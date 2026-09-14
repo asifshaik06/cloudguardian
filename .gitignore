@@ -156,6 +156,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+*.pem
+cloudguardian-env/
+*.pyc
 
 # Spyder project settings
 .spyderproject
@@ -216,3 +219,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+*.pem
+__pycache__/
+cloudguardian-env/
+*.pyc
