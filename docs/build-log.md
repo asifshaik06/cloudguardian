@@ -14,3 +14,14 @@
 - Added 3 managed rules: s3-bucket-public-read-prohibited, encrypted-volumes, restricted-ssh
 - Config delivery bucket: config-bucket-388371826759
 - Setup confirmed, resource discovery in progress
+
+
+## Week 3 - EventBridge + Lambda Detection Pipeline
+- Created DynamoDB table cloudguardian-findings (partition key: finding_id)
+- Created Lambda function cloudguardian-detection-handler (Python 3.12)
+- Attached AmazonDynamoDBFullAccess policy to Lambda's execution role
+- Wrote Lambda handler to parse Config compliance events and write findings to DynamoDB
+- Created EventBridge rule cloudguardian-config-trigger (event source: aws.config, detail-type: Config Rules Compliance Change)
+- Connected rule to cloudguardian-detection-handler Lambda as target
+- Rule confirmed Enabled on default event bus
+- End-to-end test pending verification (Config recording set to Daily frequency, so results may take up to 24 hours to appear in CloudWatch Logs and DynamoDB)
