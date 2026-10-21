@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Security Overview</h1>
+<p class="subtitle">Sample data. Live AWS integration in progress.</p>
+
+<section class="cards">
+    <div class="card"><span class="label">Total Findings</span><span class="value">{{ stats.total }}</span></div>
+    <div class="card"><span class="label">Critical</span><span class="value critical-text">{{ stats.critical }}</span></div>
+    <div class="card"><span class="label">Auto-Fixed</span><span class="value fixed-text">{{ stats.fixed }}</span></div>
+    <div class="card"><span class="label">Avg Risk Score</span><span class="value">{{ stats.avg_score }}</span></div>
+</section>
+
+<section class="panel">
+    <h2>Recent Findings</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Rule</th><th>Resource</th><th>Severity</th><th>Risk</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            {% for f in findings %}
+            <tr>
+                <td>{{ f.id }}</td>
+                <td>{{ f.rule }}</td>
+                <td>{{ f.resource }}</td>
+                <td><span class="badge {{ f.severity|lower }}">{{ f.severity }}</span></td>
+                <td>{{ f.score }}</td>
+                <td>{{ f.status }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% endblock %}

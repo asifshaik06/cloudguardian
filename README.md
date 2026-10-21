@@ -116,8 +116,7 @@ cloudguardian-env\Scripts\Activate.ps1
 
 pip install -r requirements.txt
 
-cp .env.example .env
-
+cp .env.example .en
 python app.py
 ```
 

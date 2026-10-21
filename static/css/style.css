@@ -1,0 +1,55 @@
+:root {
+    --bg: #070b16;
+    --panel: #0f1629;
+    --border: #1e2a4a;
+    --text: #e6ecff;
+    --muted: #8a96b8;
+    --accent: #3b82f6;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: radial-gradient(circle at top, #0d1a3a 0%, var(--bg) 60%);
+    color: var(--text);
+    min-height: 100vh;
+}
+
+.topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 32px; border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; font-size: 1.2rem; letter-spacing: 0.5px; }
+.topbar a { color: var(--accent); text-decoration: none; }
+
+.container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+h1 { font-size: 1.8rem; }
+.subtitle { color: var(--muted); margin: 6px 0 24px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+.card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; display: flex; flex-direction: column; gap: 8px;
+    box-shadow: 0 0 18px rgba(59, 130, 246, 0.12);
+}
+.label { color: var(--muted); font-size: 0.85rem; }
+.value { font-size: 2rem; font-weight: 700; }
+.critical-text { color: #f87171; }
+.fixed-text { color: #4ade80; }
+
+.panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; overflow-x: auto;
+}
+.panel h2 { margin-bottom: 14px; font-size: 1.1rem; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+th { color: var(--muted); font-weight: 600; }
+
+.badge { padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+.critical { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+.high { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+.medium { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+.low { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
