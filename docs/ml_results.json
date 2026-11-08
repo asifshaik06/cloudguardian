@@ -1,0 +1,114 @@
+{
+  "zscore": {
+    "controlled": {
+      "precision": 0.88,
+      "recall": 0.759,
+      "f1": 0.815,
+      "pr_auc": 0.776,
+      "benign_fpr": 0.0028,
+      "false_alarms_per_hour": 0.028
+    },
+    "new_real_recall": {
+      "splunk_bedrock.json": {
+        "windows": 1,
+        "recall": 1.0
+      },
+      "splunk_s3_public_bucket.json": {
+        "windows": 4,
+        "recall": 0.0
+      },
+      "splunk_security_scanner.json": {
+        "windows": 2,
+        "recall": 1.0
+      }
+    },
+    "old_real_unlabelled": {
+      "windows": 35538,
+      "alert_rate": 0.0555
+    }
+  },
+  "isolation_forest": {
+    "controlled": {
+      "precision": 0.889,
+      "recall": 0.828,
+      "f1": 0.857,
+      "pr_auc": 0.903,
+      "benign_fpr": 0.0028,
+      "false_alarms_per_hour": 0.028
+    },
+    "new_real_recall": {
+      "splunk_bedrock.json": {
+        "windows": 1,
+        "recall": 1.0
+      },
+      "splunk_s3_public_bucket.json": {
+        "windows": 4,
+        "recall": 1.0
+      },
+      "splunk_security_scanner.json": {
+        "windows": 2,
+        "recall": 1.0
+      }
+    },
+    "old_real_unlabelled": {
+      "windows": 35538,
+      "alert_rate": 0.0979
+    }
+  },
+  "lof": {
+    "controlled": {
+      "precision": 0.5,
+      "recall": 0.69,
+      "f1": 0.58,
+      "pr_auc": 0.732,
+      "benign_fpr": 0.0188,
+      "false_alarms_per_hour": 0.189
+    },
+    "new_real_recall": {
+      "splunk_bedrock.json": {
+        "windows": 1,
+        "recall": 0.0
+      },
+      "splunk_s3_public_bucket.json": {
+        "windows": 4,
+        "recall": 0.0
+      },
+      "splunk_security_scanner.json": {
+        "windows": 2,
+        "recall": 1.0
+      }
+    },
+    "old_real_unlabelled": {
+      "windows": 35538,
+      "alert_rate": 0.8161
+    }
+  },
+  "ocsvm": {
+    "controlled": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1": 0.667,
+      "pr_auc": 1.0,
+      "benign_fpr": 0.0272,
+      "false_alarms_per_hour": 0.274
+    },
+    "new_real_recall": {
+      "splunk_bedrock.json": {
+        "windows": 1,
+        "recall": 1.0
+      },
+      "splunk_s3_public_bucket.json": {
+        "windows": 4,
+        "recall": 1.0
+      },
+      "splunk_security_scanner.json": {
+        "windows": 2,
+        "recall": 1.0
+      }
+    },
+    "old_real_unlabelled": {
+      "windows": 35538,
+      "alert_rate": 0.309
+    }
+  }
+}
