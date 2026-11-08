@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudGuardian</title>
+<style>
+:root{--bg:#fafaf7;--card:#fff;--tx:#1f1f1c;--mu:#6b6a64;--ln:#e3e1d8;--ok:#0f6e56;--okb:#e1f5ee;--bad:#a32d2d;--badb:#fcebeb;--wr:#854f0b;--wrb:#faeeda;--in:#185fa5;--inb:#e6f1fb}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1c1a;--card:#262624;--tx:#f1efe8;--mu:#a8a69c;--ln:#3d3d3a;--ok:#5dcaa5;--okb:#04342c;--bad:#f09595;--badb:#501313;--wr:#ef9f27;--wrb:#412402;--in:#85b7eb;--inb:#042c53}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,sans-serif}
+main{max-width:960px;margin:0 auto;padding:18px 16px 48px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:22px 0 8px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:12px 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.meta{font-size:13px;color:var(--mu);margin:3px 0}.meta b{color:var(--tx)}
+.tag{font-size:12px;padding:2px 8px;border-radius:99px;display:inline-block}.ok{background:var(--okb);color:var(--ok)}.bad{background:var(--badb);color:var(--bad)}.wr{background:var(--wrb);color:var(--wr)}.gr{background:var(--ln);color:var(--mu)}.in{background:var(--inb);color:var(--in)}pre.log{margin:8px 0 0;white-space:pre-wrap}
+.chip{font-size:12px;padding:4px 10px;border-radius:99px;border:1px solid var(--ln);color:var(--mu)}.chip.done{background:var(--okb);color:var(--ok);border-color:transparent}.chip.act{background:var(--inb);color:var(--in);border-color:var(--in);font-weight:600}
+button{font:inherit;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid var(--ln);background:var(--card);color:var(--tx);cursor:pointer;margin-top:6px}
+button.go{background:var(--ok);color:var(--bg);border-color:var(--ok)}button.no{color:var(--bad);border-color:var(--bad)}
+.banner{background:var(--inb);color:var(--in);border-radius:12px;padding:12px 14px;margin:12px 0;font-weight:600}
+.bar{background:var(--ln);border-radius:6px;height:10px;overflow:hidden;margin:3px 0 8px}.bar i{display:block;height:100%;background:var(--in)}
+.why{border-left:3px solid var(--wr);padding:0 0 0 10px;margin:8px 0}.xai{border-left:3px solid var(--in);padding:0 0 0 10px;margin:8px 0}
+.log{font:12px ui-monospace,Menlo,monospace;max-height:220px;overflow:auto}.log div{padding:3px 0;border-bottom:1px solid var(--ln)}
+.top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+</style></head><body><main>
+<div class="top"><h1>CloudGuardian</h1><span>Security score <b id="score">100%</b></span></div>
+<p class="meta">A live guard for a cloud account. It watches the real cloud, explains problems in plain words, and fixes them only after you approve. Try it: click “Simulate attack” below.</p>
+<div class="card" style="margin:10px 0"><div class="top"><span><span id="mode" class="tag in"></span> <span class="meta" id="conn"></span></span><span class="meta" id="chk"></span></div>
+<details><summary class="meta">Show the raw AWS API responses behind these cards</summary><pre class="log" id="evd"></pre></details></div>
+<div id="steps" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+<div class="banner" id="banner"></div>
+<h2>What is being protected</h2><div class="grid" id="res"></div>
+<h2>Alerts waiting for you</h2><div id="fin"></div>
+<div class="grid"><div><h2>Live activity feed</h2><div class="card log" id="ev"></div></div><div><h2>Audit trail (who did what)</h2><div class="card log" id="au"></div></div></div>
+</main>
+<script>
+const $=i=>document.getElementById(i);
+const go=(p)=>fetch(p,{method:"POST"}).then(tick);
+async function tick(){draw(await (await fetch("/api/state")).json())}
+function draw(s){
+ const pend=s.findings.filter(f=>f.status=="pending").length,
+ und=s.resources.filter(r=>!r.ok&&!s.findings.some(f=>f.id==r.id&&f.status!="fixed")).length,
+ step=pend?3:(und?2:(s.findings.some(f=>f.status=="fixed")?4:1));
+ $("steps").innerHTML=["1 Attack happens","2 System notices","3 You decide","4 Fixed and verified"].map((t,i)=>`<span class="chip ${i+1==step?"act":(i+1<step?"done":"")}">${t}</span>`).join("");
+ $("banner").textContent=pend?"Something suspicious was found. The system is waiting for your decision below.":und?"A change was just made in the cloud account. The detector is checking it…":step==4?"All fixed. The cloud is safe again and every action is recorded.":"Everything looks safe. Click “Simulate attack” on any item below.";
+ $("score").textContent=s.score+"%";
+ const live=s.mode=="Live AWS";$("mode").textContent=live?"LIVE AWS":"SIMULATOR (AWS emulator)";$("mode").className="tag "+(live?"ok":"in");
+ $("conn").innerHTML=`account ${s.account} · region ${s.region} · ${s.polls} checks · ${s.latency} ms per check`+(s.video?` · <a href="${s.video}">Watch the recorded live-AWS run</a>`:"");
+ $("chk").textContent="Last verified from the AWS API at "+s.checked;$("evd").textContent=JSON.stringify(s.evidence,null,2);
+ $("res").innerHTML=s.resources.map(r=>`<div class="card"><b>${r.name}</b><p class="meta">${r.desc}</p><span class="tag ${r.ok?"ok":"bad"}">${r.ok?r.good:r.badtxt}</span><br><button onclick="go('/api/attack/${r.id}')">Simulate attack</button><p class="meta">${r.attack}</p></div>`).join("");
+ $("fin").innerHTML=s.findings.length?s.findings.slice().reverse().map(f=>{
+  const cl=f.status=="fixed"?"ok":f.status=="rejected"?"gr":"wr",st={pending:"Waiting for approval",fixed:"Fixed and verified",rejected:"Ignored (accepted risk)"}[f.status];
+  const bars=f.explain.length>1?f.explain.map(e=>`<div class="meta">${e[0]} <b>${Math.round(e[1]*100)}%</b></div><div class="bar"><i style="width:${e[1]*100}%"></i></div>`).join(""):`<div class="meta">A security rule was broken: ${f.ref}</div>`;
+  const btn=f.status=="pending"?`<button class="go" onclick="go('/api/decide/${f.id}/ok')">Approve fix</button> <button class="no" onclick="go('/api/decide/${f.id}/no')">Reject</button>`:"";
+  return `<div class="card" style="margin-bottom:10px"><div class="top"><b>${f.title}</b><span><span class="tag bad">${f.sev}</span> <span class="tag ${cl}">${st}</span></span></div>
+  <p class="meta"><b>What happened:</b> ${f.what}</p><div class="why"><p class="meta"><b>Why it matters:</b> ${f.why}</p></div>
+  <div class="xai"><p class="meta"><b>How the system knew:</b> noticed in ${f.tdetect}s</p>${bars}</div>
+  <p class="meta"><b>Proposed fix:</b> ${f.fixtxt}</p>${f.status=="fixed"?`<p class="meta"><b>Verified:</b> the cloud was checked again and ${f.verified?"confirms the problem is gone.":"still reports a problem."}</p>`:""}${btn}</div>`}).join(""):`<div class="card meta">No alerts yet.</div>`;
+ $("ev").innerHTML=s.events.length?s.events.map(e=>`<div>${e.t} ${e.name} · ${e.src} · ${e.user} · ${e.country} · ${e.mode}</div>`).join(""):"<div>Waiting for activity…</div>";
+ $("au").innerHTML=s.audit.length?s.audit.map(a=>`<div>${a}</div>`).join(""):"<div>No actions yet.</div>";
+}
+tick();setInterval(tick,1000);
+</script></body></html>

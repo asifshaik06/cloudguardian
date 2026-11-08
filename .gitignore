@@ -1,0 +1,10 @@
+.env
+.venv/
+*.pem
+*.db
+.aws/
+__pycache__/
+datasets/raw/
+models/*.pkl
+terraform/.terraform/
+*.tfstate*
