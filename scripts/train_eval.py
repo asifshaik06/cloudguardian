@@ -31,7 +31,8 @@ def fit(Xtr):
 
 def score(sc, models, X):
     Z = sc.transform(X)
-    out = {"zscore": np.abs(Z).max(axis=1)}
+    Zf = (X - sc.mean_) / np.maximum(sc.scale_, 0.1)  # variance floor
+    out = {"zscore": np.abs(Zf).max(axis=1)}
     out.update({k: -m.score_samples(Z) for k, m in models.items()})
     return out
 
@@ -101,3 +102,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -24,3 +24,8 @@ Each entry: decision, reason, alternatives considered.
 ## 5. Open question: model features
 - The first demo model uses hour, country, and request rate on single events.
 - Planned: five-minute behavioural windows per identity, with relative features, to avoid a mismatch between generated and real data.
+
+## 6. Z-score variance floor (added after seeing results)
+- The benign baseline never contains sensitive actions, so those features had zero variance and the z-score could not react to them.
+- Fix: divide by max(std, 0.1) in the Z-score baseline. Decided after seeing the Splunk S3 public bucket result, so the 7 real windows are development cases, not a clean test.
+

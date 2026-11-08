@@ -11,3 +11,8 @@
 - Done: multi-dataset evaluation (controlled, 3 Splunk files, 2 flaws chunks).
 - Finding: generated baseline does not match real logs (alert rates 6 to 82 percent).
 - Next: review top flaws alerts, fix SENSITIVE list from real data, collect real benign baseline in the live AWS run.
+
+## Day 5
+- Found: Z-score missed Splunk S3 public bucket because sensitive features had zero variance in baseline.
+- Applied variance floor (documented in decisions.md).
+- flaws.cloud top alerts: bursts from one identity with 100 percent errors, manual review pending.
