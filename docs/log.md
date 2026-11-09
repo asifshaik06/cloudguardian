@@ -16,3 +16,5 @@
 - Found: Z-score missed Splunk S3 public bucket because sensitive features had zero variance in baseline.
 - Applied variance floor (documented in decisions.md).
 - flaws.cloud top alerts: bursts from one identity with 100 percent errors, manual review pending.
+
+- Day 6: 20-seed controlled benchmark done. F1: Z-score 0.838, IF 0.772, OCSVM 0.764, LOF 0.573. Z-score advantage partly a generator artifact. Final detector choice waits for real benign baseline.

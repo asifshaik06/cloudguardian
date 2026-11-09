@@ -1,10 +1,10 @@
 {
   "zscore": {
     "controlled": {
-      "precision": 0.875,
-      "recall": 0.724,
-      "f1": 0.792,
-      "pr_auc": 0.739,
+      "precision": 0.906,
+      "recall": 1.0,
+      "f1": 0.951,
+      "pr_auc": 0.983,
       "benign_fpr": 0.0028,
       "false_alarms_per_hour": 0.028
     },
@@ -15,7 +15,7 @@
       },
       "splunk_s3_public_bucket.json": {
         "windows": 4,
-        "recall": 0.0
+        "recall": 1.0
       },
       "splunk_security_scanner.json": {
         "windows": 2,
@@ -24,7 +24,7 @@
     },
     "old_real_unlabelled": {
       "windows": 35538,
-      "alert_rate": 0.0549
+      "alert_rate": 0.1741
     }
   },
   "isolation_forest": {
