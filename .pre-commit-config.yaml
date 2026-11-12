@@ -1,5 +1,9 @@
-repos:
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
+﻿repos:
+  - repo: local
     hooks:
-      - id: gitleaks
+      - id: gitleaks-docker
+        name: Gitleaks (official Docker image)
+        entry: python scripts/gitleaks_precommit.py
+        language: system
+        pass_filenames: false
+        always_run: true

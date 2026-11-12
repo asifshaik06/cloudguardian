@@ -165,6 +165,11 @@ def attack(k): T0[k] = time.time(); audit(f"SIMULATED ATTACK {k}"); R[k]["attack
 @app.post("/api/decide/<k>/<d>")
 def dec(k, d): decide(k, d == "ok", "dashboard"); return jsonify(ok=True)
 
+from backend.dashboard_api import register
+register(app, globals())
+from backend.telemetry import register_telemetry
+register_telemetry(app, globals())
+
 if __name__ == "__main__":
     setup(); ACCT = acct(); threading.Thread(target=scan, daemon=True).start()
     if TG: threading.Thread(target=tg_poll, daemon=True).start()

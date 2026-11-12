@@ -8,3 +8,7 @@ datasets/raw/
 models/*.pkl
 terraform/.terraform/
 *.tfstate*
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal

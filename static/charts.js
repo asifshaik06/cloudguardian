@@ -1,0 +1,35 @@
+/* ECharts wrappers. Chart elements persist across page re-renders, so data updates animate smoothly. */
+const CG=(()=>{
+const RM=matchMedia("(prefers-reduced-motion: reduce)").matches,CH={};
+const cv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const empty=m=>({animation:false,xAxis:{show:false},yAxis:{show:false},series:[],graphic:{type:"text",left:"center",top:"middle",style:{text:m,fill:cv("--mu"),fontSize:12}}});
+function base(){const mu=cv("--mu"),ln=cv("--ln");return{mu,ln,o:{animation:!RM,animationDuration:500,animationDurationUpdate:300,animationEasing:"cubicOut",textStyle:{color:mu},grid:{left:46,right:14,top:26,bottom:26},tooltip:{trigger:"axis",backgroundColor:cv("--sf2"),borderColor:ln,textStyle:{color:cv("--tx"),fontSize:12}}},
+ ax:o=>Object.assign({axisLine:{lineStyle:{color:ln}},axisTick:{show:false},axisLabel:{color:mu,fontSize:11,hideOverlap:true},splitLine:{lineStyle:{color:ln}}},o),
+ lg:{show:true,top:0,right:0,textStyle:{color:mu,fontSize:11},itemWidth:10,itemHeight:10}}}
+const hm=t=>new Date(t*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",hour12:false});
+const NM={zscore:"Z-score",isolation_forest:"Isolation Forest",lof:"LocalOutlierFactor",ocsvm:"OneClassSVM"};
+const B={
+posture(D){const{o,ax}=base(),p=D.M.posture;if(!p.length)return empty("Collecting samples…");
+ return{...o,tooltip:{...o.tooltip,valueFormatter:v=>v+" / 100"},xAxis:ax({type:"time",splitNumber:4,splitLine:{show:false}}),yAxis:ax({type:"value",min:0,max:100,interval:25,name:"Score",nameTextStyle:{color:cv("--mu"),fontSize:11,align:"left"}}),series:[{type:"line",step:"end",showSymbol:false,data:p.map(x=>[x.t*1000,x.score]),lineStyle:{color:cv("--ac"),width:2},areaStyle:{color:cv("--ac"),opacity:.1}}]}},
+anomaly(D){const{o,ax,mu}=base(),a=D.M.anomaly,thr=D.M.threshold;if(!a.length)return empty("Waiting for scored events…");const bad=cv("--bad"),ac=cv("--ac");
+ return{...o,tooltip:{...o.tooltip,trigger:"item",formatter:p=>`${new Date(p.value[0]).toLocaleTimeString()}<br>Anomaly score ${p.value[1]} (${p.data.kind})`},xAxis:ax({type:"time",splitNumber:4,splitLine:{show:false}}),yAxis:ax({type:"value",scale:true}),
+ series:[{type:"scatter",data:a.map(x=>({value:[x.t*1000,x.score],kind:x.kind,symbolSize:x.kind=="attack"?11:6,itemStyle:{color:x.score>thr?bad:ac,opacity:x.kind=="attack"?1:.65}})),markLine:{silent:true,symbol:"none",lineStyle:{color:bad,type:"dashed"},label:{formatter:"Detection threshold "+thr,color:mu,position:"insideStartTop"},data:[{yAxis:thr}]}}]}},
+activity(D){const{o,ax,lg}=base(),b=D.M.buckets;if(!b.length)return empty("No events yet");
+ return{...o,legend:lg,xAxis:ax({type:"category",data:b.map(v=>hm(v.t)),splitLine:{show:false}}),yAxis:ax({type:"value",minInterval:1,name:"Events",nameTextStyle:{color:cv("--mu"),fontSize:11,align:"left"}}),series:[{name:"Baseline (simulated)",type:"bar",stack:"e",data:b.map(v=>v.baseline),itemStyle:{color:cv("--c4")}},{name:"Attack actions",type:"bar",stack:"e",data:b.map(v=>v.attack),itemStyle:{color:cv("--bad")}}]}},
+severity(D){const{o,ax,lg}=base(),f=D.S.findings;if(!f.length)return empty("No findings yet");const sv=["Critical","High","Medium","Low"],ST=[["pending","Awaiting approval","--wr"],["fixed","Remediated","--ok"],["rejected","Rejected","--c4"]];
+ return{...o,legend:lg,grid:{...o.grid,left:64},xAxis:ax({type:"value",minInterval:1}),yAxis:ax({type:"category",data:sv,inverse:true,splitLine:{show:false}}),series:ST.map(s=>({name:s[1],type:"bar",stack:"s",barWidth:14,data:sv.map(v=>f.filter(x=>x.sev==v&&x.status==s[0]).length),itemStyle:{color:cv(s[2])}}))}},
+remediation(D){const{o,ax,lg}=base(),it=D.M.rem.items;if(!it.length)return empty("No findings yet");
+ return{...o,legend:lg,tooltip:{...o.tooltip,valueFormatter:v=>v==null?"n/a":v+" s"},xAxis:ax({type:"category",data:it.map(i=>i.id),splitLine:{show:false}}),yAxis:ax({type:"value"}),series:[{name:"Time to detect",type:"bar",barMaxWidth:22,data:it.map(i=>i.ttd),itemStyle:{color:cv("--ac")}},{name:"Time to remediate",type:"bar",barMaxWidth:22,data:it.map(i=>i.ttr),itemStyle:{color:cv("--ok")}}]}},
+detectors(D){const{o,ax,lg}=base(),r=(D.ML&&D.ML.results)||{},ks=Object.keys(NM).filter(k=>r[k]);if(!ks.length)return empty("Run scripts\\train_eval.py to generate results");
+ return{...o,legend:lg,tooltip:{...o.tooltip,valueFormatter:v=>Number(v).toFixed(3)},xAxis:ax({type:"category",data:ks.map(k=>NM[k]),splitLine:{show:false},axisLabel:{color:cv("--mu"),fontSize:11,interval:0,formatter:n=>({"Isolation Forest":"Iso. Forest",LocalOutlierFactor:"LOF",OneClassSVM:"OC-SVM"}[n]||n)}}),yAxis:ax({type:"value",min:0,max:1,interval:.25}),series:[["precision","Precision","--c1"],["recall","Recall","--c2"],["f1","F1","--c3"]].map(m=>({name:m[1],type:"bar",barMaxWidth:18,data:ks.map(k=>r[k].controlled[m[0]]),itemStyle:{color:cv(m[2])}}))}}};
+B.calib=function(D){const{o,ax}=base(),r=(D.ML&&D.ML.results)||{},ks=Object.keys(NM).filter(k=>r[k]&&r[k].old_real_unlabelled);if(!ks.length)return empty("Run train_eval.py with the flaws.cloud logs");
+ const hit=k=>{const nr=r[k].new_real_recall||{},t=Object.values(nr).reduce((a,q)=>a+q.windows,0);return Math.round(Object.values(nr).reduce((a,q)=>a+q.windows*q.recall,0))+" of "+t+" real attack windows flagged"};
+ return{...o,grid:{...o.grid,left:130,right:36},tooltip:{...o.tooltip,trigger:"item",formatter:p=>`${p.name}<br>${p.value}% of flaws.cloud windows flagged<br>${hit(ks[p.dataIndex])}`},xAxis:ax({type:"value",min:0,max:100,axisLabel:{color:cv("--mu"),fontSize:11,formatter:"{value}%"}}),yAxis:ax({type:"category",data:ks.map(k=>NM[k]),inverse:true,splitLine:{show:false}}),
+ series:[{type:"bar",barWidth:14,data:ks.map(k=>({value:+(r[k].old_real_unlabelled.alert_rate*100).toFixed(1),itemStyle:{color:r[k].old_real_unlabelled.alert_rate>.3?cv("--wr"):cv("--c1")}})),label:{show:true,position:"right",color:cv("--mu"),fontSize:11,formatter:"{c}%"},markLine:{silent:true,symbol:"none",lineStyle:{color:cv("--bad"),type:"dashed"},label:{formatter:"1% target",color:cv("--mu"),position:"end",rotate:0,align:"left",padding:[0,0,0,6]},data:[{xAxis:1}]}}]}};
+function paint(k,D){const c=CH[k];if(!c||!c.inst||!c.el.isConnected||!B[k])return;const o=B[k](D),e=!!o.graphic;c.inst.setOption(o,{notMerge:c.empty!==e||e});c.empty=e}
+function mount(D){document.querySelectorAll(".cslot").forEach(s=>{const k=s.dataset.key;if(!window.echarts){s.textContent="Chart library not found. Download ECharts into static/vendor (see the setup steps).";return}
+ let c=CH[k];if(!c){const el=document.createElement("div");el.style.cssText="width:100%;height:100%";c=CH[k]={el,inst:null,empty:null};if(window.ResizeObserver)new ResizeObserver(()=>{if(c.inst&&c.el.isConnected)c.inst.resize()}).observe(el)}
+ s.replaceChildren(c.el);if(!c.inst)c.inst=echarts.init(c.el,null,{renderer:"svg"});c.inst.resize();paint(k,D)})}
+function update(D){Object.keys(CH).forEach(k=>paint(k,D))}
+window.addEventListener("resize",()=>Object.values(CH).forEach(c=>c.inst&&c.el.isConnected&&c.inst.resize()));
+return{mount,update,count:()=>Object.keys(CH).length}})();
