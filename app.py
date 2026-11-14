@@ -37,6 +37,7 @@ from backend.replay import register_replay_api
 from backend.security import (
     SESSION_COOKIE_NAME,
     get_active_api_key,
+    is_authenticated,
     is_telegram_user_authorized,
     redact_sensitive_data,
     require_auth,
