@@ -42,7 +42,17 @@ function drawerHTML(x){const lab={pending:["Awaiting approval","wr"],fixed:["Fix
  <div style="margin-top:12px">${tg(x.sev,"bad")}${tg(lab[0],lab[1])}</div>
  <div class="lb">Summary</div><p>${esc(x.what)}</p><p class="mu">${esc(x.why)}</p><p><span class="mu">Proposed fix:</span> ${esc(x.fix)}</p>
  <div class="lb">MITRE ATT&amp;CK</div><p><span class="chip">${esc(m.id||"n/a")}</span> ${esc(m.name||"No mapping recorded")}</p><p class="mu">Tactics: ${esc(m.tactics||"n/a")}</p>
- <div class="lb">Risk score</div><div class="rk"><b>${x.risk.score}</b> <span class="mu">/ 100</span></div>${x.risk.rows.map((r,i)=>`<div class="br"><span>${esc(r.name)} <span class="mu">weight ${Math.round(r.weight*100)}%, value ${r.value}</span></span><b>${r.points}</b></div><div class="bt"><i class="gx" style="width:${r.points}%;--i:${i}"></i></div>`).join("")}<p class="mu">${esc(x.risk.note)} ${esc(x.risk.excluded)}</p>
+ <div class="lb">Risk score</div><div class="rk"><b>${x.risk.score}</b> <span class="mu">/ 100</span></div>${x.risk.rows.map((r,i)=>`<div class="br"><span>${esc(r.name)} <span class="mu">weight ${Math.round(r.weight*100)}%, value ${r.value}</span></span><b>${r.points}</b></div><div class="bt"><i class="gx" style="width:${r.points}%;--i:${i}"></i></div>`).join("")}<p class="mu">${esc(x.risk.note)} ${esc(x.risk.excluded||"")}</p>
+ ${x.blast_radius?`<div class="lb">IAM Capability &amp; Blast Radius</div>
+ <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px;margin-top:6px">
+   <div style="display:flex;justify-content:space-between;align-items:center">
+     <span><b>Target Identity:</b> ${esc(x.blast_radius.target_id)}</span>
+     ${tg("Blast Risk: "+x.blast_radius.score+" / 100",x.blast_radius.severity=="Critical"?"bad":"wr")}
+   </div>
+   <p class="mu" style="margin-top:4px;font-size:12px">${esc(x.blast_radius.summary)}</p>
+   ${x.blast_radius.admin_reachable?`<div style="margin-top:4px"><span class="chip" style="background:rgba(255,107,107,0.15);color:var(--bad);border:1px solid var(--bad)">★ Escalation Path to AdministratorAccess Detected</span></div>`:""}
+   ${x.blast_radius.recommendations&&x.blast_radius.recommendations.length?`<div class="mu" style="margin-top:6px;font-size:11px"><b>Mitigation:</b> ${esc(x.blast_radius.recommendations[0])}</div>`:""}
+ </div>`:""}
  <div class="lb">Evidence</div>${bars}${x.events.length?`<div class="lb">CloudTrail-style events</div><pre>${esc(JSON.stringify(x.events,null,1))}</pre>`:""}
  <div class="lb">Configuration before and after</div><div class="cmp">${[["At detection",x.detected],["Current",x.current],["After fix",x.status=="fixed"?x.after:"__na"]].map((c,i)=>`<div><div class="mu">${c[0]}</div><pre class="${i&&c[1]!=="__na"&&!same(c[1],x.detected)?"chg":""}">${esc(cfg(c[1]))}</pre></div>`).join("")}</div>
  <div class="lb">Remediation workflow</div>${stepper({status:x.status})}<div class="tl">${x.timeline.map(t=>`<div>${esc(t)}</div>`).join("")||'<span class="mu">No activity recorded.</span>'}</div>
@@ -50,10 +60,87 @@ function drawerHTML(x){const lab={pending:["Awaiting approval","wr"],fixed:["Fix
 async function openDrawer(id){DR=id;const d=$$("drawer");d.className="drawer open";d.innerHTML='<div class="dh"><b>Loading…</b></div><div class="db"><div class="sk" style="height:200px;margin-top:12px"></div></div>';const x=await get("/api/finding/"+id);if(DR!=id)return;d.innerHTML=x&&!x.error?drawerHTML(x):'<div class="dh"><b>Finding not available</b><button class="btn sm" id="dclose">Close</button></div>'}
 function closeDrawer(){DR=null;$$("drawer").className="drawer"}
 let KS="";async function loadMetrics(){const m=await get("/api/metrics");if(!m)return;M=m;CG.update(ctx());const p=$$("pipe");if(p)p.innerHTML=pipe();const k=JSON.stringify([m.rem.rolled_back,m.rem.items.map(i=>i.ttr)]);if(k!==KS){KS=k;if(route()=="overview"&&BOOT)render()}}
-function refresh(){const r=route();if(r=="findings")paintFindings();if(r=="events")loadEvents();if(r=="audit")loadAudit()}
+function graph(){
+ const g=window.GRAPH||{nodes:[],links:[],categories:[],stats:{}},
+       st=g.stats||{},
+       paths=window.ATTACK_PATHS||{},
+       totPaths=Object.values(paths).reduce((a,b)=>a+b.length,0),
+       selTarget=window.SEL_PRINCIPAL||"user/intern-dev",
+       br=window.BLAST_REPORT;
+
+ return `<div class="kpis">
+   <div class="panel kp"><div class="lb">IAM Principals</div><div class="kv">${(st.users||0)+(st.roles||0)}</div><div class="mu">${st.users||0} users, ${st.roles||0} roles</div></div>
+   <div class="panel kp"><div class="lb">Escalation Paths</div><div class="kv bad">${totPaths}</div><div class="mu">Multi-hop attack vectors</div></div>
+   <div class="panel kp"><div class="lb">Admin Entities</div><div class="kv">${st.admin_roles||0}</div><div class="mu">Full AdministratorAccess</div></div>
+   <div class="panel kp"><div class="lb">Cloud Resources</div><div class="kv">${st.resources||0}</div><div class="mu">S3 &amp; EC2 assets</div></div>
+ </div>
+ <div class="g3 mt">
+   <section class="panel span2">
+     <div class="ph">
+       <span class="pt">IAM Capability &amp; Attack-Path Graph</span>
+       <div class="ac">
+         <button class="btn sm primary" id="btn-trace-admin" title="Highlight multi-hop attack path from intern-dev to admin-role">Trace intern-dev → admin</button>
+         <button class="btn sm" id="btn-reset-graph" title="Reset view">Reset Graph</button>
+       </div>
+     </div>
+     <div class="pb">
+       <div class="cslot" data-key="iam_graph" style="height:460px"></div>
+     </div>
+   </section>
+   <section class="panel">
+     <div class="ph"><span class="pt">Blast Radius Investigator</span></div>
+     <div class="pb">
+       <div class="lb">Target Identity / Resource</div>
+       <div style="display:flex;gap:6px;margin-bottom:12px">
+         <select id="sel-blast-principal" style="flex:1;padding:6px;background:var(--sf2);color:var(--tx);border:1px solid var(--ln);border-radius:4px">
+           ${(g.nodes||[]).filter(n=>n.category==0||n.category==1).map(n=>`<option value="${n.id}" ${n.id==selTarget?"selected":""}>${esc(n.name)} (${n.value})</option>`).join("")||'<option value="user/intern-dev">user/intern-dev</option>'}
+         </select>
+         <button class="btn sm" id="btn-investigate-blast">Check</button>
+       </div>
+       ${br?`<div class="rk"><b>${br.score}</b> <span class="mu">/ 100</span> ${tg(br.severity,br.severity=="Critical"?"bad":"wr")}</div>
+         <p class="mu" style="font-size:12px;margin:8px 0">${esc(br.summary)}</p>
+         <div class="lb">Reachable Identities (${(br.reachable_principals||[]).length})</div>
+         <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">${(br.reachable_principals||[]).map(p=>`<span class="chip">${esc(p)}</span>`).join("")||'<span class="mu">None</span>'}</div>
+         <div class="lb">Exposed Resources (${(br.reachable_resources||[]).length})</div>
+         <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">${(br.reachable_resources||[]).map(r=>`<span class="chip ${(br.sensitive_resources_exposed||[]).includes(r)?"bad":""}">${esc(r)}</span>`).join("")||'<span class="mu">None</span>'}</div>
+         <div class="lb">Remediation Guidance</div>
+         <ul style="padding-left:16px;margin:4px 0;font-size:12px" class="mu">${(br.recommendations||[]).map(rec=>`<li>${esc(rec)}</li>`).join("")}</ul>`
+       :`<div class="empty">Select an identity and click Check.</div>`}
+     </div>
+   </section>
+ </div>
+ <section class="panel mt">
+   <div class="ph"><span class="pt">Discovered Privilege Escalation Vectors</span><span class="mu">${totPaths} active vectors</span></div>
+   <div class="wrap">
+     <table class="tbl">
+       <tr><th>Source Principal</th><th>Target Capability</th><th>Hops</th><th>Risk</th><th>Severity</th><th>MITRE ATT&amp;CK</th><th>Action</th></tr>
+       ${Object.entries(paths).flatMap(([p,list])=>list.map(pt=>`<tr>
+         <td class="mono"><b>${esc(pt.source)}</b></td>
+         <td class="mono">${esc(pt.target)}</td>
+         <td>${pt.hops}</td>
+         <td><b>${pt.risk_score}</b>/100</td>
+         <td>${tg(pt.severity,pt.severity=="Critical"?"bad":"wr")}</td>
+         <td><span class="chip">${esc((pt.steps[0]&&pt.steps[0].mitre&&pt.steps[0].mitre.id)||"T1078.004")}</span> ${esc((pt.steps[0]&&pt.steps[0].mitre&&pt.steps[0].mitre.name)||"Privilege Escalation")}</td>
+         <td><button class="btn sm" data-trace="${esc(pt.nodes.join(","))}">Trace in Graph</button></td>
+       </tr>`)).join("")||'<tr><td colspan="7"><div class="empty">No privilege escalation vectors detected.</div></td></tr>'}
+     </table>
+   </div>
+ </section>`;
+}
+function refresh(){const r=route();if(r=="findings")paintFindings();if(r=="events")loadEvents();if(r=="audit")loadAudit();if(r=="graph"&&window.loadGraph)loadGraph()}
 function bind(){const r=route();
  if(r=="findings"){$$("fsev").value=FSEV;$$("fst").value=FST;$$("fsev").onchange=e=>{FSEV=e.target.value;paintFindings()};$$("fst").onchange=e=>{FST=e.target.value;paintFindings()};paintFindings()}
  if(r=="events"){$$("ek").value=EK;$$("ek").onchange=e=>{EK=e.target.value;loadEvents()};loadEvents()}
+ if(r=="graph"){
+   const bTr=$$("btn-trace-admin");if(bTr)bTr.onclick=()=>window.loadGraph&&loadGraph("user/intern-dev,role/dev-role,role/cicd-deployer,role/admin-role,s3/student-records-demo");
+   const bRs=$$("btn-reset-graph");if(bRs)bRs.onclick=()=>window.loadGraph&&loadGraph("");
+   const bInv=$$("btn-investigate-blast");if(bInv)bInv.onclick=async()=>{
+     const sel=$$("sel-blast-principal");if(sel&&window.investigateBlast)await investigateBlast(sel.value);
+   };
+   document.querySelectorAll("[data-trace]").forEach(btn=>{
+     btn.onclick=()=>window.loadGraph&&loadGraph(btn.dataset.trace);
+   });
+ }
  CG.mount(ctx())}
 let tm;$$("gq").addEventListener("input",e=>{clearTimeout(tm);tm=setTimeout(()=>{Q=e.target.value.trim();if(!["findings","events","audit"].includes(route()))location.hash="#findings";else refresh()},180)});
 document.addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o)openDrawer(o.dataset.open);if(e.target.id=="dclose")closeDrawer();if(e.target.closest("[data-p]")&&DR)setTimeout(()=>DR&&openDrawer(DR),900)});
@@ -61,4 +148,4 @@ document.addEventListener("keydown",e=>{if(e.key=="Escape")closeDrawer();if(e.ke
 new MutationObserver(()=>CG.update(ctx())).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 $$("menu").onclick=()=>document.body.classList.toggle("navopen");$$("scrim").onclick=()=>document.body.classList.remove("navopen");window.addEventListener("hashchange",()=>document.body.classList.remove("navopen"));
 setTimeout(loadMetrics,0);setInterval(loadMetrics,3000);setInterval(()=>{if(route()=="events")loadEvents()},2000);
-return{overview,findings,events,audit,bind,slot,q:()=>Q,open:openDrawer}})();
+return{overview,findings,events,audit,graph,bind,slot,q:()=>Q,open:openDrawer}})();

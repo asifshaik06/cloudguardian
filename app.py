@@ -28,6 +28,7 @@ from backend.aws_guard import (
     safe_setup,
 )
 from backend.ingestion.stream import EventStreamPipeline
+from backend.graph import IAMCapabilityGraph, register_graph_api
 from backend.ml_engine.detector import RuntimeDetector
 from backend.ml_engine.window_aggregator import StreamingWindowAggregator
 from backend.replay import register_replay_api
@@ -71,6 +72,19 @@ store = StateStore()
 aggregator = StreamingWindowAggregator(window_minutes=5)
 detector = RuntimeDetector("models/baseline_v1.joblib")
 pipeline = EventStreamPipeline(store, aggregator, detector)
+
+# IAM Capability Graph Engine & Attack-Path Intelligence
+iam_graph = IAMCapabilityGraph()
+try:
+    iam_graph.build_from_aws_or_moto(
+        iam_client=iam,
+        s3_client=s3,
+        ec2_client=ec2,
+        populate_defaults_if_empty=True,
+    )
+except Exception as _g_err:
+    logger.warning("Failed building IAM graph on startup, falling back to default topology: %s", _g_err)
+    iam_graph.seed_default_topology()
 
 BLOCK: Dict[str, bool] = dict(
     BlockPublicAcls=True,
@@ -608,6 +622,8 @@ context: Dict[str, Any] = {
     "decide": decide,
     "emit": emit,
     "ml_check": ml_check,
+    "iam_graph": iam_graph,
+    "clients": {"iam": iam, "s3": s3, "ec2": ec2, "ct": ct},
 }
 
 from backend.dashboard_api import register
@@ -617,6 +633,8 @@ from backend.telemetry import register_telemetry
 register_telemetry(app, context)
 
 register_replay_api(app, pipeline)
+
+register_graph_api(app, iam_graph, {"iam": iam, "s3": s3, "ec2": ec2, "ct": ct})
 
 
 def run_server() -> None:

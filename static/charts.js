@@ -26,6 +26,59 @@ B.calib=function(D){const{o,ax}=base(),r=(D.ML&&D.ML.results)||{},ks=Object.keys
  const hit=k=>{const nr=r[k].new_real_recall||{},t=Object.values(nr).reduce((a,q)=>a+q.windows,0);return Math.round(Object.values(nr).reduce((a,q)=>a+q.windows*q.recall,0))+" of "+t+" real attack windows flagged"};
  return{...o,grid:{...o.grid,left:130,right:36},tooltip:{...o.tooltip,trigger:"item",formatter:p=>`${p.name}<br>${p.value}% of flaws.cloud windows flagged<br>${hit(ks[p.dataIndex])}`},xAxis:ax({type:"value",min:0,max:100,axisLabel:{color:cv("--mu"),fontSize:11,formatter:"{value}%"}}),yAxis:ax({type:"category",data:ks.map(k=>NM[k]),inverse:true,splitLine:{show:false}}),
  series:[{type:"bar",barWidth:14,data:ks.map(k=>({value:+(r[k].old_real_unlabelled.alert_rate*100).toFixed(1),itemStyle:{color:r[k].old_real_unlabelled.alert_rate>.3?cv("--wr"):cv("--c1")}})),label:{show:true,position:"right",color:cv("--mu"),fontSize:11,formatter:"{c}%"},markLine:{silent:true,symbol:"none",lineStyle:{color:cv("--bad"),type:"dashed"},label:{formatter:"1% target",color:cv("--mu"),position:"end",rotate:0,align:"left",padding:[0,0,0,6]},data:[{xAxis:1}]}}]}};
+B.iam_graph=function(D){
+ const g=(D&&D.GRAPH)||window.GRAPH||{nodes:[],links:[],categories:[]};
+ if(!g.nodes||!g.nodes.length)return empty("Loading IAM capability graph…");
+ const mu=cv("--mu"),ln=cv("--ln"),tx=cv("--tx"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+ return{
+  animation:true,
+  animationDuration:600,
+  tooltip:{
+   trigger:"item",
+   backgroundColor:cv("--sf2"),
+   borderColor:ln,
+   textStyle:{color:tx,fontSize:12},
+   formatter:p=>{
+    if(p.dataType=="node"){
+     const d=p.data;
+     const adm=d.is_admin?'<br><span style="color:var(--bad)">★ Administrator</span>':'';
+     const sens=d.is_sensitive?'<br><span style="color:var(--wr)">⚠ Sensitive Asset</span>':'';
+     const path=d.in_attack_path?'<br><span style="color:var(--bad)">● Active Attack Path Node</span>':'';
+     return`<b>${esc(d.name)}</b><br><span style="color:${mu}">Type:</span> ${esc(d.value)}${adm}${sens}${path}`;
+    }
+    if(p.dataType=="edge"){
+     const l=p.data;
+     const acts=l.actions&&l.actions.length?`<br><span style="color:${mu}">Actions:</span> ${esc(l.actions.join(", "))}`:"";
+     const path=l.in_attack_path?'<br><span style="color:var(--bad)">● Active Escalation Edge</span>':'';
+     return`<b>${esc(l.relationship)}</b><br>${esc(l.source)} → ${esc(l.target)}${acts}${path}`;
+    }
+    return"";
+   }
+  },
+  legend:{
+   data:(g.categories||[]).map(c=>c.name),
+   top:8,
+   left:12,
+   textStyle:{color:mu,fontSize:11},
+   itemWidth:10,
+   itemHeight:10
+  },
+  series:[{
+   type:"graph",
+   layout:"force",
+   data:g.nodes,
+   links:g.links,
+   categories:g.categories,
+   roam:true,
+   label:{show:true,position:"right",formatter:"{b}",fontSize:11,color:tx},
+   edgeSymbol:["none","arrow"],
+   edgeSymbolSize:[4,8],
+   lineStyle:{curveness:0.12},
+   emphasis:{focus:"adjacency",lineStyle:{width:3.5}},
+   force:{repulsion:220,gravity:0.08,edgeLength:[70,140]}
+  }]
+ };
+};
 function paint(k,D){const c=CH[k];if(!c||!c.inst||!c.el.isConnected||!B[k])return;const o=B[k](D),e=!!o.graphic;c.inst.setOption(o,{notMerge:c.empty!==e||e});c.empty=e}
 function mount(D){document.querySelectorAll(".cslot").forEach(s=>{const k=s.dataset.key;if(!window.echarts){s.textContent="Chart library not found. Download ECharts into static/vendor (see the setup steps).";return}
  let c=CH[k];if(!c){const el=document.createElement("div");el.style.cssText="width:100%;height:100%";c=CH[k]={el,inst:null,empty:null};if(window.ResizeObserver)new ResizeObserver(()=>{if(c.inst&&c.el.isConnected)c.inst.resize()}).observe(el)}

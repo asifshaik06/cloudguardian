@@ -231,6 +231,26 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
             parts["ML anomaly score"] = (W["ml"], anomaly_list[-1]["score"])
         parts["Asset sensitivity"] = (W["asset"], ASSET[k][1])
 
+        # Integrate dynamic IAM Capability Graph blast radius if available
+        iam_graph = g.get("iam_graph")
+        br_data = None
+        if iam_graph:
+            target_map = {
+                "key": "user/intern-dev",
+                "s3": "s3/student-records-demo",
+                "ct": "s3/main-trail-bucket",
+                "sg": "ec2/bastion-ec2",
+            }
+            target_id = target_map.get(k)
+            if target_id:
+                try:
+                    from backend.graph.blast_radius import calculate_blast_radius
+                    br = calculate_blast_radius(iam_graph, target_id)
+                    br_data = br.to_dict()
+                    parts["IAM blast radius"] = (0.25, round(br.score / 100.0, 2))
+                except Exception as err:
+                    logger.debug("Failed computing blast radius for finding %s: %s", k, err)
+
         tot = sum(w for w, _ in parts.values())
         rows = [
             dict(
@@ -274,9 +294,10 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
             risk=dict(
                 score=round(sum(x["points"] for x in rows)),
                 rows=rows,
-                note="Weights are project-defined, not learned.",
-                excluded="Graph exposure is not included because the IAM graph is not built yet.",
+                note="Composite score combining CSPM severity, ML anomaly, asset sensitivity, and IAM capability graph exposure.",
+                excluded=None if br_data else "Graph exposure is not included because the IAM graph is not active.",
             ),
+            blast_radius=br_data,
             events=matching_events,
             timeline=rel_lines[-14:],
             asset=ASSET[k][0],
