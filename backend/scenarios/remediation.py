@@ -46,8 +46,8 @@ def apply_remediation(
 
     # 1. Capture Pre-Remediation Baseline
     pre_paths = len(run.paths)
-    pre_confirmed = sum(1 for p in run.paths if p.get("classification") == "Confirmed")
-    pre_potential = sum(1 for p in run.paths if p.get("classification") == "Potential")
+    pre_confirmed = sum(1 for p in run.paths if str(p.get("classification", "")).upper() == "CONFIRMED")
+    pre_potential = sum(1 for p in run.paths if str(p.get("classification", "")).upper() == "POTENTIAL")
     pre_score = float(run.blast_radius.get("score", 0.0))
     pre_sensitive = len(run.blast_radius.get("sensitive_resources_exposed", []))
     pre_admin = bool(run.blast_radius.get("admin_reachable", False))
@@ -163,8 +163,8 @@ def apply_remediation(
 
     # 4. Capture Post-Remediation Metrics
     post_paths = len(run.paths)
-    post_confirmed = sum(1 for p in run.paths if p.get("classification") == "Confirmed")
-    post_potential = sum(1 for p in run.paths if p.get("classification") == "Potential")
+    post_confirmed = sum(1 for p in run.paths if str(p.get("classification", "")).upper() == "CONFIRMED")
+    post_potential = sum(1 for p in run.paths if str(p.get("classification", "")).upper() == "POTENTIAL")
     post_score = float(run.blast_radius.get("score", 0.0))
     post_sensitive = len(run.blast_radius.get("sensitive_resources_exposed", []))
     post_admin = bool(run.blast_radius.get("admin_reachable", False))

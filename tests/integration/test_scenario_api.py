@@ -14,6 +14,7 @@ Covers all 10 Part H endpoints:
 """
 import pytest
 from app import app as flask_app
+from backend.security import AUTH_HEADER, get_active_api_key
 
 
 @pytest.fixture
@@ -21,6 +22,11 @@ def client():
     flask_app.config["TESTING"] = True
     with flask_app.test_client() as client:
         yield client
+
+
+@pytest.fixture
+def auth_headers():
+    return {AUTH_HEADER: get_active_api_key()}
 
 
 # 1. GET /api/scenarios
@@ -60,9 +66,9 @@ def test_get_scenario_details(client):
 
 
 # 3. POST /api/scenarios/<id>/launch
-def test_launch_scenario(client):
+def test_launch_scenario(client, auth_headers):
     """Verify launching an isolated scenario simulation run."""
-    resp = client.post("/api/scenarios/privesc-risky-trust/launch")
+    resp = client.post("/api/scenarios/privesc-risky-trust/launch", headers=auth_headers)
     assert resp.status_code == 201
     data = resp.get_json()
 
@@ -73,10 +79,10 @@ def test_launch_scenario(client):
 
 
 # 4. GET /api/scenarios/runs/<run_id>
-def test_get_run_state_and_graph(client):
+def test_get_run_state_and_graph(client, auth_headers):
     """Verify fetching run state and ECharts graph topology."""
     # First launch
-    launch_resp = client.post("/api/scenarios/privesc-excessive-iam/launch")
+    launch_resp = client.post("/api/scenarios/privesc-excessive-iam/launch", headers=auth_headers)
     run_id = launch_resp.get_json()["run_id"]
 
     resp = client.get(f"/api/scenarios/runs/{run_id}")
@@ -91,12 +97,12 @@ def test_get_run_state_and_graph(client):
 
 
 # 5. POST /api/scenarios/runs/<run_id>/analyze
-def test_reanalyze_run(client):
+def test_reanalyze_run(client, auth_headers):
     """Verify triggering deep re-analysis of a scenario run."""
-    launch_resp = client.post("/api/scenarios/privesc-excessive-iam/launch")
+    launch_resp = client.post("/api/scenarios/privesc-excessive-iam/launch", headers=auth_headers)
     run_id = launch_resp.get_json()["run_id"]
 
-    resp = client.post(f"/api/scenarios/runs/{run_id}/analyze", json={"context": {"mfa_present": True}})
+    resp = client.post(f"/api/scenarios/runs/{run_id}/analyze", headers=auth_headers, json={"context": {"mfa_present": True}})
     assert resp.status_code == 200
     data = resp.get_json()
 
@@ -107,16 +113,17 @@ def test_reanalyze_run(client):
 
 
 # 6. POST /api/scenarios/runs/<run_id>/remediate
-def test_remediate_run(client):
+def test_remediate_run(client, auth_headers):
     """Verify applying a simulated remediation action to an active run."""
-    launch_resp = client.post("/api/scenarios/privesc-excessive-iam/launch")
+    launch_resp = client.post("/api/scenarios/privesc-excessive-iam/launch", headers=auth_headers)
     run_id = launch_resp.get_json()["run_id"]
 
     action = {
         "type": "revoke_excessive_iam",
         "target": "user/junior-operator",
     }
-    resp = client.post(f"/api/scenarios/runs/{run_id}/remediate", json={"action": action})
+    # Test standard wrapped format
+    resp = client.post(f"/api/scenarios/runs/{run_id}/remediate", headers=auth_headers, json={"action": action})
     assert resp.status_code == 200
     data = resp.get_json()
 
@@ -124,20 +131,28 @@ def test_remediate_run(client):
     assert data["status"] == "PASS"
     assert data["metrics"]["delta"]["paths_eliminated"] >= 1
 
+    # Test direct payload format without wrapping (BUG-008 fix)
+    launch_resp2 = client.post("/api/scenarios/privesc-excessive-iam/launch", headers=auth_headers)
+    run_id2 = launch_resp2.get_json()["run_id"]
+    resp2 = client.post(f"/api/scenarios/runs/{run_id2}/remediate", headers=auth_headers, json=action)
+    assert resp2.status_code == 200
+    assert resp2.get_json()["verified"] is True
+
 
 # 7. POST /api/scenarios/runs/<run_id>/verify
-def test_verify_run(client):
+def test_verify_run(client, auth_headers):
     """Verify inspecting post-remediation security status."""
-    launch_resp = client.post("/api/scenarios/resource-s3-public/launch")
+    launch_resp = client.post("/api/scenarios/resource-s3-public/launch", headers=auth_headers)
     run_id = launch_resp.get_json()["run_id"]
 
     # Apply fix
     client.post(
         f"/api/scenarios/runs/{run_id}/remediate",
+        headers=auth_headers,
         json={"action": {"type": "enable_s3_public_access_block", "target": "s3/student-records-public"}},
     )
 
-    resp = client.post(f"/api/scenarios/runs/{run_id}/verify")
+    resp = client.post(f"/api/scenarios/runs/{run_id}/verify", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.get_json()
 
@@ -146,19 +161,20 @@ def test_verify_run(client):
 
 
 # 8. POST /api/scenarios/runs/<run_id>/reset
-def test_reset_run(client):
+def test_reset_run(client, auth_headers):
     """Verify resetting an isolated scenario run restores initial topology."""
-    launch_resp = client.post("/api/scenarios/privesc-excessive-iam/launch")
+    launch_resp = client.post("/api/scenarios/privesc-excessive-iam/launch", headers=auth_headers)
     run_id = launch_resp.get_json()["run_id"]
 
     # Remediate (removes paths)
     client.post(
         f"/api/scenarios/runs/{run_id}/remediate",
+        headers=auth_headers,
         json={"action": {"type": "revoke_excessive_iam", "target": "user/junior-operator"}},
     )
 
     # Reset
-    resp = client.post(f"/api/scenarios/runs/{run_id}/reset")
+    resp = client.post(f"/api/scenarios/runs/{run_id}/reset", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.get_json()
 
@@ -167,7 +183,7 @@ def test_reset_run(client):
 
 
 # 9. POST /api/scenarios/custom
-def test_create_custom_scenario(client):
+def test_create_custom_scenario(client, auth_headers):
     """Verify dynamic custom scenario builder endpoint."""
     custom_payload = {
         "id": "custom-devops-privesc",
@@ -216,7 +232,7 @@ def test_create_custom_scenario(client):
         ],
     }
 
-    resp = client.post("/api/scenarios/custom", json=custom_payload)
+    resp = client.post("/api/scenarios/custom", headers=auth_headers, json=custom_payload)
     assert resp.status_code == 201
     data = resp.get_json()
 
@@ -226,7 +242,7 @@ def test_create_custom_scenario(client):
 
 
 # 10. POST /api/scenarios/validate-policy
-def test_validate_policy(client):
+def test_validate_policy(client, auth_headers):
     """Verify real-time IAM policy validation endpoint."""
     policy_payload = {
         "statements": [
@@ -245,7 +261,7 @@ def test_validate_policy(client):
         ]
     }
 
-    resp = client.post("/api/scenarios/validate-policy", json=policy_payload)
+    resp = client.post("/api/scenarios/validate-policy", headers=auth_headers, json=policy_payload)
     assert resp.status_code == 200
     data = resp.get_json()
 
@@ -253,3 +269,21 @@ def test_validate_policy(client):
     assert data["has_explicit_deny"] is True
     assert data["statement_count"] == 2
     assert len(data["warnings"]) >= 1
+
+
+def test_scenario_mutating_endpoints_require_auth(client):
+    """Verify that unauthenticated mutating scenario requests are rejected with 401."""
+    # 1. Launch
+    assert client.post("/api/scenarios/privesc-excessive-iam/launch").status_code == 401
+    # 2. Analyze
+    assert client.post("/api/scenarios/runs/run-test/analyze").status_code == 401
+    # 3. Remediate
+    assert client.post("/api/scenarios/runs/run-test/remediate", json={"action": {}}).status_code == 401
+    # 4. Verify
+    assert client.post("/api/scenarios/runs/run-test/verify").status_code == 401
+    # 5. Reset
+    assert client.post("/api/scenarios/runs/run-test/reset").status_code == 401
+    # 6. Custom
+    assert client.post("/api/scenarios/custom", json={}).status_code == 401
+    # 7. Validate policy
+    assert client.post("/api/scenarios/validate-policy", json={}).status_code == 401

@@ -322,7 +322,7 @@ class PolicyEvaluator:
                     "status": "MISSING_EDGE",
                     "reason": f"No direct transition edge exists between {source_id} and {target_id}.",
                 })
-                return PathClassification.THEORETICAL, f"Hop {i+1} ({source_id} -> {target_id}) lacks a connecting capability edge.", hop_evaluations
+                return PathClassification.UNVERIFIED, f"Hop {i+1} ({source_id} -> {target_id}) lacks a connecting capability edge.", hop_evaluations
 
             edge_data = dict(g[source_id][target_id])
             rel = edge_data.get("relationship", "")
@@ -340,7 +340,7 @@ class PolicyEvaluator:
                     "status": "EXPLICIT_DENY",
                     "reason": f"Explicit Deny effect on capability edge {source_id} -> {target_id}.",
                 })
-                return PathClassification.THEORETICAL, f"Hop {i+1} is blocked by an explicit Deny statement.", hop_evaluations
+                return PathClassification.BLOCKED, f"Hop {i+1} is blocked by an explicit Deny statement.", hop_evaluations
 
             # Evaluate AssumesRole trust policy
             if rel == EdgeType.ASSUMES_ROLE.value:
@@ -360,7 +360,7 @@ class PolicyEvaluator:
                             "status": "TRUST_REJECTED",
                             "reason": f"Trust policy on {target_id} does not permit {source_arn} or condition failed.",
                         })
-                        return PathClassification.THEORETICAL, f"Hop {i+1} role trust relationship rejected for {source_arn}.", hop_evaluations
+                        return PathClassification.BLOCKED, f"Hop {i+1} role trust relationship rejected for {source_arn}.", hop_evaluations
 
                 # Check if MFA condition was required but missing
                 if evidence.get("requires_mfa") and not ctx.get("mfa_present", False):
@@ -372,7 +372,7 @@ class PolicyEvaluator:
                         "status": "MFA_REQUIRED",
                         "reason": f"MFA token required by policy but not present in caller context.",
                     })
-                    return PathClassification.THEORETICAL, f"Hop {i+1} requires Multi-Factor Authentication.", hop_evaluations
+                    return PathClassification.BLOCKED, f"Hop {i+1} requires Multi-Factor Authentication.", hop_evaluations
 
             # Check PassRole external context requirement
             if rel == EdgeType.PASS_ROLE.value:

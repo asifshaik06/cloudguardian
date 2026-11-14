@@ -26,9 +26,35 @@ class ScenarioDifficulty(str, Enum):
 
 class PathClassification(str, Enum):
     """Confidence classification of discovered attack paths."""
-    CONFIRMED = "Confirmed"       # All Allow, no Deny, valid trust, conditions satisfied
-    POTENTIAL = "Potential"       # Capability exists (e.g. PassRole), requires external compute context
-    THEORETICAL = "Theoretical"   # Blocked by explicit Deny, resource restriction, or unmet condition
+    CONFIRMED = "CONFIRMED"       # All Allow, no Deny, valid trust, conditions satisfied
+    POTENTIAL = "POTENTIAL"       # Capability exists (e.g. PassRole), requires external compute context
+    BLOCKED = "BLOCKED"           # Blocked by explicit Deny, boundary restriction, or unmet condition
+    UNVERIFIED = "UNVERIFIED"     # Ambiguous or missing relationship edge/trust
+    THEORETICAL = "BLOCKED"       # Backward-compatible alias for BLOCKED
+
+    @classmethod
+    def _missing_(cls, value: object) -> Any:
+        if isinstance(value, str):
+            val_upper = value.upper()
+            if val_upper in ("THEORETICAL", "BLOCKED"):
+                return cls.BLOCKED
+            for member in cls:
+                if member.value == val_upper:
+                    return member
+        return super()._missing_(value)
+
+    def __hash__(self) -> int:
+        return hash(self.value.upper())
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, str):
+            val_upper = self.value.upper()
+            oth_upper = other.upper()
+            if val_upper == oth_upper:
+                return True
+            if val_upper == "BLOCKED" and oth_upper in ("THEORETICAL", "BLOCKED"):
+                return True
+        return super().__eq__(other)
 
 
 class RunStatus(str, Enum):

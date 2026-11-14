@@ -239,8 +239,13 @@ class ScenarioSessionManager:
 
         # Sort paths: Confirmed first, then highest risk score
         def path_sort_key(p: Dict[str, Any]) -> Tuple[int, float]:
-            cls_order = {"Confirmed": 0, "Potential": 1, "Theoretical": 2}
-            cls_rank = cls_order.get(p.get("classification", "Theoretical"), 3)
+            cls_order = {
+                "CONFIRMED": 0, "Confirmed": 0,
+                "POTENTIAL": 1, "Potential": 1,
+                "UNVERIFIED": 2, "Unverified": 2,
+                "BLOCKED": 3, "THEORETICAL": 3, "Theoretical": 3,
+            }
+            cls_rank = cls_order.get(str(p.get("classification", "BLOCKED")), 4)
             return (cls_rank, -p.get("risk_score", 0))
 
         unique_paths.sort(key=path_sort_key)
@@ -259,7 +264,7 @@ class ScenarioSessionManager:
         finding_idx = 1
 
         for p in unique_paths:
-            if p.get("classification") == PathClassification.THEORETICAL.value:
+            if str(p.get("classification", "")).upper() in ("BLOCKED", "THEORETICAL"):
                 continue
 
             src = p.get("source_id", "")

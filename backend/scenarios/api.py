@@ -35,6 +35,7 @@ from backend.scenarios.session import (
     ScenarioSessionManager,
     scenario_session_manager,
 )
+from backend.security import require_auth
 
 logger = logging.getLogger("cloudguardian.scenarios.api")
 
@@ -78,6 +79,7 @@ def register_scenarios_api(
 
     # 3. POST /api/scenarios/<scenario_id>/launch - Launch isolated run
     @app.post("/api/scenarios/<scenario_id>/launch")
+    @require_auth
     def launch_scenario(scenario_id: str) -> Any:
         """Launch an isolated scenario simulation run."""
         scenario_def = get_scenario_by_id(scenario_id)
@@ -115,6 +117,7 @@ def register_scenarios_api(
 
     # 5. POST /api/scenarios/runs/<run_id>/analyze - Re-analyze graph
     @app.post("/api/scenarios/runs/<run_id>/analyze")
+    @require_auth
     def reanalyze_run(run_id: str) -> Any:
         """Trigger deep re-analysis of the isolated capability graph."""
         payload = request.get_json(silent=True) or {}
@@ -134,10 +137,13 @@ def register_scenarios_api(
 
     # 6. POST /api/scenarios/runs/<run_id>/remediate - Apply simulated fix
     @app.post("/api/scenarios/runs/<run_id>/remediate")
+    @require_auth
     def remediate_run(run_id: str) -> Any:
         """Apply a simulated remediation action to an isolated scenario run."""
         payload = request.get_json(silent=True) or {}
         action = payload.get("action")
+        if not action and isinstance(payload, dict) and ("type" in payload or "target" in payload or "source" in payload):
+            action = payload
         if not action or not isinstance(action, dict):
             return jsonify({"error": "Request body must include an 'action' object."}), 400
 
@@ -152,6 +158,7 @@ def register_scenarios_api(
 
     # 7. POST /api/scenarios/runs/<run_id>/verify - Verify post-remediation security state
     @app.post("/api/scenarios/runs/<run_id>/verify")
+    @require_auth
     def verify_run(run_id: str) -> Any:
         """Verify current remediation status, remaining attack vectors, and blast radius delta."""
         try:
@@ -162,6 +169,7 @@ def register_scenarios_api(
 
     # 8. POST /api/scenarios/runs/<run_id>/reset - Reset run to initial state
     @app.post("/api/scenarios/runs/<run_id>/reset")
+    @require_auth
     def reset_run(run_id: str) -> Any:
         """Restore an isolated scenario run to its initial configuration."""
         try:
@@ -178,6 +186,7 @@ def register_scenarios_api(
 
     # 9. POST /api/scenarios/custom - Build & analyze dynamic custom scenario
     @app.post("/api/scenarios/custom")
+    @require_auth
     def create_custom_scenario() -> Any:
         """Validate, build, and analyze a dynamic user-created scenario."""
         payload = request.get_json(silent=True)
@@ -211,6 +220,7 @@ def register_scenarios_api(
 
     # 10. POST /api/scenarios/validate-policy - Real-time policy validation
     @app.post("/api/scenarios/validate-policy")
+    @require_auth
     def validate_policy() -> Any:
         """Real-time validation of user-defined IAM policy statements."""
         payload = request.get_json(silent=True)

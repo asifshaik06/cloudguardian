@@ -68,7 +68,7 @@ def test_workflow_1_attack_detection_to_alerts(client, auth_headers, monkeypatch
 # WORKFLOW 2: ALERT ESCALATION -> INCIDENT CREATION
 # =========================================================================
 
-def test_workflow_2_alert_escalation_to_incident(client):
+def test_workflow_2_alert_escalation_to_incident(client, auth_headers):
     """Workflow 2: Escalate an alert and verify incident creation with linkage."""
     # Create or fetch an alert
     resp = client.get("/api/alerts")
@@ -85,7 +85,7 @@ def test_workflow_2_alert_escalation_to_incident(client):
         "summary": "Formal security analyst escalation for critical posture drift.",
         "assigned_to": "SOC Lead"
     }
-    resp_esc = client.post(f"/api/alerts/{alert_id}/escalate", json=esc_payload)
+    resp_esc = client.post(f"/api/alerts/{alert_id}/escalate", json=esc_payload, headers=auth_headers)
     assert resp_esc.status_code in [200, 201]
     res_data = resp_esc.get_json()
     incident = res_data.get("incident", res_data)
@@ -106,7 +106,7 @@ def test_workflow_2_alert_escalation_to_incident(client):
 # WORKFLOW 3: COMPLETE INCIDENT RESPONSE LIFECYCLE (6 STAGES)
 # =========================================================================
 
-def test_workflow_3_complete_incident_lifecycle(client):
+def test_workflow_3_complete_incident_lifecycle(client, auth_headers):
     """Workflow 3: Progress an incident through all 6 response stages to closure."""
     # Create fresh incident
     create_resp = client.post("/api/incidents", json={
@@ -114,14 +114,14 @@ def test_workflow_3_complete_incident_lifecycle(client):
         "severity": "High",
         "summary": "Verifying full response pipeline.",
         "lead_analyst": "Evaluator Analyst"
-    })
+    }, headers=auth_headers)
     assert create_resp.status_code in [200, 201]
     inc = create_resp.get_json()
     inc_id = inc["id"]
     assert inc["status"] == "Triage"
 
     # Stage 2: Investigation
-    client.post(f"/api/incidents/{inc_id}/action", json={"status": "Investigation", "notes": "Triaged initial logs."})
+    client.post(f"/api/incidents/{inc_id}/action", json={"status": "Investigation", "notes": "Triaged initial logs."}, headers=auth_headers)
     inc_check = client.get(f"/api/incidents/{inc_id}").get_json()
     assert inc_check["status"] == "Investigation"
 
@@ -133,23 +133,23 @@ def test_workflow_3_complete_incident_lifecycle(client):
             "sessions_terminated": True,
             "ingress_restricted": True
         }
-    })
+    }, headers=auth_headers)
     inc_check = client.get(f"/api/incidents/{inc_id}").get_json()
     assert inc_check["status"] == "Containment"
     assert inc_check["containment_evidence"]["quarantine_enacted"] is True
 
     # Stage 4: Remediation
-    client.post(f"/api/incidents/{inc_id}/action", json={"status": "Remediation", "notes": "Remediation task REM-0001 dispatched."})
+    client.post(f"/api/incidents/{inc_id}/action", json={"status": "Remediation", "notes": "Remediation task REM-0001 dispatched."}, headers=auth_headers)
     inc_check = client.get(f"/api/incidents/{inc_id}").get_json()
     assert inc_check["status"] == "Remediation"
 
     # Stage 5: Verification
-    client.post(f"/api/incidents/{inc_id}/action", json={"status": "Verification", "notes": "CSPM re-scan returned 100% compliant."})
+    client.post(f"/api/incidents/{inc_id}/action", json={"status": "Verification", "notes": "CSPM re-scan returned 100% compliant."}, headers=auth_headers)
     inc_check = client.get(f"/api/incidents/{inc_id}").get_json()
     assert inc_check["status"] == "Verification"
 
     # Stage 6: Closed
-    client.post(f"/api/incidents/{inc_id}/action", json={"status": "Closed", "closure_reason": "Threat neutralized and verified."})
+    client.post(f"/api/incidents/{inc_id}/action", json={"status": "Closed", "closure_reason": "Threat neutralized and verified."}, headers=auth_headers)
     inc_check = client.get(f"/api/incidents/{inc_id}").get_json()
     assert inc_check["status"] == "Closed"
     assert inc_check["closure_reason"] == "Threat neutralized and verified."
@@ -207,7 +207,7 @@ def test_workflow_5_blast_radius_analysis(client):
 # WORKFLOW 6 & 7: REMEDIATION APPROVAL, VERIFICATION & ROLLBACK
 # =========================================================================
 
-def test_workflow_6_and_7_remediation_lifecycle_and_rollback(client, monkeypatch):
+def test_workflow_6_and_7_remediation_lifecycle_and_rollback(client, auth_headers, monkeypatch):
     """Workflow 6 & 7: Test full remediation lifecycle and subsequent safe rollback."""
     # List remediations
     resp = client.get("/api/remediations")
@@ -217,25 +217,25 @@ def test_workflow_6_and_7_remediation_lifecycle_and_rollback(client, monkeypatch
     rem_id = rem_list[0]["id"]
 
     # Approve remediation
-    resp_appr = client.post(f"/api/remediations/{rem_id}/approve", json={"user": "Evaluator Lead"})
+    resp_appr = client.post(f"/api/remediations/{rem_id}/approve", json={"user": "Evaluator Lead"}, headers=auth_headers)
     assert resp_appr.status_code == 200
     appr_data = resp_appr.get_json()
     status = appr_data["remediation"]["status"] if "remediation" in appr_data else appr_data.get("status")
     assert status == "Approved"
 
     # Apply remediation
-    resp_apply = client.post(f"/api/remediations/{rem_id}/apply", json={"user": "Evaluator Lead"})
+    resp_apply = client.post(f"/api/remediations/{rem_id}/apply", json={"user": "Evaluator Lead"}, headers=auth_headers)
     assert resp_apply.status_code == 200
 
     # Verify remediation
-    resp_ver = client.post(f"/api/remediations/{rem_id}/verify")
+    resp_ver = client.post(f"/api/remediations/{rem_id}/verify", headers=auth_headers)
     assert resp_ver.status_code == 200
 
     # Mock rollback attack call so test environment doesn't fail on socket permissions
     monkeypatch.setitem(app_module.R["s3"], "attack", lambda: True)
 
     # Workflow 7: Rollback remediation
-    resp_roll = client.post(f"/api/remediations/{rem_id}/rollback")
+    resp_roll = client.post(f"/api/remediations/{rem_id}/rollback", headers=auth_headers)
     assert resp_roll.status_code == 200
     roll_data = resp_roll.get_json()
     status_roll = roll_data["remediation"]["status"] if "remediation" in roll_data else roll_data.get("status")
@@ -246,7 +246,7 @@ def test_workflow_6_and_7_remediation_lifecycle_and_rollback(client, monkeypatch
 # WORKFLOW 8: PREDEFINED SCENARIO LAB EXECUTION & RESET
 # =========================================================================
 
-def test_workflow_8_predefined_scenario_execution(client):
+def test_workflow_8_predefined_scenario_execution(client, auth_headers):
     """Workflow 8: Predefined scenario execution, path inspection, and reset."""
     resp = client.get("/api/scenarios")
     assert resp.status_code == 200
@@ -255,7 +255,7 @@ def test_workflow_8_predefined_scenario_execution(client):
 
     # Launch excessive permissions scenario
     target_scen = scenarios[0]["id"]
-    launch_resp = client.post(f"/api/scenarios/{target_scen}/launch")
+    launch_resp = client.post(f"/api/scenarios/{target_scen}/launch", headers=auth_headers)
     assert launch_resp.status_code in [200, 201]
     run_info = launch_resp.get_json()
     assert "run_id" in run_info
@@ -270,11 +270,11 @@ def test_workflow_8_predefined_scenario_execution(client):
     assert "graph" in run_data
 
     # Verify scenario
-    ver_resp = client.post(f"/api/scenarios/runs/{run_id}/verify")
+    ver_resp = client.post(f"/api/scenarios/runs/{run_id}/verify", headers=auth_headers)
     assert ver_resp.status_code == 200
 
     # Reset scenario
-    reset_resp = client.post(f"/api/scenarios/runs/{run_id}/reset")
+    reset_resp = client.post(f"/api/scenarios/runs/{run_id}/reset", headers=auth_headers)
     assert reset_resp.status_code == 200
 
 
@@ -282,14 +282,14 @@ def test_workflow_8_predefined_scenario_execution(client):
 # WORKFLOW 9: DYNAMIC CUSTOM SCENARIO BUILDER
 # =========================================================================
 
-def test_workflow_9_dynamic_custom_scenario_builder(client):
+def test_workflow_9_dynamic_custom_scenario_builder(client, auth_headers):
     """Workflow 9: Dynamic custom scenario creation and policy statement validation."""
     # Step A: Validate policy statement
     val_resp = client.post("/api/scenarios/validate-policy", json={
         "statements": [
             {"effect": "Allow", "actions": ["iam:PassRole", "ec2:RunInstances"], "resources": ["*"]}
         ]
-    })
+    }, headers=auth_headers)
     assert val_resp.status_code == 200
     val_data = val_resp.get_json()
     assert val_data["valid"] is True
@@ -343,7 +343,7 @@ def test_workflow_9_dynamic_custom_scenario_builder(client):
             }
         ]
     }
-    cust_resp = client.post("/api/scenarios/custom", json=custom_payload)
+    cust_resp = client.post("/api/scenarios/custom", json=custom_payload, headers=auth_headers)
     assert cust_resp.status_code in [200, 201]
     cust_data = cust_resp.get_json()
     assert "run_id" in cust_data

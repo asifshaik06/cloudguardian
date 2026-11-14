@@ -368,6 +368,132 @@ async function loadRunDetails(runId, highlight) {
   }
 }
 
+async function remediateRun(runId, action) {
+  if (!runId) return;
+  showToast("Applying remediation to simulated environment...", "info");
+  try {
+    const res = await fetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/remediate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: action || { type: "generic_remediation" } }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      await loadRunDetails(runId);
+      showToast(data.verified ? "Remediation verified (PASS) — Risk mitigated!" : "Remediation applied; residual vectors detected.", data.verified ? "ok" : "warn");
+      WORKBENCH_TAB = "remediation";
+      if (route() === "lab") render();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error || "Failed to apply remediation.", "bad");
+    }
+  } catch (err) {
+    showToast("Network error applying remediation.", "bad");
+  }
+}
+
+async function reanalyzeRun(runId) {
+  if (!runId) return;
+  showToast("Re-analyzing capability graph & blast radius...", "info");
+  try {
+    const res = await fetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      await loadRunDetails(runId);
+      showToast("Capability graph re-analysis complete.", "ok");
+      if (route() === "lab") render();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error || "Failed to re-analyze scenario.", "bad");
+    }
+  } catch (err) {
+    showToast("Network error during analysis.", "bad");
+  }
+}
+
+async function verifyRun(runId) {
+  if (!runId) return;
+  showToast("Verifying post-remediation security state...", "info");
+  try {
+    const res = await fetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/verify`, {
+      method: "POST",
+    });
+    if (res.ok) {
+      const data = await res.json();
+      await loadRunDetails(runId);
+      showToast(data.verified ? "Verification PASSED: Target risk mitigated." : `Status: ${data.status || "UNREMEDIATED"}`, data.verified ? "ok" : "warn");
+      WORKBENCH_TAB = "remediation";
+      if (route() === "lab") render();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error || "Failed to verify scenario.", "bad");
+    }
+  } catch (err) {
+    showToast("Network error verifying scenario state.", "bad");
+  }
+}
+
+async function resetRun(runId) {
+  if (!runId) return;
+  confirmModal(
+    "Reset Scenario Run",
+    "Are you sure you want to reset this simulated scenario to its initial baseline? All applied remediations will be reverted.",
+    async () => {
+      try {
+        const res = await fetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/reset`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          await loadRunDetails(runId);
+          showToast("Scenario reset to initial simulated baseline.", "info");
+          WORKBENCH_TAB = "paths";
+          if (route() === "lab") render();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.error || "Failed to reset scenario.", "bad");
+        }
+      } catch (err) {
+        showToast("Network error resetting scenario.", "bad");
+      }
+    }
+  );
+}
+
+function bindWorkbenchInspectorEvents() {
+  const bRecFix = $$("btn-apply-recommended-fix");
+  if (bRecFix && ACTIVE_RUN) {
+    bRecFix.onclick = () => remediateRun(ACTIVE_RUN.run_id, (ACTIVE_RUN.definition && ACTIVE_RUN.definition.expected_remediation) || { type: "generic_remediation" });
+  }
+
+  document.querySelectorAll("[data-lab-trace]").forEach(b => {
+    b.onclick = () => {
+      if (!ACTIVE_RUN) return;
+      const p = ACTIVE_RUN.paths[+b.dataset.labTrace];
+      if (p && p.nodes) {
+        ACTIVE_SCENARIO_PATH = p;
+        loadRunDetails(ACTIVE_RUN.run_id, p.nodes.join(","));
+      }
+    };
+  });
+
+  const bClearLabInsp = $$("btn-clear-lab-inspector");
+  if (bClearLabInsp) {
+    bClearLabInsp.onclick = () => {
+      SELECTED_SCENARIO_NODE = null;
+      SELECTED_SCENARIO_EDGE = null;
+      updateWorkbenchInspector();
+    };
+  }
+}
+
+window.remediateRun = remediateRun;
+window.reanalyzeRun = reanalyzeRun;
+window.verifyRun = verifyRun;
+window.resetRun = resetRun;
+
 window.onScenarioGraphClick = function(params) {
   if (params.dataType === "node") {
     SELECTED_SCENARIO_NODE = params.data;
@@ -551,6 +677,7 @@ function updateWorkbenchInspector() {
       t.className = "btn sm";
     }
   });
+  bindWorkbenchInspectorEvents();
 }
 
 function renderCatalogView() {

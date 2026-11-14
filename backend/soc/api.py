@@ -19,6 +19,7 @@ from backend.soc.models import (
     VerificationState,
 )
 from backend.soc.store import SOCStore, soc_store
+from backend.security import require_auth
 
 logger = logging.getLogger("cloudguardian.soc.api")
 
@@ -71,6 +72,7 @@ def register_soc_api(
         return jsonify(alert.model_dump())
 
     @app.post("/api/alerts/<alert_id>/action")
+    @require_auth
     def update_alert_action(alert_id: str) -> Any:
         """Update alert lifecycle status (Acknowledge, Investigate, Resolve, Suppress)."""
         payload = request.get_json(silent=True) or {}
@@ -101,6 +103,7 @@ def register_soc_api(
         })
 
     @app.post("/api/alerts/<alert_id>/escalate")
+    @require_auth
     def escalate_alert_to_incident(alert_id: str) -> Any:
         """Promote an alert into a formal Security Incident."""
         alert = s_store.get_alert(alert_id)
@@ -157,6 +160,7 @@ def register_soc_api(
         return jsonify(inc.model_dump())
 
     @app.post("/api/incidents")
+    @require_auth
     def create_incident_endpoint() -> Any:
         """Create a new security incident."""
         payload = request.get_json(silent=True) or {}
@@ -179,6 +183,7 @@ def register_soc_api(
         return jsonify(incident.model_dump()), 201
 
     @app.post("/api/incidents/<incident_id>/action")
+    @require_auth
     def update_incident_action(incident_id: str) -> Any:
         """Perform lifecycle actions on incident (status update, notes, containment, closure)."""
         payload = request.get_json(silent=True) or {}
@@ -237,6 +242,7 @@ def register_soc_api(
         return jsonify(task.model_dump())
 
     @app.post("/api/remediations/<rem_id>/approve")
+    @require_auth
     def approve_remediation(rem_id: str) -> Any:
         """Grant human approval for a remediation task."""
         payload = request.get_json(silent=True) or {}
@@ -252,6 +258,7 @@ def register_soc_api(
         })
 
     @app.post("/api/remediations/<rem_id>/apply")
+    @require_auth
     def apply_remediation_endpoint(rem_id: str) -> Any:
         """Apply remediation fix and independently verify actual post-remediation security state."""
         task = s_store.get_remediation_task(rem_id)
@@ -308,6 +315,7 @@ def register_soc_api(
         })
 
     @app.post("/api/remediations/<rem_id>/verify")
+    @require_auth
     def verify_remediation_endpoint(rem_id: str) -> Any:
         """Independently verify whether a remediation task eliminated the target risk."""
         task = s_store.get_remediation_task(rem_id)
@@ -334,6 +342,7 @@ def register_soc_api(
         })
 
     @app.post("/api/remediations/<rem_id>/rollback")
+    @require_auth
     def rollback_remediation_endpoint(rem_id: str) -> Any:
         """Roll back an applied remediation and verify restored state."""
         task = s_store.get_remediation_task(rem_id)

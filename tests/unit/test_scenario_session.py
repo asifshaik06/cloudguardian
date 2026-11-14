@@ -83,7 +83,7 @@ def test_create_and_analyze_run(sample_scenario_definition):
     p = run.paths[0]
     assert p["source_id"] == "user/test-dev"
     assert p["target_id"] in ("role/target-admin", "s3/confidential-records")
-    assert p["classification"] == "Confirmed"
+    assert p["classification"] in ("Confirmed", "CONFIRMED")
 
     # Check blast radius
     assert run.blast_radius.get("admin_reachable") is True

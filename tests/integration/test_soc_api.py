@@ -1,6 +1,7 @@
 """Integration tests for CloudGuardian SOC REST API Endpoints."""
 import pytest
 from app import app as flask_app
+from backend.security import AUTH_HEADER, get_active_api_key
 
 
 @pytest.fixture
@@ -8,6 +9,11 @@ def client():
     flask_app.config["TESTING"] = True
     with flask_app.test_client() as client:
         yield client
+
+
+@pytest.fixture
+def auth_headers():
+    return {AUTH_HEADER: get_active_api_key()}
 
 
 # =========================================================================
@@ -43,10 +49,11 @@ def test_alert_details_and_404(client):
     assert resp_404.status_code == 404
 
 
-def test_alert_lifecycle_actions_api(client):
+def test_alert_lifecycle_actions_api(client, auth_headers):
     """Test updating alert status via action endpoint."""
     resp = client.post(
         "/api/alerts/ALT-0001/action",
+        headers=auth_headers,
         json={"action": "acknowledge", "notes": "Triaged by security team", "user": "analyst1"},
     )
     assert resp.status_code == 200
@@ -54,14 +61,15 @@ def test_alert_lifecycle_actions_api(client):
     assert data["alert"]["status"] == "Acknowledged"
 
     # Invalid action
-    resp_bad = client.post("/api/alerts/ALT-0001/action", json={"action": "destroy"})
+    resp_bad = client.post("/api/alerts/ALT-0001/action", headers=auth_headers, json={"action": "destroy"})
     assert resp_bad.status_code == 400
 
 
-def test_alert_escalation_to_incident_api(client):
+def test_alert_escalation_to_incident_api(client, auth_headers):
     """Test escalating an alert into a new incident."""
     resp = client.post(
         "/api/alerts/ALT-0001/escalate",
+        headers=auth_headers,
         json={
             "title": "Escalated S3 Breach Investigation",
             "severity": "Critical",
@@ -104,10 +112,11 @@ def test_incidents_list_and_details(client):
     assert detail_resp.get_json()["id"] == inc_id
 
 
-def test_incident_create_and_action(client):
+def test_incident_create_and_action(client, auth_headers):
     """Test creating an incident and updating its status/notes."""
     create_resp = client.post(
         "/api/incidents",
+        headers=auth_headers,
         json={
             "title": "Ransomware Defense Simulation",
             "severity": "High",
@@ -123,6 +132,7 @@ def test_incident_create_and_action(client):
     # Update to Containment
     act_resp = client.post(
         f"/api/incidents/{inc_id}/action",
+        headers=auth_headers,
         json={
             "status": "Containment",
             "notes": "Isolated network access",
@@ -151,7 +161,7 @@ def test_remediations_list_and_stats(client):
     assert "total" in stats_resp.get_json()
 
 
-def test_remediation_approval_and_apply(client):
+def test_remediation_approval_and_apply(client, auth_headers):
     """Test approving and applying remediation task."""
     # Find a task with finding_id 's3'
     list_resp = client.get("/api/remediations")
@@ -160,25 +170,45 @@ def test_remediation_approval_and_apply(client):
     rem_id = target["id"]
 
     # Approve
-    appr_resp = client.post(f"/api/remediations/{rem_id}/approve", json={"user": "admin_auditor"})
+    appr_resp = client.post(f"/api/remediations/{rem_id}/approve", headers=auth_headers, json={"user": "admin_auditor"})
     assert appr_resp.status_code == 200
     assert appr_resp.get_json()["remediation"]["status"] == "Approved"
 
     # Apply (triggers executor and independent verifier)
-    apply_resp = client.post(f"/api/remediations/{rem_id}/apply", json={"user": "admin_auditor"})
+    apply_resp = client.post(f"/api/remediations/{rem_id}/apply", headers=auth_headers, json={"user": "admin_auditor"})
     assert apply_resp.status_code == 200
     app_data = apply_resp.get_json()
     assert "remediation" in app_data
     assert app_data["remediation"]["verification_state"] in ("PASS", "FAIL", "PARTIAL")
 
 
-def test_remediation_independent_verify_endpoint(client):
+def test_remediation_independent_verify_endpoint(client, auth_headers):
     """Test standalone verify endpoint for remediation."""
-    resp = client.post("/api/remediations/REM-0001/verify")
+    resp = client.post("/api/remediations/REM-0001/verify", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.get_json()
     assert "verification_state" in data
     assert data["verification_state"] in ("PASS", "FAIL", "PARTIAL", "UNVERIFIED")
+
+
+def test_soc_mutating_endpoints_require_auth(client):
+    """Verify that unauthenticated mutating requests are rejected with 401."""
+    # 1. Alert action
+    assert client.post("/api/alerts/ALT-0001/action", json={"action": "acknowledge"}).status_code == 401
+    # 2. Alert escalate
+    assert client.post("/api/alerts/ALT-0001/escalate", json={"title": "Test"}).status_code == 401
+    # 3. Incident create
+    assert client.post("/api/incidents", json={"title": "Test"}).status_code == 401
+    # 4. Incident action
+    assert client.post("/api/incidents/INC-0001/action", json={"status": "Containment"}).status_code == 401
+    # 5. Remediation approve
+    assert client.post("/api/remediations/REM-0001/approve").status_code == 401
+    # 6. Remediation apply
+    assert client.post("/api/remediations/REM-0001/apply").status_code == 401
+    # 7. Remediation verify
+    assert client.post("/api/remediations/REM-0001/verify").status_code == 401
+    # 8. Remediation rollback
+    assert client.post("/api/remediations/REM-0001/rollback").status_code == 401
 
 
 # =========================================================================
