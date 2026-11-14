@@ -65,6 +65,7 @@ const MET=[["precision","Precision"],["recall","Recall"],["f1","F1"],["pr_auc","
 let S={resources:[],findings:[],events:[],audit:[],evidence:{},score:100,mode:"",account:"",region:"",polls:0,latency:0,checked:"",video:""},ML={results:{},card:{},multi:"",top:[]},AU={rows:[],chain_ok:true,count:0},DS=[],RU=[],GRAPH={nodes:[],links:[],categories:[]},ATTACK_PATHS={},BLAST_REPORT=null,SEL_PRINCIPAL="user/intern-dev",PREV={},SEEN=new Set(),FSEEN=new Set(),SIG="",BOOT=false;
 const route=()=>{const r=(location.hash||"#overview").slice(1);return V[r]?r:"overview"},evk=e=>e.t+e.name+e.user;
 async function get(p){try{return await (await fetch(p)).json()}catch(e){return null}}
+window.get=get;
 async function act(p){const r=await fetch(p,{method:"POST"});if(!r.ok){const j=await r.json().catch(()=>({}));alert(j.error||"Action failed")}SIG="";await poll()}
 async function poll(){const s=await get("/api/state");if(!s)return;S=s;if(!BOOT){BOOT=true;S.events.forEach(e=>SEEN.add(evk(e)));S.findings.forEach(f=>FSEEN.add(f.id+f.status))}head();const g=JSON.stringify([s.findings,s.resources,s.events,s.score,s.evidence]);if(g!==SIG){SIG=g;render()}}
 async function loadStatic(){ML=(await get("/api/ml"))||ML;DS=(await get("/api/datasets"))||[];RU=(await get("/api/rules"))||[];await loadGraph();render()}

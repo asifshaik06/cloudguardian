@@ -1,6 +1,7 @@
 /* Page views that need more than a template: overview, findings, events, audit and the investigation drawer.
    Uses the globals defined in index.html (S, ML, AU, DS, BOOT, esc, tg, none, ring, stepper, evalTable, get, route). */
 const Views=(()=>{
+const _get=async p=>{if(typeof window.get==="function")return await window.get(p);try{return await(await fetch(p)).json()}catch(e){return null}};
 let M={posture:[],anomaly:[],threshold:null,buckets:[],events_total:0,rem:{items:[],fixed:0,verified:0,rolled_back:0}},EVR=[],ES=new Set(),EBOOT=false,Q="",FSEV="",FST="",EK="",DR=null;
 const ctx=()=>({S,ML,M}),mid=x=>(x.ref.match(/T\d{4}(\.\d{3})?/)||["n/a"])[0],$$=id=>document.getElementById(id);
 const stat=s=>({pending:tg("Awaiting approval","wr"),fixed:tg("Remediated","ok"),rejected:tg("Rejected","gr")}[s]||tg(s,"gr"));
@@ -29,7 +30,7 @@ function events(){return`<div class="tools"><select id="ek" aria-label="Kind"><o
 function paintEvents(){const t=$$("etbl");if(!t)return;$$("ecount").textContent=`${EVR.length} shown`;
  t.innerHTML=EVR.length?`<tr><th>Time</th><th>Event</th><th>Service</th><th>Principal</th><th>Country</th><th>Kind</th><th>Mode</th></tr>`+EVR.map(e=>`<tr class="${EBOOT&&!ES.has(e.id)?"fresh":""}"><td>${esc(e.t)}</td><td>${esc(e.name)}</td><td>${esc(e.src)}</td><td>${esc(e.user)}</td><td>${esc(e.country)}</td><td>${tg(e.kind=="attack"?"Attack":"Baseline",e.kind=="attack"?"bad":"")}</td><td>${esc(e.mode)}</td></tr>`).join(""):`<tr><td colspan="7">${none("No events match.")}</td></tr>`;
  EVR.forEach(e=>ES.add(e.id));EBOOT=true}
-async function loadEvents(){const r=await get("/api/events?kind="+encodeURIComponent(EK)+"&q="+encodeURIComponent(Q));if(r){EVR=r.rows;if(route()=="events")paintEvents()}}
+async function loadEvents(){const r=await _get("/api/events?kind="+encodeURIComponent(EK)+"&q="+encodeURIComponent(Q));if(r){EVR=r.rows;if(route()=="events")paintEvents()}}
 function audit(){return`<section class="panel"><div class="ph"><span class="pt">Audit trail</span><span>${tg(AU.chain_ok?"Hash chain verified":"Chain broken at entry "+AU.first_bad,AU.chain_ok?"ok":"bad")}${tg((AU.matched!=null&&AU.matched!=AU.count?AU.matched+" of ":"")+AU.count+" entries")}</span></div><div class="wrap"><table class="tbl mono">${AU.rows.map(r=>`<tr><td class="mu">#${r.i}</td><td class="mu">${esc(r.hash)}</td><td>${esc(r.text)}</td></tr>`).join("")||`<tr><td>${none("No entries match.")}</td></tr>`}</table></div></section>
  <section class="panel mt"><div class="ph"><span class="pt">Model evaluation</span></div>${evalTable()}${ML.multi?`<div class="pb"><div class="lb">Seed results (synthetic benchmark)</div><pre>${esc(ML.multi)}</pre></div>`:""}</section>
  <h2 class="sec">Dataset provenance</h2>${DS.length?DS.map(d=>`<details class="panel mt"><summary class="ph">${esc(d.name)}</summary><div class="pb"><pre>${esc(d.text)}</pre></div></details>`).join(""):'<div class="panel">'+none("No dataset metadata files found in datasets\\metadata. Add one per dataset with its source, licence, hash and record count.")+'</div>'}`}
@@ -57,9 +58,9 @@ function drawerHTML(x){const lab={pending:["Awaiting approval","wr"],fixed:["Fix
  <div class="lb">Configuration before and after</div><div class="cmp">${[["At detection",x.detected],["Current",x.current],["After fix",x.status=="fixed"?x.after:"__na"]].map((c,i)=>`<div><div class="mu">${c[0]}</div><pre class="${i&&c[1]!=="__na"&&!same(c[1],x.detected)?"chg":""}">${esc(cfg(c[1]))}</pre></div>`).join("")}</div>
  <div class="lb">Remediation workflow</div>${stepper({status:x.status})}<div class="tl">${x.timeline.map(t=>`<div>${esc(t)}</div>`).join("")||'<span class="mu">No activity recorded.</span>'}</div>
  <div class="lb">Approval history and rollback</div><div class="tl">${hist.map(t=>`<div>${esc(t)}</div>`).join("")||'<span class="mu">No approvals yet.</span>'}</div><div class="ac">${acts}</div></div>`}
-async function openDrawer(id){DR=id;const d=$$("drawer");d.className="drawer open";d.innerHTML='<div class="dh"><b>Loading…</b></div><div class="db"><div class="sk" style="height:200px;margin-top:12px"></div></div>';const x=await get("/api/finding/"+id);if(DR!=id)return;d.innerHTML=x&&!x.error?drawerHTML(x):'<div class="dh"><b>Finding not available</b><button class="btn sm" id="dclose">Close</button></div>'}
+async function openDrawer(id){DR=id;const d=$$("drawer");d.className="drawer open";d.innerHTML='<div class="dh"><b>Loading…</b></div><div class="db"><div class="sk" style="height:200px;margin-top:12px"></div></div>';const x=await _get("/api/finding/"+id);if(DR!=id)return;d.innerHTML=x&&!x.error?drawerHTML(x):'<div class="dh"><b>Finding not available</b><button class="btn sm" id="dclose">Close</button></div>'}
 function closeDrawer(){DR=null;$$("drawer").className="drawer"}
-let KS="";async function loadMetrics(){const m=await get("/api/metrics");if(!m)return;M=m;CG.update(ctx());const p=$$("pipe");if(p)p.innerHTML=pipe();const k=JSON.stringify([m.rem.rolled_back,m.rem.items.map(i=>i.ttr)]);if(k!==KS){KS=k;if(route()=="overview"&&BOOT)render()}}
+let KS="";async function loadMetrics(){const m=await _get("/api/metrics");if(!m)return;M=m;CG.update(ctx());const p=$$("pipe");if(p)p.innerHTML=pipe();const k=JSON.stringify([m.rem.rolled_back,m.rem.items.map(i=>i.ttr)]);if(k!==KS){KS=k;if(route()=="overview"&&BOOT)render()}}
 function graph(){
  const g=window.GRAPH||{nodes:[],links:[],categories:[],stats:{}},
        st=g.stats||{},
