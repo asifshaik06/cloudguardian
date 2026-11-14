@@ -126,15 +126,82 @@ B.iam_graph=function(D){
   }]
  };
 };
+B.scenario_graph=function(D){
+ const g=(D&&D.SCENARIO_GRAPH)||window.SCENARIO_GRAPH||{nodes:[],links:[],categories:[]};
+ if(!g.nodes||!g.nodes.length)return empty("Launch or build a scenario to explore its isolated capability graph…");
+ const mu=cv("--mu"),ln=cv("--ln"),tx=cv("--tx"),sf=cv("--sf")||"#0f172a",esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+ return{
+  animation:true,
+  animationDuration:600,
+  tooltip:{
+   trigger:"item",
+   backgroundColor:cv("--sf2"),
+   borderColor:ln,
+   textStyle:{color:tx,fontSize:12},
+   formatter:p=>{
+    if(p.dataType=="node"){
+     const d=p.data;
+     const adm=d.is_admin?'<br><span style="color:var(--bad)">★ AdministratorAccess</span>':'';
+     const sens=d.is_sensitive?'<br><span style="color:var(--wr)">⚠ Sensitive Asset</span>':'';
+     const path=d.in_attack_path?'<br><span style="color:var(--bad)">● Active Attack Path Node</span>':'';
+     return`<b>${esc(d.name)}</b><br><span style="color:${mu}">Type:</span> ${esc(d.value)}<br><span style="color:${mu}">ARN:</span> <code style="font-size:10px">${esc(d.arn||d.id)}</code>${adm}${sens}${path}<br><span style="color:${mu};font-size:10px">Click node to inspect details</span>`;
+    }
+    if(p.dataType=="edge"){
+     const l=p.data;
+     const step=l.step_number?`<span style="color:var(--bad)">Step ${l.step_number}:</span> `:'';
+     const acts=l.actions&&l.actions.length?`<br><span style="color:${mu}">Actions:</span> ${esc(l.actions.slice(0,4).join(", "))}${l.actions.length>4?'…':''}`:"";
+     const path=l.in_attack_path?'<br><span style="color:var(--bad)">● Active Escalation Edge</span>':'';
+     return`<b>${step}${esc(l.relationship)}</b><br>${esc(l.source)} → ${esc(l.target)}${acts}${path}<br><span style="color:${mu};font-size:10px">Click edge to inspect policy evidence</span>`;
+    }
+    return"";
+   }
+  },
+  legend:{
+   data:(g.categories||[]).map(c=>c.name),
+   top:8,
+   left:12,
+   textStyle:{color:mu,fontSize:11},
+   itemWidth:10,
+   itemHeight:10
+  },
+  series:[{
+   type:"graph",
+   layout:"force",
+   data:g.nodes,
+   links:g.links,
+   categories:g.categories,
+   roam:true,
+   draggable:true,
+   label:{
+    show:true,
+    position:"bottom",
+    distance:6,
+    formatter:"{b}",
+    fontSize:11,
+    fontWeight:500,
+    color:tx,
+    textBorderColor:sf,
+    textBorderWidth:2
+   },
+   edgeSymbol:["none","arrow"],
+   edgeSymbolSize:[5,12],
+   edgeLabel:{show:false},
+   emphasis:{focus:"adjacency",lineStyle:{width:4.0}},
+   force:{repulsion:950,gravity:0.035,edgeLength:[140,250],friction:0.6}
+  }]
+ };
+};
 function paint(k,D){const c=CH[k];if(!c||!c.inst||!c.el.isConnected||!B[k])return;const o=B[k](D),e=!!o.graphic;c.inst.setOption(o,{notMerge:c.empty!==e||e});c.empty=e}
 function mount(D){document.querySelectorAll(".cslot").forEach(s=>{const k=s.dataset.key;if(!window.echarts){s.textContent="Chart library not found. Download ECharts into static/vendor (see the setup steps).";return}
  let c=CH[k];if(!c){const el=document.createElement("div");el.style.cssText="width:100%;height:100%";c=CH[k]={el,inst:null,empty:null};if(window.ResizeObserver)new ResizeObserver(()=>{if(c.inst&&c.el.isConnected)c.inst.resize()}).observe(el)}
  s.replaceChildren(c.el);
  if(!c.inst){
   c.inst=echarts.init(c.el,null,{renderer:"svg"});
-  if(k==="iam_graph"){
+  if(k==="iam_graph"||k==="scenario_graph"){
    c.inst.on("click",params=>{
-    if(window.onGraphElementClick)window.onGraphElementClick(params);
+    if(k==="scenario_graph"&&window.onScenarioGraphClick)window.onScenarioGraphClick(params);
+    else if(window.onGraphElementClick)window.onGraphElementClick(params);
    });
   }
  }
@@ -148,6 +215,17 @@ window.graphZoom=function(factor){
 };
 window.graphFit=function(){
  const c=CH["iam_graph"];if(!c||!c.inst)return;
+ c.inst.setOption({series:[{zoom:1.0,center:null}]});
+};
+window.scenarioGraphZoom=function(factor){
+ const c=CH["scenario_graph"];if(!c||!c.inst)return;
+ const opt=c.inst.getOption();if(!opt||!opt.series||!opt.series[0])return;
+ const currentZoom=opt.series[0].zoom||1;
+ const newZoom=Math.max(0.3,Math.min(4.0,currentZoom*factor));
+ c.inst.setOption({series:[{zoom:newZoom}]});
+};
+window.scenarioGraphFit=function(){
+ const c=CH["scenario_graph"];if(!c||!c.inst)return;
  c.inst.setOption({series:[{zoom:1.0,center:null}]});
 };
 function update(D){Object.keys(CH).forEach(k=>paint(k,D))}

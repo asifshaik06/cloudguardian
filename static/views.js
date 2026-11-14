@@ -304,6 +304,565 @@ function graph(){
    </div>
  </section>`;
 }
+// ============================================================================
+// IAM Attack Simulation Lab View (Part A, B, C, D, E)
+// ============================================================================
+let SCENARIOS_CATALOG = [];
+let LAB_MODE = "catalog"; // "catalog" | "workbench" | "builder"
+let LAB_CAT_FILTER = "";
+let LAB_DIFF_FILTER = "";
+let LAB_SEARCH_QUERY = "";
+let ACTIVE_RUN = null;
+let WORKBENCH_TAB = "paths"; // "paths" | "findings" | "inspector" | "remediation"
+let SELECTED_SCENARIO_NODE = null;
+let SELECTED_SCENARIO_EDGE = null;
+let ACTIVE_SCENARIO_PATH = null;
+let BUILDER_STATE = {
+  name: "Custom Cloud Attack Scenario",
+  description: "User-defined IAM access topology and escalation paths.",
+  category: "Custom Scenario",
+  learning_objective: "Evaluate custom authorization policies and path reachability.",
+  identities: [
+    { id: "user/custom-analyst", name: "custom-analyst", type: "user", is_admin: false, arn: "arn:aws:iam::123456789012:user/custom-analyst" },
+    { id: "role/custom-admin", name: "custom-admin", type: "role", is_admin: true, arn: "arn:aws:iam::123456789012:role/custom-admin" }
+  ],
+  resources: [
+    { id: "s3/confidential-archive", name: "confidential-archive", type: "s3", is_sensitive: true, arn: "arn:aws:s3:::confidential-archive" }
+  ],
+  relationships: [
+    { source_id: "user/custom-analyst", target_id: "role/custom-admin", relationship: "AssumesRole", actions: ["sts:AssumeRole"] },
+    { source_id: "role/custom-admin", target_id: "s3/confidential-archive", relationship: "CanAccessResource", actions: ["s3:*"] }
+  ],
+  statements: [
+    { sid: "PermitAssume", effect: "Allow", actions: ["sts:AssumeRole"], resources: ["*"] }
+  ]
+};
+
+async function loadScenarioCatalog() {
+  const r = await _get("/api/scenarios");
+  if (r && r.scenarios) {
+    SCENARIOS_CATALOG = r.scenarios;
+  }
+}
+
+async function launchScenarioRun(scenarioId) {
+  const res = await fetch(`/api/scenarios/${encodeURIComponent(scenarioId)}/launch`, { method: "POST" });
+  if (res.ok) {
+    const data = await res.json();
+    await loadRunDetails(data.run_id);
+    LAB_MODE = "workbench";
+    WORKBENCH_TAB = "paths";
+    if (route() === "lab") render();
+  } else {
+    alert("Failed to launch scenario.");
+  }
+}
+
+async function loadRunDetails(runId, highlight) {
+  const url = `/api/scenarios/runs/${encodeURIComponent(runId)}` + (highlight ? `?highlight=${encodeURIComponent(highlight)}` : "");
+  const r = await _get(url);
+  if (r && !r.error) {
+    ACTIVE_RUN = r;
+    window.SCENARIO_GRAPH = r.graph || { nodes: [], links: [], categories: [] };
+    CG.update(ctx());
+  }
+}
+
+window.onScenarioGraphClick = function(params) {
+  if (params.dataType === "node") {
+    SELECTED_SCENARIO_NODE = params.data;
+    SELECTED_SCENARIO_EDGE = null;
+    WORKBENCH_TAB = "inspector";
+    updateWorkbenchInspector();
+  } else if (params.dataType === "edge") {
+    SELECTED_SCENARIO_EDGE = params.data;
+    SELECTED_SCENARIO_NODE = null;
+    WORKBENCH_TAB = "inspector";
+    updateWorkbenchInspector();
+  }
+};
+
+function renderWorkbenchInspector() {
+  const edge = SELECTED_SCENARIO_EDGE;
+  const node = SELECTED_SCENARIO_NODE;
+  const run = ACTIVE_RUN;
+  if (!run) return `<div class="pb"><p class="mu">No active scenario run.</p></div>`;
+
+  if (WORKBENCH_TAB === "paths") {
+    const paths = run.paths || [];
+    if (!paths.length) {
+      return `<div class="pb">
+        <p class="mu">No active attack or privilege escalation paths discovered.</p>
+        <p class="mu" style="font-size:11px;margin-top:6px">The current IAM configuration contains zero reachable paths to administrative control or sensitive resources.</p>
+      </div>`;
+    }
+
+    return `<div class="pb" style="display:flex;flex-direction:column;gap:10px">
+      ${paths.map((p, idx) => {
+        const clsBadge = p.classification === "Confirmed" ? tg("Confirmed", "bad") :
+                         p.classification === "Potential" ? tg("Potential", "wr") : tg("Theoretical", "");
+        return `<div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span class="mono" style="font-size:12px"><b>${esc(p.source || p.source_id)}</b> → <b>${esc(p.target || p.target_id)}</b></span>
+            ${clsBadge}
+          </div>
+          <div style="display:flex;gap:8px;font-size:11px;margin-bottom:8px" class="mu">
+            <span>Risk Score: <b>${p.risk_score}</b></span>
+            <span>·</span>
+            <span>Hops: <b>${p.hops || p.hop_count}</b></span>
+            <span>·</span>
+            <span>${esc(p.severity || "High")} Severity</span>
+          </div>
+          <div style="font-size:11px;margin-bottom:8px;line-height:1.4">${esc(p.narrative || p.classification_reason || "")}</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm primary" data-lab-trace="${idx}">Trace in Graph</button>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>`;
+  }
+
+  if (WORKBENCH_TAB === "findings") {
+    const findings = run.findings || [];
+    if (!findings.length) {
+      return `<div class="pb"><p class="mu">No security findings active for this scenario.</p></div>`;
+    }
+
+    return `<div class="pb" style="display:flex;flex-direction:column;gap:10px">
+      ${findings.map(f => `
+        <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <b>${esc(f.title)}</b>
+            ${tg(f.severity, f.severity === "Critical" ? "bad" : "wr")}
+          </div>
+          <div style="font-size:11px;color:var(--mu);margin-bottom:6px">${esc(f.category)} · MITRE ${esc(f.mitre_attack || "T1078")}</div>
+          <p style="font-size:12px;margin-bottom:8px">${esc(f.description)}</p>
+          <div style="background:var(--sf);border-left:3px solid var(--ac);padding:6px 8px;border-radius:3px;font-size:11px">
+            <b>Remediation:</b> ${esc(f.remediation_advice)}
+          </div>
+        </div>
+      `).join("")}
+    </div>`;
+  }
+
+  if (WORKBENCH_TAB === "inspector") {
+    if (edge) {
+      return `<div class="pb">
+        <div class="lb">Capability Transition Edge</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span class="mono"><b>${esc(edge.source)}</b> → <b>${esc(edge.target)}</b></span>
+          ${tg(edge.relationship, "in")}
+        </div>
+        <div class="lb">Effect &amp; Permitted Actions</div>
+        <p>${tg(edge.effect || "Allow", edge.effect === "Deny" ? "bad" : "ok")}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0">
+          ${(edge.actions || []).map(a => `<span class="chip">${esc(a)}</span>`).join("") || '<span class="mu">No specific actions specified</span>'}
+        </div>
+        <div class="lb">Evidence &amp; Provenance</div>
+        <pre>${esc(JSON.stringify(edge.evidence || {}, null, 2))}</pre>
+        <button class="btn sm mt" id="btn-clear-lab-inspector">Clear Selection</button>
+      </div>`;
+    }
+
+    if (node) {
+      return `<div class="pb">
+        <div class="lb">IAM / Resource Node</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <b>${esc(node.name)}</b>
+          ${tg(node.value || "Entity", "in")}
+        </div>
+        <div style="font-size:11px" class="mu mono">ARN: ${esc(node.arn || node.id)}</div>
+        <div style="margin:8px 0">
+          ${node.is_admin ? '<span class="tg bad">★ AdministratorAccess</span>' : ''}
+          ${node.is_sensitive ? '<span class="tg wr">⚠ Sensitive Cloud Resource</span>' : ''}
+        </div>
+        <div class="lb">Evidence &amp; Policies</div>
+        <pre>${esc(JSON.stringify(node.evidence || {}, null, 2))}</pre>
+        <button class="btn sm mt" id="btn-clear-lab-inspector">Clear Selection</button>
+      </div>`;
+    }
+
+    return `<div class="pb">
+      <p class="mu">Click any node or relationship edge in the graph canvas to inspect IAM permissions, trust policies, and condition keys.</p>
+    </div>`;
+  }
+
+  if (WORKBENCH_TAB === "remediation") {
+    const vr = run.verification_result;
+    const def = run.definition || {};
+    const expRem = def.expected_remediation || {};
+
+    return `<div class="pb">
+      <div class="lb">Expected Remediation Strategy</div>
+      <p style="font-size:12px;margin-bottom:10px">${esc(def.verification_criteria || "Eliminate privilege escalation vectors and enforce least privilege.")}</p>
+
+      <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px;margin-bottom:12px">
+        <div class="lb" style="margin-top:0">Recommended Fix Action</div>
+        <div class="mono" style="font-size:12px;margin-bottom:6px">Type: <b>${esc(expRem.type || "generic_remediation")}</b></div>
+        ${expRem.target ? `<div class="mono" style="font-size:11px" class="mu">Target: ${esc(expRem.target)}</div>` : ""}
+        <button class="btn primary sm" style="margin-top:10px" id="btn-apply-recommended-fix">Apply Recommended Fix</button>
+      </div>
+
+      ${vr ? `
+        <div class="lb">Independent Verification Result</div>
+        <div style="background:var(--sf2);border:1px solid ${vr.verified ? "var(--ok)" : "var(--bad)"};border-radius:6px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:14px;font-weight:600">${vr.verified ? "✓ Verification PASSED" : "✕ Verification FAILED"}</span>
+            ${tg(vr.status, vr.verified ? "ok" : "bad")}
+          </div>
+          <p style="font-size:12px;margin-bottom:8px">${esc(vr.summary)}</p>
+          <div style="font-size:11px;color:var(--mu)">Verified at: ${esc(vr.timestamp)} · Action: ${esc(vr.action_taken)}</div>
+
+          <div class="lb">Pre vs Post Metrics Comparison</div>
+          <table class="tbl" style="font-size:11px;margin-top:4px">
+            <tr><th>Metric</th><th>Pre-Fix</th><th>Post-Fix</th><th>Delta</th></tr>
+            <tr><td>Attack Paths</td><td>${vr.metrics.pre_remediation.paths}</td><td>${vr.metrics.post_remediation.paths}</td><td>-${vr.metrics.delta.paths_eliminated}</td></tr>
+            <tr><td>Blast Risk Score</td><td>${vr.metrics.pre_remediation.blast_radius_score}</td><td>${vr.metrics.post_remediation.blast_radius_score}</td><td>-${vr.metrics.delta.score_reduction}</td></tr>
+            <tr><td>Confirmed Paths</td><td>${vr.metrics.pre_remediation.confirmed_paths}</td><td>${vr.metrics.post_remediation.confirmed_paths}</td><td>-</td></tr>
+          </table>
+
+          ${vr.remaining_paths && vr.remaining_paths.length ? `
+            <div style="margin-top:8px;padding:6px;background:rgba(217,160,47,0.1);border:1px solid var(--wr);border-radius:4px;font-size:11px">
+              <b>Alternative Vectors Remain:</b> ${vr.remaining_paths.length} path(s) still active in the topology.
+            </div>
+          ` : `
+            <div style="margin-top:8px;padding:6px;background:rgba(63,178,127,0.1);border:1px solid var(--ok);border-radius:4px;font-size:11px;color:var(--ok)">
+              ✓ All discovered attack vectors completely mitigated.
+            </div>
+          `}
+        </div>
+      ` : `
+        <div class="mu" style="font-size:11px">Click "Apply Recommended Fix" or choose a custom remediation to evaluate verification.</div>
+      `}
+    </div>`;
+  }
+
+  return "";
+}
+
+function updateWorkbenchInspector() {
+  const el = $$("workbench-inspector-body");
+  if (el) el.innerHTML = renderWorkbenchInspector();
+  const tabs = document.querySelectorAll("[data-wb-tab]");
+  tabs.forEach(t => {
+    if (t.dataset.wbTab === WORKBENCH_TAB) {
+      t.className = "btn sm primary";
+    } else {
+      t.className = "btn sm";
+    }
+  });
+}
+
+function renderCatalogView() {
+  const q = LAB_SEARCH_QUERY.toLowerCase();
+  const filtered = SCENARIOS_CATALOG.filter(s => {
+    if (LAB_CAT_FILTER && s.category.toLowerCase() !== LAB_CAT_FILTER.toLowerCase()) return false;
+    if (LAB_DIFF_FILTER && s.difficulty.toLowerCase() !== LAB_DIFF_FILTER.toLowerCase()) return false;
+    if (q) {
+      const txt = (s.name + s.description + s.learning_objective + (s.mitre_attack || []).join(" ")).toLowerCase();
+      if (!txt.includes(q)) return false;
+    }
+    return true;
+  });
+
+  return `
+    <div class="tools" style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input id="lab-search" type="search" placeholder="Search scenarios, MITRE techniques..." value="${esc(LAB_SEARCH_QUERY)}" style="min-width:260px" />
+      <select id="lab-cat-filter">
+        <option value="">All Categories (12)</option>
+        <option value="Privilege Escalation" ${LAB_CAT_FILTER === "Privilege Escalation" ? "selected" : ""}>Privilege Escalation (4)</option>
+        <option value="Resource Exposure" ${LAB_CAT_FILTER === "Resource Exposure" ? "selected" : ""}>Resource Exposure (4)</option>
+        <option value="Identity & Lateral Movement" ${LAB_CAT_FILTER === "Identity & Lateral Movement" ? "selected" : ""}>Identity & Lateral Movement (4)</option>
+      </select>
+      <select id="lab-diff-filter">
+        <option value="">All Difficulties</option>
+        <option value="Beginner" ${LAB_DIFF_FILTER === "Beginner" ? "selected" : ""}>Beginner</option>
+        <option value="Intermediate" ${LAB_DIFF_FILTER === "Intermediate" ? "selected" : ""}>Intermediate</option>
+        <option value="Advanced" ${LAB_DIFF_FILTER === "Advanced" ? "selected" : ""}>Advanced</option>
+      </select>
+      <button class="btn sm" id="btn-lab-reset-filters">Reset Filters</button>
+      <span class="mu" style="margin-left:auto">${filtered.length} of ${SCENARIOS_CATALOG.length} scenarios shown</span>
+    </div>
+
+    <div class="g3">
+      ${filtered.map(s => `
+        <article class="panel fc" style="display:flex;flex-direction:column;justify-content:space-between">
+          <div>
+            <div class="ph">
+              <span class="pt">${esc(s.name)}</span>
+              <div>
+                ${tg(s.difficulty, s.difficulty === "Advanced" ? "bad" : s.difficulty === "Intermediate" ? "wr" : "ok")}
+              </div>
+            </div>
+            <div class="pb">
+              <div style="margin-bottom:8px">
+                <span class="tg in" style="margin-left:0">${esc(s.category)}</span>
+                ${(s.mitre_attack || []).map(m => `<span class="chip">${esc(m)}</span>`).join("")}
+              </div>
+              <p style="font-size:12px;margin-bottom:10px;line-height:1.4">${esc(s.description)}</p>
+              <div style="background:var(--sf2);border-left:3px solid var(--ac);padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:12px">
+                <b>Learning Objective:</b> ${esc(s.learning_objective)}
+              </div>
+              <div class="mu" style="font-size:11px">
+                ${s.identity_count} Identities · ${s.resource_count} Resources · ${s.expected_findings_count} Expected Vectors
+              </div>
+            </div>
+          </div>
+          <div class="pb" style="border-top:1px solid var(--ln);padding-top:10px">
+            <button class="btn primary sm" style="width:100%" data-launch-scenario="${esc(s.id)}">Launch in Workbench</button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderWorkbenchView() {
+  if (!ACTIVE_RUN) {
+    return `<div class="panel pb es" style="text-align:center;padding:48px 24px">
+      <h3>No Active Scenario Simulation</h3>
+      <p class="mu">Choose a predefined scenario from the Library or construct a custom scenario in the Builder to enter the active workbench.</p>
+      <div style="display:flex;gap:12px;margin-top:16px">
+        <button class="btn primary" id="btn-goto-catalog">Open Scenario Library</button>
+        <button class="btn" id="btn-goto-builder">Open Custom Builder</button>
+      </div>
+    </div>`;
+  }
+
+  const run = ACTIVE_RUN;
+  const def = run.definition || {};
+  const statusColor = run.status === "verified" ? "ok" : run.status === "remediated" ? "wr" : "in";
+  const br = run.blast_radius || {};
+  const paths = run.paths || [];
+  const findings = run.findings || [];
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;background:var(--sf);border:1px solid var(--ln);padding:10px 16px;border-radius:8px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <b style="font-size:15px">${esc(run.scenario_name)}</b>
+          ${tg(run.status.toUpperCase(), statusColor)}
+          <span class="chip" style="font-size:10px">${esc(run.run_id)}</span>
+        </div>
+        <div class="mu" style="font-size:11px;margin-top:3px">${esc(def.category || "")} · ${esc(def.difficulty || "")} · Isolated Moto Simulation</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm" id="btn-wb-reanalyze">🔄 Re-Analyze</button>
+        <button class="btn sm" id="btn-wb-verify">✓ Verify State</button>
+        <button class="btn sm danger" id="btn-wb-reset">↩ Reset Scenario</button>
+        <button class="btn sm" id="btn-wb-switch">✕ Switch Scenario</button>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="panel kp">
+        <div class="lb">Blast Risk Score</div>
+        <div class="kv ${br.score >= 70 ? "bad" : br.score >= 40 ? "wr" : "ok"}">${br.score || 0} <span class="mu" style="font-size:14px">/ 100</span></div>
+        <div class="mu">${br.admin_reachable ? "★ Admin Reachable" : "Admin Contained"}</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Attack Paths</div>
+        <div class="kv">${paths.length}</div>
+        <div class="mu">${paths.filter(p => p.classification === "Confirmed").length} Confirmed · ${paths.filter(p => p.classification === "Potential").length} Potential</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Security Findings</div>
+        <div class="kv">${findings.length}</div>
+        <div class="mu">${findings.filter(f => f.severity === "Critical").length} Critical · ${findings.filter(f => f.severity === "High").length} High</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Verification Status</div>
+        <div class="kv ${run.status === "verified" ? "ok" : "mu"}">${run.status === "verified" ? "PASS" : "UNREMEDIATED"}</div>
+        <div class="mu">${run.remediation_applied ? "Fix Applied" : "Awaiting Remediation"}</div>
+      </div>
+    </div>
+
+    <div class="cols2" style="grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; margin-top: 16px">
+      <!-- Left Column: Force-Directed Graph Canvas -->
+      <section class="panel" style="display:flex;flex-direction:column">
+        <div class="ph">
+          <span class="pt">Simulated Capability Graph</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" id="btn-sg-zin" title="Zoom In">+</button>
+            <button class="btn sm" id="btn-sg-zout" title="Zoom Out">-</button>
+            <button class="btn sm" id="btn-sg-fit">Fit</button>
+            <button class="btn sm" id="btn-sg-reset">Reset</button>
+          </div>
+        </div>
+        <div class="pb" style="flex:1;min-height:540px;position:relative">
+          <div class="cslot" data-key="scenario_graph" style="height:540px;width:100%"></div>
+        </div>
+      </section>
+
+      <!-- Right Column: Inspector & Investigator -->
+      <section class="panel" style="display:flex;flex-direction:column">
+        <div class="ph" style="padding:6px 12px;gap:6px">
+          <button class="btn sm ${WORKBENCH_TAB === "paths" ? "primary" : ""}" data-wb-tab="paths">Paths (${paths.length})</button>
+          <button class="btn sm ${WORKBENCH_TAB === "findings" ? "primary" : ""}" data-wb-tab="findings">Findings (${findings.length})</button>
+          <button class="btn sm ${WORKBENCH_TAB === "inspector" ? "primary" : ""}" data-wb-tab="inspector">Inspector</button>
+          <button class="btn sm ${WORKBENCH_TAB === "remediation" ? "primary" : ""}" data-wb-tab="remediation">Playground</button>
+        </div>
+        <div id="workbench-inspector-body" style="overflow-y:auto;max-height:540px">
+          ${renderWorkbenchInspector()}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderBuilderView() {
+  const b = BUILDER_STATE;
+
+  return `
+    <div class="cols2" style="grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px">
+      <!-- Left Column: Builder Form -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <section class="panel">
+          <div class="ph"><span class="pt">1. Scenario Metadata</span></div>
+          <div class="pb" style="display:flex;flex-direction:column;gap:10px">
+            <div>
+              <div class="lb" style="margin-top:0">Scenario Name</div>
+              <input id="b-meta-name" type="text" value="${esc(b.name)}" style="width:100%" />
+            </div>
+            <div>
+              <div class="lb">Description</div>
+              <input id="b-meta-desc" type="text" value="${esc(b.description)}" style="width:100%" />
+            </div>
+            <div>
+              <div class="lb">Learning Objective</div>
+              <input id="b-meta-obj" type="text" value="${esc(b.learning_objective)}" style="width:100%" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Entity Creation -->
+        <section class="panel">
+          <div class="ph"><span class="pt">2. Add IAM Identities &amp; Resources</span></div>
+          <div class="pb" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input id="b-ent-name" placeholder="Entity name (e.g. dev-user)" style="flex:1" />
+              <select id="b-ent-type">
+                <option value="user">IAM User</option>
+                <option value="role">IAM Role</option>
+                <option value="group">IAM Group</option>
+                <option value="s3">S3 Bucket</option>
+                <option value="ec2">EC2 Instance</option>
+                <option value="kms">KMS Key</option>
+              </select>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px">
+                <input type="checkbox" id="b-ent-flag"> Privileged / Sensitive
+              </label>
+              <button class="btn sm primary" id="btn-b-add-entity">Add Entity</button>
+            </div>
+
+            <div class="lb">Configured Topology Entities (${b.identities.length + b.resources.length})</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              ${b.identities.map(i => `<span class="chip">${esc(i.id)} ${i.is_admin ? "★" : ""}</span>`).join("")}
+              ${b.resources.map(r => `<span class="chip" style="border-color:var(--wr)">${esc(r.id)} ${r.is_sensitive ? "⚠" : ""}</span>`).join("")}
+            </div>
+          </div>
+        </section>
+
+        <!-- Relationship Creation -->
+        <section class="panel">
+          <div class="ph"><span class="pt">3. Add Capability Relationships</span></div>
+          <div class="pb" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <select id="b-rel-src" style="flex:1">
+                ${b.identities.concat(b.resources).map(e => `<option value="${esc(e.id)}">${esc(e.id)}</option>`).join("")}
+              </select>
+              <select id="b-rel-type">
+                <option value="AssumesRole">AssumesRole</option>
+                <option value="PassRole">PassRole</option>
+                <option value="CanAccessResource">CanAccessResource</option>
+                <option value="CanEscalateTo">CanEscalateTo</option>
+              </select>
+              <select id="b-rel-tgt" style="flex:1">
+                ${b.identities.concat(b.resources).map(e => `<option value="${esc(e.id)}">${esc(e.id)}</option>`).join("")}
+              </select>
+            </div>
+            <div style="display:flex;gap:8px">
+              <input id="b-rel-actions" placeholder="Actions (comma separated, e.g. sts:AssumeRole, s3:*)" style="flex:1" />
+              <button class="btn sm primary" id="btn-b-add-rel">Add Edge</button>
+            </div>
+
+            <div class="lb">Configured Capability Edges (${b.relationships.length})</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              ${b.relationships.map(r => `
+                <div class="mono" style="font-size:11px;background:var(--sf2);padding:4px 8px;border-radius:4px">
+                  ${esc(r.source_id)} ──[${esc(r.relationship)}: ${esc((r.actions||[]).join(","))}]──&gt; ${esc(r.target_id)}
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column: Policy Validator & Launch -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <section class="panel">
+          <div class="ph">
+            <span class="pt">4. IAM Policy Statement Validator</span>
+            <button class="btn sm" id="btn-validate-policy-stmt">Validate Statement</button>
+          </div>
+          <div class="pb" style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;gap:8px">
+              <select id="b-stmt-effect">
+                <option value="Allow">Effect: Allow</option>
+                <option value="Deny">Effect: Deny</option>
+              </select>
+              <input id="b-stmt-actions" placeholder="Action (e.g. s3:*, iam:PassRole)" style="flex:1" value="sts:AssumeRole" />
+            </div>
+            <div>
+              <div class="lb" style="margin-top:0">Resource Scope</div>
+              <input id="b-stmt-resources" placeholder="Resource ARN (e.g. * or arn:aws:s3:::*)" style="width:100%" value="*" />
+            </div>
+            <div id="policy-validation-result" style="display:none;padding:10px;border-radius:6px;background:var(--sf2);border:1px solid var(--ln);font-size:12px"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="ph"><span class="pt">5. Build &amp; Simulate</span></div>
+          <div class="pb">
+            <p class="mu" style="font-size:12px;margin-bottom:12px">
+              Compiles your custom cloud entities, capability edges, and policy statements into an isolated NetworkX capability graph, discovers all transitive escalation paths, and calculates attack blast radius.
+            </p>
+            <button class="btn primary" id="btn-build-and-launch-custom" style="width:100%;height:36px;font-size:13px">
+              🚀 Build &amp; Launch in Workbench
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
+}
+
+function lab() {
+  if (!SCENARIOS_CATALOG.length) {
+    loadScenarioCatalog().then(() => {
+      if (route() === "lab") render();
+    });
+  }
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="margin:0;font-size:18px;font-weight:600">IAM Attack Simulation Lab</h2>
+        <div class="mu" style="font-size:12px;margin-top:2px">Isolated Moto AWS attack scenarios, deterministic IAM policy evaluation, and independent post-remediation verification.</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn ${LAB_MODE === "catalog" ? "primary" : ""}" id="tab-lab-catalog">📚 Scenario Library (12)</button>
+        <button class="btn ${LAB_MODE === "workbench" ? "primary" : ""}" id="tab-lab-workbench">⚡ Workbench ${ACTIVE_RUN ? `(${esc(ACTIVE_RUN.scenario_name)})` : ""}</button>
+        <button class="btn ${LAB_MODE === "builder" ? "primary" : ""}" id="tab-lab-builder">🛠 Custom Builder</button>
+      </div>
+    </div>
+
+    ${LAB_MODE === "catalog" ? renderCatalogView() :
+      LAB_MODE === "workbench" ? renderWorkbenchView() :
+      renderBuilderView()}
+  `;
+}
+
 function refresh(){const r=route();if(r=="findings")paintFindings();if(r=="events")loadEvents();if(r=="audit")loadAudit();if(r=="graph"&&window.loadGraph)loadGraph()}
 function bind(){const r=route();
  if(r=="findings"){$$("fsev").value=FSEV;$$("fst").value=FST;$$("fsev").onchange=e=>{FSEV=e.target.value;paintFindings()};$$("fst").onchange=e=>{FST=e.target.value;paintFindings()};paintFindings()}
@@ -402,11 +961,185 @@ function bind(){const r=route();
      };
    });
  }
- CG.mount(ctx())}
+ // Bind Simulation Lab handlers
+    if(r=="lab"){
+      const bCat=$$("tab-lab-catalog");
+      if(bCat)bCat.onclick=()=>{LAB_MODE="catalog";render()};
+      const bWb=$$("tab-lab-workbench");
+      if(bWb)bWb.onclick=()=>{LAB_MODE="workbench";render()};
+      const bBld=$$("tab-lab-builder");
+      if(bBld)bBld.onclick=()=>{LAB_MODE="builder";render()};
+
+      const bGotoCat=$$("btn-goto-catalog");
+      if(bGotoCat)bGotoCat.onclick=()=>{LAB_MODE="catalog";render()};
+      const bGotoBld=$$("btn-goto-builder");
+      if(bGotoBld)bGotoBld.onclick=()=>{LAB_MODE="builder";render()};
+
+      const bResetFilt=$$("btn-lab-reset-filters");
+      if(bResetFilt)bResetFilt.onclick=()=>{
+        LAB_CAT_FILTER="";LAB_DIFF_FILTER="";LAB_SEARCH_QUERY="";
+        render();
+      };
+
+      const inSearch=$$("lab-search");
+      if(inSearch)inSearch.oninput=(e)=>{
+        LAB_SEARCH_QUERY=e.target.value.trim();
+        render();
+      };
+
+      const selCat=$$("lab-cat-filter");
+      if(selCat)selCat.onchange=(e)=>{
+        LAB_CAT_FILTER=e.target.value;
+        render();
+      };
+
+      const selDiff=$$("lab-diff-filter");
+      if(selDiff)selDiff.onchange=(e)=>{
+        LAB_DIFF_FILTER=e.target.value;
+        render();
+      };
+
+      document.querySelectorAll("[data-launch-scenario]").forEach(b=>{
+        b.onclick=()=>launchScenarioRun(b.dataset.launchScenario);
+      });
+
+      document.querySelectorAll("[data-wb-tab]").forEach(b=>{
+        b.onclick=()=>{
+          WORKBENCH_TAB=b.dataset.wbTab;
+          updateWorkbenchInspector();
+        };
+      });
+
+      const bWbRe=$$("btn-wb-reanalyze");
+      if(bWbRe&&ACTIVE_RUN)bWbRe.onclick=()=>reanalyzeRun(ACTIVE_RUN.run_id);
+      const bWbVer=$$("btn-wb-verify");
+      if(bWbVer&&ACTIVE_RUN)bWbVer.onclick=()=>verifyRun(ACTIVE_RUN.run_id);
+      const bWbRes=$$("btn-wb-reset");
+      if(bWbRes&&ACTIVE_RUN)bWbRes.onclick=()=>resetRun(ACTIVE_RUN.run_id);
+      const bWbSw=$$("btn-wb-switch");
+      if(bWbSw)bWbSw.onclick=()=>{LAB_MODE="catalog";render()};
+
+      const bRecFix=$$("btn-apply-recommended-fix");
+      if(bRecFix&&ACTIVE_RUN){
+        bRecFix.onclick=()=>remediateRun(ACTIVE_RUN.run_id,ACTIVE_RUN.definition.expected_remediation||{type:"generic_remediation"});
+      }
+
+      document.querySelectorAll("[data-lab-trace]").forEach(b=>{
+        b.onclick=()=>{
+          if(!ACTIVE_RUN)return;
+          const p=ACTIVE_RUN.paths[+b.dataset.labTrace];
+          if(p&&p.nodes){
+            ACTIVE_SCENARIO_PATH=p;
+            loadRunDetails(ACTIVE_RUN.run_id,p.nodes.join(","));
+          }
+        };
+      });
+
+      const bClearLabInsp=$$("btn-clear-lab-inspector");
+      if(bClearLabInsp)bClearLabInsp.onclick=()=>{
+        SELECTED_SCENARIO_NODE=null;
+        SELECTED_SCENARIO_EDGE=null;
+        updateWorkbenchInspector();
+      };
+
+      const bZIn=$$("btn-sg-zin");
+      if(bZIn)bZIn.onclick=()=>window.scenarioGraphZoom&&window.scenarioGraphZoom(1.25);
+      const bZOut=$$("btn-sg-zout");
+      if(bZOut)bZOut.onclick=()=>window.scenarioGraphZoom&&window.scenarioGraphZoom(0.8);
+      const bFit=$$("btn-sg-fit");
+      if(bFit)bFit.onclick=()=>window.scenarioGraphFit&&window.scenarioGraphFit();
+      const bReset=$$("btn-sg-reset");
+      if(bReset&&ACTIVE_RUN)bReset.onclick=()=>loadRunDetails(ACTIVE_RUN.run_id,"");
+
+      const bAddEnt=$$("btn-b-add-entity");
+      if(bAddEnt)bAddEnt.onclick=()=>{
+        const name=($$("b-ent-name")||{}).value||"";
+        const type=($$("b-ent-type")||{}).value||"user";
+        const flag=($$("b-ent-flag")||{}).checked||false;
+        if(!name)return alert("Please enter entity name");
+        const id=`${type}/${name.toLowerCase().replace(/[^a-z0-9-_]/g,"")}`;
+        if(["user","role","group"].includes(type)){
+          BUILDER_STATE.identities.push({
+            id,name,type,is_admin:flag,arn:`arn:aws:iam::123456789012:${id}`
+          });
+        } else {
+          BUILDER_STATE.resources.push({
+            id,name,type,is_sensitive:flag,arn:`arn:aws:${type}:::${name}`
+          });
+        }
+        render();
+      };
+
+      const bAddRel=$$("btn-b-add-rel");
+      if(bAddRel)bAddRel.onclick=()=>{
+        const src=($$("b-rel-src")||{}).value;
+        const tgt=($$("b-rel-tgt")||{}).value;
+        const rel=($$("b-rel-type")||{}).value;
+        const acts=(($$("b-rel-actions")||{}).value||"").split(",").map(x=>x.trim()).filter(Boolean);
+        if(!src||!tgt)return alert("Select source and target entities");
+        BUILDER_STATE.relationships.push({
+          source_id:src,target_id:tgt,relationship:rel,actions:acts.length?acts:["*"]
+        });
+        render();
+      };
+
+      const bValPol=$$("btn-validate-policy-stmt");
+      if(bValPol)bValPol.onclick=async()=>{
+        const eff=($$("b-stmt-effect")||{}).value||"Allow";
+        const acts=(($$("b-stmt-actions")||{}).value||"").split(",").map(x=>x.trim()).filter(Boolean);
+        const res=(($$("b-stmt-resources")||{}).value||"").split(",").map(x=>x.trim()).filter(Boolean);
+        const resp=await fetch("/api/scenarios/validate-policy",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({statements:[{effect:eff,actions:acts,resources:res}]})
+        });
+        const data=await resp.json();
+        const el=$$("policy-validation-result");
+        if(el){
+          el.style.display="block";
+          el.innerHTML=`
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <b>${data.valid?"✓ Statement Validated":"✕ Invalid Statement"}</b>
+              ${tg("Risk: "+(data.risk_level||"Low"),data.risk_level=="Critical"?"bad":data.risk_level=="High"?"wr":"ok")}
+            </div>
+            ${data.has_explicit_deny?'<div class="tg bad" style="margin-bottom:4px">Explicit Deny Rule Active</div>':''}
+            ${(data.warnings||[]).map(w=>`<div class="mu" style="color:var(--wr);font-size:11px">⚠ ${esc(w)}</div>`).join("")||'<div style="color:var(--ok);font-size:11px">Zero security warnings detected.</div>'}
+          `;
+        }
+      };
+
+      const bLaunchCustom=$$("btn-build-and-launch-custom");
+      if(bLaunchCustom)bLaunchCustom.onclick=async()=>{
+        const name=($$("b-meta-name")||{}).value||BUILDER_STATE.name;
+        const desc=($$("b-meta-desc")||{}).value||BUILDER_STATE.description;
+        const obj=($$("b-meta-obj")||{}).value||BUILDER_STATE.learning_objective;
+        const payload={
+          name,description:desc,learning_objective:obj,
+          identities:BUILDER_STATE.identities,
+          resources:BUILDER_STATE.resources,
+          relationships:BUILDER_STATE.relationships,
+          policies:[]
+        };
+        const res=await fetch("/api/scenarios/custom",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify(payload)
+        });
+        if(res.ok){
+          const data=await res.json();
+          await loadRunDetails(data.run_id);
+          LAB_MODE="workbench";
+          WORKBENCH_TAB="paths";
+          render();
+        } else {
+          const err=await res.json().catch(()=>({}));
+          alert("Failed to build scenario: "+(err.error||"Validation error"));
+        }
+      };
+    }
+  CG.mount(ctx())}
 let tm;$$("gq").addEventListener("input",e=>{clearTimeout(tm);tm=setTimeout(()=>{Q=e.target.value.trim();if(!["findings","events","audit"].includes(route()))location.hash="#findings";else refresh()},180)});
 document.addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o)openDrawer(o.dataset.open);if(e.target.id=="dclose")closeDrawer();if(e.target.closest("[data-p]")&&DR)setTimeout(()=>DR&&openDrawer(DR),900)});
 document.addEventListener("keydown",e=>{if(e.key=="Escape")closeDrawer();if(e.key=="/"&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$$("gq").focus()}});
 new MutationObserver(()=>CG.update(ctx())).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 $$("menu").onclick=()=>document.body.classList.toggle("navopen");$$("scrim").onclick=()=>document.body.classList.remove("navopen");window.addEventListener("hashchange",()=>document.body.classList.remove("navopen"));
 setTimeout(loadMetrics,0);setInterval(loadMetrics,3000);setInterval(()=>{if(route()=="events")loadEvents()},2000);
-return{overview,findings,events,audit,graph,bind,slot,q:()=>Q,open:openDrawer}})();
+return{overview,findings,events,audit,graph,lab,bind,slot,q:()=>Q,open:openDrawer}})();

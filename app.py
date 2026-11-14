@@ -29,6 +29,8 @@ from backend.aws_guard import (
 )
 from backend.ingestion.stream import EventStreamPipeline
 from backend.graph import IAMCapabilityGraph, register_graph_api
+from backend.scenarios.api import register_scenarios_api
+from backend.scenarios.session import scenario_session_manager
 from backend.ml_engine.detector import RuntimeDetector
 from backend.ml_engine.window_aggregator import StreamingWindowAggregator
 from backend.replay import register_replay_api
@@ -635,6 +637,7 @@ register_telemetry(app, context)
 register_replay_api(app, pipeline)
 
 register_graph_api(app, iam_graph, {"iam": iam, "s3": s3, "ec2": ec2, "ct": ct})
+register_scenarios_api(app, scenario_session_manager, store)
 
 
 def run_server() -> None:
