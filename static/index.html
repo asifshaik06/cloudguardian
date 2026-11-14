@@ -12,7 +12,6 @@
 nav{display:flex;flex-direction:column;gap:4px}
 .nv{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 12px;border-radius:6px;color:var(--mu);text-decoration:none;font-size:14px;font-weight:500;box-shadow:inset 2px 0 0 transparent;transition:background .15s,color .15s,box-shadow .15s}
 .nv svg{width:20px;height:20px;flex:none}.nv:hover{background:var(--sf2);color:var(--tx)}.nv.on{background:var(--fl);color:var(--ac);box-shadow:inset 2px 0 0 var(--ac)}
-#sfoot{margin-top:auto;padding:0 8px;font-size:12px;display:grid;gap:2px}
 .bar{display:flex;align-items:center;gap:12px;padding:12px var(--pad);border-bottom:1px solid var(--ln);position:sticky;top:0;background:var(--bg);z-index:3}.bar h1{font-size:16px;margin:0;font-weight:600;white-space:nowrap}
 .sq{flex:1;min-width:0;max-width:440px;margin-left:12px}.rt{display:flex;align-items:center;gap:12px;margin-left:auto}.menu{display:none;align-items:center;justify-content:center;width:34px;padding:0}.menu svg{width:18px;height:18px}
 .mb{padding:6px var(--pad);font-size:12px;border-bottom:1px solid var(--ln)}.mb.sim{background:var(--fl);color:var(--ac)}.mb.live{background:rgba(63,178,127,.12);color:var(--ok)}
@@ -62,7 +61,7 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:10
 @media(max-width:640px){.g3,.kpis{grid-template-columns:minmax(0,1fr)}.pipe{grid-template-columns:repeat(2,minmax(0,1fr))}.stg{border-bottom:1px solid var(--ln)}.live span{display:none}.feed .ev{grid-template-columns:64px 1fr}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
-<div class="shell"><aside class="side"><div class="logo"><i></i>CloudGuardian</div><nav id="nav"></nav><div id="sfoot"></div></aside>
+<div class="shell"><aside class="side"><div class="logo"><i></i>CloudGuardian</div><nav id="nav"></nav></aside>
 <div class="mainc"><div class="bar"><button class="btn menu" id="menu" aria-label="Open navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><h1 id="title"></h1><input id="gq" class="sq" type="search" placeholder="Search findings, events and audit   ( / )" aria-label="Search"><div class="rt"><span id="mode" class="tg in"></span><span class="live"><i class="pd"></i><span id="ver">Connecting</span></span><button class="btn sm" id="theme">Theme</button></div></div><div id="modebar" class="mb sim"></div><main class="content" id="app"></main></div></div>
 <div class="scrim" id="scrim"></div>
 <div class="drawer" id="drawer" aria-label="Finding details"></div>
@@ -98,10 +97,23 @@ const PAGES=[
   ["inventory","Inventory and posture"],
   ["threats","Detection and XAI"],
   ["events","Event viewer"],
-  ["audit","Audit and evaluation"],
-  ["architecture","Architecture & Viva"],
-  ["demo","Guided Demo"]
+  ["audit","Audit and evaluation"]
 ];
+const TITLES={
+  overview:"Overview",
+  alerts:"Alerts",
+  findings:"Findings",
+  incidents:"Incidents",
+  graph:"IAM Attack Graph",
+  lab:"Simulation Lab",
+  remediation:"Remediation",
+  inventory:"Inventory and posture",
+  threats:"Detection and XAI",
+  events:"Event viewer",
+  audit:"Audit and evaluation",
+  architecture:"Architecture & Viva",
+  demo:"Guided Demo"
+};
 const NAMES={zscore:"Z-score",isolation_forest:"Isolation Forest",lof:"LocalOutlierFactor",ocsvm:"OneClassSVM"};
 const MET=[["precision","Precision"],["recall","Recall"],["f1","F1"],["pr_auc","PR-AUC"]],COL=["var(--c1)","var(--c2)","var(--c3)","var(--c4)"];
 let S={resources:[],findings:[],events:[],audit:[],evidence:{},score:100,mode:"",account:"",region:"",polls:0,latency:0,checked:"",video:""},ML={results:{},card:{},multi:"",top:[]},AU={rows:[],chain_ok:true,count:0},DS=[],RU=[],GRAPH={nodes:[],links:[],categories:[]},ATTACK_PATHS={},BLAST_REPORT=null,SEL_PRINCIPAL="user/intern-dev",PREV={},SEEN=new Set(),FSEEN=new Set(),SIG="",BOOT=false;
@@ -131,7 +143,7 @@ async function investigateBlast(targetId){
 }
 window.investigateBlast=investigateBlast;
 const tg=(t,c)=>`<span class="tg ${c||""}">${esc(t)}</span>`,none=m=>`<div class="empty">${m}</div>`;
-function head(){const l=S.mode=="Live AWS";$("mode").textContent=l?"LIVE AWS":"SIMULATOR";$("mode").className="tg "+(l?"ok":"in");$("modebar").className="mb "+(l?"live":"sim");$("modebar").textContent=l?"AWS live mode. Connected to a real account. Attack simulation is disabled.":"Simulation mode. Resources and events come from a local AWS emulator, not a real account.";$("sfoot").innerHTML=`<div class="lb">Data source</div><div>${l?"Live AWS account":"Local AWS emulator"}</div><div class="mu">Account ${esc(S.account)}</div><div class="mu">Region ${esc(S.region)}</div><div class="mu">${S.polls} checks, ${S.latency} ms each</div>`+(S.video?`<a class="lk" href="${esc(S.video)}">Recorded live run</a>`:"");$("ver").textContent="Verified "+S.checked}
+function head(){const l=S.mode=="Live AWS";$("mode").textContent=l?"LIVE AWS":"SIMULATOR";$("mode").className="tg "+(l?"ok":"in");$("modebar").className="mb "+(l?"live":"sim");$("modebar").textContent=l?"AWS live mode. Connected to a real account. Attack simulation is disabled.":"Simulation mode. Resources and events come from a local AWS emulator, not a real account.";$("ver").textContent="Verified "+S.checked}
 function ring(v){const d=2*Math.PI*26,c=v>=80?"var(--ok)":v>=50?"var(--wr)":"var(--bad)";return`<svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Posture score ${v}"><circle cx="32" cy="32" r="26" fill="none" stroke="var(--sf2)" stroke-width="7"/><circle class="rc" data-to="${v}" data-d="${d}" cx="32" cy="32" r="26" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${d*v/100} ${d}" transform="rotate(-90 32 32)"/></svg>`}
 function bars(f){return f.explain.length>1?f.explain.map((e,i)=>`<div class="br"><span>${esc(e[0])}</span><b>${Math.round(e[1]*100)}%</b></div><div class="bt"><i class="gx" style="width:${e[1]*100}%;--i:${i}"></i></div>`).join(""):`<p class="mu">Rule trace: ${esc(f.ref)} was violated. The raw API response is on the Inventory page.</p>`}
 function stepper(f){const s=f.status;return`<div class="st">${["Detected","Approval","Remediated","Verified"].map((x,i)=>`<span class="s ${s=="fixed"?"d":i==0?"d":i==1?(s=="rejected"?"x":"a"):""}">${x}</span>`).join("")}</div>`}
@@ -174,7 +186,7 @@ audit(){return Views.audit()}};
 function post(){document.querySelectorAll("[data-count]").forEach(el=>{const to=+el.dataset.count,k=el.dataset.k,dec=+(el.dataset.dec||0),suf=el.dataset.suf||"",from=PREV[k]==null?0:PREV[k];PREV[k]=to;if(from===to)return;const t0=performance.now();(function f(t){const p=Math.min(1,(t-t0)/700),e=1-Math.pow(1-p,3);el.textContent=(from+(to-from)*e).toFixed(dec)+suf;if(p<1)requestAnimationFrame(f)})(t0)});
  document.querySelectorAll(".rc").forEach(c=>{const to=+c.dataset.to,d=+c.dataset.d,from=PREV.ring==null?0:PREV.ring;PREV.ring=to;c.style.strokeDasharray=`${d*from/100} ${d}`;requestAnimationFrame(()=>requestAnimationFrame(()=>{c.style.strokeDasharray=`${d*to/100} ${d}`}))});
  S.events.forEach(e=>SEEN.add(evk(e)));S.findings.forEach(f=>FSEEN.add(f.id+f.status));Views.bind()}
-function render(anim){const r=route(),a=$("app");$("nav").innerHTML=PAGES.map(p=>`<a class="nv${p[0]==r?" on":""}" href="#${p[0]}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[p[0]]}</svg>${p[1]}</a>`).join("");$("title").textContent=PAGES.find(p=>p[0]==r)[1];a.innerHTML=V[r]();
+function render(anim){const r=route(),a=$("app");$("nav").innerHTML=PAGES.map(p=>`<a class="nv${p[0]==r?" on":""}" href="#${p[0]}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[p[0]]}</svg>${p[1]}</a>`).join("");$("title").textContent=TITLES[r]||(PAGES.find(p=>p[0]==r)||[r,r])[1];a.innerHTML=V[r]();
  if(anim){a.classList.remove("anim");void a.offsetWidth;a.classList.add("anim");clearTimeout(window._t);window._t=setTimeout(()=>a.classList.remove("anim"),1600)}post()}
 function setTheme(t){document.documentElement.dataset.theme=t;try{localStorage.cgTheme=t}catch(e){}$("theme").textContent=t=="light"?"Dark mode":"Light mode"}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-p]");if(b){b.disabled=true;act(b.dataset.p)}});
