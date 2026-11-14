@@ -13,10 +13,13 @@ so it needs no AWS account and costs nothing.
 - Detection: a continuous scanner checks live resource state against CIS-style rules,
   and an Isolation Forest flags unusual access-key behaviour.
 - Plain-English explanations: what happened, why it matters, and how the system knew.
-- Human-approved remediation: approve or reject in the dashboard, then the fix is applied
+- Human-approved remediation: approve or reject in the dashboard or verified Telegram, then the fix is applied
   and verified by checking the cloud again.
-- Audit trail and a data-source badge (Simulator or Live AWS) with the raw API responses shown.
-- Optional Telegram alerts with Approve and Reject buttons.
+- Cryptographic hash-chained audit trail (SQLite in WAL mode) with tamper verification and rollback.
+- Thread-safe state architecture protecting against concurrent race conditions.
+- Authenticated control plane: session-cookie and `X-API-Key` token verification.
+- Safe Live AWS safeguards: automatic resource provisioning is strictly blocked on live accounts without explicit operator flags.
+- Comprehensive test suite (54 unit and integration tests).
 
 ## Run locally (Windows PowerShell)
 
@@ -27,22 +30,29 @@ so it needs no AWS account and costs nothing.
     python app.py              # terminal 2
     # open http://localhost:8000
 
-Copy .env.example to .env for local settings.
+Copy `.env.example` to `.env` for local settings.
+
+## Running Tests
+
+Run the full automated test suite (54 tests):
+
+    python -m pytest
 
 ## Security notes
 
-- Never commit .env, AWS keys, or Telegram tokens. .gitignore and a gitleaks pre-commit hook help prevent it.
-- Account IDs and key IDs are masked in the audit log.
-- Live AWS mode (CG_LIVE_AWS=1) is optional and untested. Use a sandbox account only.
+- **API Protection:** Control endpoints (`/api/attack`, `/api/decide`, `/api/rollback`) require authentication via session cookie or `X-API-Key` header.
+- **Telegram Verification:** Callback actions are verified against `TG_CHAT_ID` and `TG_ALLOWED_USERS`. Unauthorized users are rejected and audited.
+- **AWS Live Protection:** Running with `CG_LIVE_AWS=1` will **never** automatically provision resources unless `CG_ALLOW_LIVE_SETUP=1` is explicitly set. Attack simulation is strictly disabled in live mode.
+- **Dry-Run Mode:** Enable `CG_DRY_RUN=1` to simulate remediations without modifying cloud infrastructure.
+- **Secret Masking:** Account numbers, access keys, and Telegram tokens are redacted before writing to audit logs.
 
 ## Roadmap
 
-- Validated event schema (Pydantic) and CloudTrail log replay
-- Five-minute behavioural features with Z-score, Isolation Forest, LocalOutlierFactor and OneClassSVM
-- SHAP explanations and an IAM capability graph
-- Rollback, hash-chained audit log, Terraform, and CI with Checkov
-- Evaluation with measured results
+- [x] Phase 1: Security Hardening, Thread Safety, API Auth & Safe AWS Mode (Completed, 54 passing tests)
+- [ ] Phase 2: ML Engine & XAI Unification (12-feature rolling window runtime model, TreeSHAP, CloudTrail log replay)
+- [ ] Phase 3: IAM Capability Graph & Attack Path Simulation (NetworkX blast radius)
+- [ ] Phase 4: Infrastructure as Code (Terraform) and CI/CD Quality Gates
 
 ## Status
 
-Work in progress. Demonstrations run only in the local simulated environment.
+Phase 1 Complete. Fully functional, secure, and thread-safe local simulated environment.

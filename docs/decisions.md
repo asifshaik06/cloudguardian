@@ -29,3 +29,17 @@ Each entry: decision, reason, alternatives considered.
 - The benign baseline never contains sensitive actions, so those features had zero variance and the z-score could not react to them.
 - Fix: divide by max(std, 0.1) in the Z-score baseline. Decided after seeing the Splunk S3 public bucket result, so the 7 real windows are development cases, not a clean test.
 
+
+## 7. Reentrant Lock (RLock) and snapshot isolation for state concurrency
+- Reason: Multiple background threads (scanner, telemetry, Telegram, Flask request workers) read and write findings and event collections simultaneously. Direct dictionary iteration without locking causes intermittent `RuntimeError: dictionary changed size during iteration`.
+- Fix: Centralized `StateStore` with `threading.RLock()` and snapshot copies for all dictionary iteration.
+- Alternatives: Multi-process architecture (too heavy for a local zero-cost single-process demo), asyncio (would require rewriting Flask and synchronous boto3 calls).
+
+## 8. Dual session-cookie and API-key authentication
+- Reason: Protect control plane endpoints (`/api/attack`, `/api/decide`, `/api/rollback`) against unauthorized network callers, malicious browser extensions, and CSRF attacks without breaking the zero-config browser dashboard experience.
+- Fix: The browser receives an HTTP-only `cg_session` cookie on visiting `/`, while programmatic API clients can supply `X-API-Key` or `Authorization: Bearer <key>`.
+- Alternatives: Basic Auth (browser popup), static unauthenticated endpoints (security risk).
+
+## 9. Fail-safe Live AWS setup guard and Telegram user validation
+- Reason: Accidental live AWS modifications could incur costs, damage real infrastructure, or expire the student Free Tier account prematurely. Unauthorized Telegram users in shared chats could approve or reject remediations.
+- Fix: `safe_setup()` strictly blocks automatic resource provisioning in Live AWS mode unless `CG_ALLOW_LIVE_SETUP=1` is explicitly configured. Telegram callback queries check `from.id` against `TG_CHAT_ID` and `TG_ALLOWED_USERS` before executing `decide()`.

@@ -18,3 +18,12 @@
 - flaws.cloud top alerts: bursts from one identity with 100 percent errors, manual review pending.
 
 - Day 6: 20-seed controlled benchmark done. F1: Z-score 0.838, IF 0.772, OCSVM 0.764, LOF 0.573. Z-score advantage partly a generator artifact. Final detector choice waits for real benign baseline.
+
+## Day 7 (Phase 1: Security Hardening & System Stability)
+- Done: Decoupled monolithic globals into dedicated modules (backend/security.py, backend/state.py, backend/aws_guard.py).
+- Done: Implemented ThreadSafeStateStore with RLock, snapshot isolation against concurrent dict iteration crashes, and serialized SQLite WAL access.
+- Done: Added token and session-cookie authentication for control endpoints (/api/attack, /api/decide, /api/rollback) with HTTP 401/403/400/404 handling.
+- Done: Implemented Telegram user ID verification and callback payload validation to prevent unauthorized remediation approvals.
+- Done: Implemented Live AWS safeguards (blocking automatic setup() in live mode unless CG_ALLOW_LIVE_SETUP=1; adding CG_DRY_RUN simulation support).
+- Done: Expanded test suite from 5 to 54 automated tests across unit and integration suites (100% passing).
+- Next: Phase 2 (Runtime ML pipeline unification with baseline_v1.joblib and TreeSHAP explainability).

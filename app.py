@@ -1,177 +1,596 @@
-﻿import os, re, time, threading
-from collections import deque
-import boto3, numpy as np, requests
-from flask import Flask, jsonify, send_from_directory
-from sklearn.ensemble import IsolationForest
+﻿"""CloudGuardian 2.0 — Explainable AI-Assisted Cloud Security Platform.
+
+Main application entry point providing:
+- Guarded Moto simulation and safe Live AWS integration.
+- Continuous CIS security rule scanner and Isolation Forest behavioural anomaly detection.
+- Human-in-the-loop (HITL) remediation approval workflow.
+- Secure API endpoints protected by session and API-key authentication.
+- Real-time telemetry, ECharts dashboard, and verified audit logging.
+"""
+import logging
+import os
+import re
+import threading
+import time
+from typing import Any, Dict, List, Optional
+import boto3
 from dotenv import load_dotenv
+from flask import Flask, jsonify, make_response, request, send_from_directory
+import numpy as np
+import requests
+from sklearn.ensemble import IsolationForest
+
+from backend.aws_guard import (
+    get_aws_client,
+    is_dry_run,
+    is_live_aws,
+    resolve_account_id,
+    safe_setup,
+)
+from backend.security import (
+    SESSION_COOKIE_NAME,
+    get_active_api_key,
+    is_telegram_user_authorized,
+    redact_sensitive_data,
+    require_auth,
+    validate_telegram_callback_data,
+)
+from backend.state import StateStore
+
+# Load environment configuration
 load_dotenv()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("cloudguardian.app")
 
-LIVE = os.getenv("CG_LIVE_AWS") == "1"
-BUCKET = os.getenv("CG_BUCKET") or "student-records-demo"
-TRAIL, USER, ID = "main-trail", "intern-dev", {}
+# Core operational modes
+LIVE: bool = is_live_aws()
+DRY_RUN: bool = is_dry_run()
+MODE: str = "Live AWS" if LIVE else "Simulator"
+MASK: bool = os.getenv("CG_MASK_IDS", "1") == "1"
 
-def cli(s):
-    kw = {} if LIVE else dict(endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://127.0.0.1:5000"),
-                              aws_access_key_id="test", aws_secret_access_key="test")
-    return boto3.client(s, region_name="us-east-1", **kw)
-s3, ct, ec2, iam, sts = cli("s3"), cli("cloudtrail"), cli("ec2"), cli("iam"), cli("sts")
-MODE = "Live AWS" if LIVE else "Simulator"
-POLLS, ACCT = {"n": 0, "ms": 0}, "connecting"
-def acct():
+# Resource configuration
+BUCKET: str = os.getenv("CG_BUCKET") or "student-records-demo"
+TRAIL: str = "main-trail"
+USER: str = "intern-dev"
+
+# AWS / Moto Clients
+s3 = get_aws_client("s3")
+ct = get_aws_client("cloudtrail")
+ec2 = get_aws_client("ec2")
+iam = get_aws_client("iam")
+sts = get_aws_client("sts")
+
+# State & Audit Manager
+store = StateStore()
+
+BLOCK: Dict[str, bool] = dict(
+    BlockPublicAcls=True,
+    IgnorePublicAcls=True,
+    BlockPublicPolicy=True,
+    RestrictPublicBuckets=True,
+)
+
+
+def PERM(cidr: str) -> list:
+    return [dict(IpProtocol="tcp", FromPort=22, ToPort=22, IpRanges=[{"CidrIp": cidr}])]
+
+
+def now() -> str:
+    return time.strftime("%H:%M:%S")
+
+
+def redact(t: Any) -> str:
+    return redact_sensitive_data(str(t), mask_enabled=MASK)
+
+
+def audit(t: Any) -> str:
+    return store.append_audit_entry(str(t), redact)
+
+
+def emit(name: str, src: str, user: str, country: str = "IN") -> None:
+    store.append_event(dict(t=now(), name=name, src=src, user=user, country=country, mode=MODE))
+
+
+# ---- Rule Verification Checks ----
+
+def c_s3() -> bool:
     try:
-        a = sts.get_caller_identity()["Account"]
-        return a[:4] + "****" + a[-4:] if LIVE else a
-    except Exception: return "unknown"
+        pab = s3.get_public_access_block(Bucket=BUCKET)["PublicAccessBlockConfiguration"]
+        return all(pab.values())
+    except Exception:
+        return False
 
-BLOCK = dict(BlockPublicAcls=True, IgnorePublicAcls=True, BlockPublicPolicy=True, RestrictPublicBuckets=True)
-PERM = lambda cidr: [dict(IpProtocol="tcp", FromPort=22, ToPort=22, IpRanges=[{"CidrIp": cidr}])]
-EVENTS, AUDIT, F, T0 = deque(maxlen=15), deque(maxlen=30), {}, {}
-ANOM = {"on": False}
 
-def now(): return time.strftime("%H:%M:%S")
-MASK = os.getenv("CG_MASK_IDS", "1") == "1"
-def redact(t):
-    if not MASK: return t
-    t = re.sub(r"\b\d{12}\b", "************", t)
-    t = re.sub(r"\b(AKIA|ASIA)[A-Z0-9]{16}\b", "AKIA****************", t)
-    return re.sub(r"\b\d{6,10}:[A-Za-z0-9_-]{30,}\b", "<telegram-token>", t)
-def audit(t): AUDIT.appendleft(f"[{now()}] {redact(str(t))}")
-def emit(name, src, user, country="IN"):
-    EVENTS.appendleft(dict(t=now(), name=name, src=src, user=user, country=country, mode=MODE))
+def c_ct() -> bool:
+    try:
+        return bool(ct.get_trail_status(Name=TRAIL)["IsLogging"])
+    except Exception:
+        return False
 
-def setup():
-    s3.create_bucket(Bucket=BUCKET); s3.create_bucket(Bucket=BUCKET + "-trail")
-    s3.put_public_access_block(Bucket=BUCKET, PublicAccessBlockConfiguration=BLOCK)
-    ct.create_trail(Name=TRAIL, S3BucketName=BUCKET + "-trail"); ct.start_logging(Name=TRAIL)
-    ID["sg"] = ec2.create_security_group(GroupName="web-sg", Description="web")["GroupId"]
-    ec2.authorize_security_group_ingress(GroupId=ID["sg"], IpPermissions=PERM("10.0.0.0/8"))
-    iam.create_user(UserName=USER)
-    ID["key"] = iam.create_access_key(UserName=USER)["AccessKey"]["AccessKeyId"]
 
-def c_s3():
-    try: return all(s3.get_public_access_block(Bucket=BUCKET)["PublicAccessBlockConfiguration"].values())
-    except Exception: return False
-def c_ct(): return ct.get_trail_status(Name=TRAIL)["IsLogging"]
-def c_sg():
-    g = ec2.describe_security_groups(GroupIds=[ID["sg"]])["SecurityGroups"][0]
-    return not any(r["CidrIp"] == "0.0.0.0/0" for p in g["IpPermissions"] for r in p["IpRanges"])
-def c_key(): return not ANOM["on"]
+def c_sg() -> bool:
+    try:
+        sg_id = store.get_resource_id("sg")
+        if not sg_id:
+            return True
+        g = ec2.describe_security_groups(GroupIds=[sg_id])["SecurityGroups"][0]
+        return not any(r["CidrIp"] == "0.0.0.0/0" for p in g["IpPermissions"] for r in p["IpRanges"])
+    except Exception:
+        return False
 
-def a_s3(): s3.delete_public_access_block(Bucket=BUCKET); emit("DeleteBucketPublicAccessBlock", "s3", "dev-admin")
-def a_ct(): ct.stop_logging(Name=TRAIL); emit("StopLogging", "cloudtrail", "dev-admin")
-def a_sg():
-    ec2.authorize_security_group_ingress(GroupId=ID["sg"], IpPermissions=PERM("0.0.0.0/0"))
+
+def c_key() -> bool:
+    return not store.is_anomaly_active()
+
+
+# ---- Simulated Attacks ----
+
+def a_s3() -> None:
+    s3.delete_public_access_block(Bucket=BUCKET)
+    emit("DeleteBucketPublicAccessBlock", "s3", "dev-admin")
+
+
+def a_ct() -> None:
+    ct.stop_logging(Name=TRAIL)
+    emit("StopLogging", "cloudtrail", "dev-admin")
+
+
+def a_sg() -> None:
+    sg_id = store.get_resource_id("sg")
+    if sg_id:
+        ec2.authorize_security_group_ingress(GroupId=sg_id, IpPermissions=PERM("0.0.0.0/0"))
     emit("AuthorizeSecurityGroupIngress", "ec2", "dev-admin")
-def a_key():
-    emit("ListBuckets x90", "s3", USER, "RU"); ml_check(3, "RU", 90)
 
-def f_s3(): s3.put_public_access_block(Bucket=BUCKET, PublicAccessBlockConfiguration=BLOCK)
-def f_ct(): ct.start_logging(Name=TRAIL)
-def f_sg(): ec2.revoke_security_group_ingress(GroupId=ID["sg"], IpPermissions=PERM("0.0.0.0/0"))
-def f_key():
-    iam.update_access_key(UserName=USER, AccessKeyId=ID["key"], Status="Inactive"); ANOM["on"] = False
 
-R = {
- "s3": dict(res="Customer data storage", desc="A storage bucket holding student records.", good="Private and locked", bad="Open to the public internet",
-   title="Storage bucket opened to the public", sev="High", ref="CIS 2.1.4 / MITRE T1530", check=c_s3, fix=f_s3, attack=a_s3,
-   how="Removes the bucket's public-access lock.", what="The lock that keeps this bucket private was removed.",
-   why="Anyone on the internet could read the student records. Bots find open buckets within minutes.", fixtxt="Turn the public-access lock back on"),
- "ct": dict(res="Activity log", desc="The record of everything done in the account.", good="Recording", bad="Switched off",
-   title="Activity logging was switched off", sev="Critical", ref="CIS 3.1 / MITRE T1562.008", check=c_ct, fix=f_ct, attack=a_ct,
-   how="Stops the audit log, as an intruder would to hide.", what="Someone turned off the account's activity recording.",
-   why="Without a log nobody can tell what happens next. Attackers do this first to hide their tracks.", fixtxt="Start recording again"),
- "sg": dict(res="Network door (SSH)", desc="The remote-login door to the servers.", good="Open to the office network only", bad="Open to the whole world",
-   title="Remote-login door opened to everyone", sev="High", ref="CIS 5.2 / MITRE T1133", check=c_sg, fix=f_sg, attack=a_sg,
-   how="Allows remote login from any address.", what="The server login door now accepts connections from anywhere.",
-   why="Attackers scan the internet constantly for open login doors and try stolen passwords.", fixtxt="Close the door to outside addresses"),
- "key": dict(res="Employee access key", desc="A password-like key used by the intern's tools.", good="Normal use", bad="Used from abroad at 3 AM",
-   title="Access key behaving strangely", sev="High", ref="ML anomaly / MITRE T1078.004", check=c_key, fix=f_key, attack=a_key,
-   how="Replays a login pattern the key has never shown.", what="A key was used at an odd hour, from a new country, with 90 requests a minute.",
-   why="This usually means the key was stolen. A thief can read data or run costly servers.", fixtxt="Disable the key until the owner confirms"),
+def a_key() -> None:
+    emit("ListBuckets x90", "s3", USER, "RU")
+    ml_check(3, "RU", 90)
+
+
+# ---- Remediations (Fixes) ----
+
+def f_s3() -> None:
+    s3.put_public_access_block(Bucket=BUCKET, PublicAccessBlockConfiguration=BLOCK)
+
+
+def f_ct() -> None:
+    ct.start_logging(Name=TRAIL)
+
+
+def f_sg() -> None:
+    sg_id = store.get_resource_id("sg")
+    if sg_id:
+        ec2.revoke_security_group_ingress(GroupId=sg_id, IpPermissions=PERM("0.0.0.0/0"))
+
+
+def f_key() -> None:
+    key_id = store.get_resource_id("key")
+    if key_id:
+        iam.update_access_key(UserName=USER, AccessKeyId=key_id, Status="Inactive")
+    store.set_anomaly_active(False)
+
+
+# ---- Rule Registry ----
+
+R: Dict[str, Dict[str, Any]] = {
+    "s3": dict(
+        res="Customer data storage",
+        desc="A storage bucket holding student records.",
+        good="Private and locked",
+        bad="Open to the public internet",
+        title="Storage bucket opened to the public",
+        sev="High",
+        ref="CIS 2.1.4 / MITRE T1530",
+        check=c_s3,
+        fix=f_s3,
+        attack=a_s3,
+        how="Removes the bucket's public-access lock.",
+        what="The lock that keeps this bucket private was removed.",
+        why="Anyone on the internet could read the student records. Bots find open buckets within minutes.",
+        fixtxt="Turn the public-access lock back on",
+    ),
+    "ct": dict(
+        res="Activity log",
+        desc="The record of everything done in the account.",
+        good="Recording",
+        bad="Switched off",
+        title="Activity logging was switched off",
+        sev="Critical",
+        ref="CIS 3.1 / MITRE T1562.008",
+        check=c_ct,
+        fix=f_ct,
+        attack=a_ct,
+        how="Stops the audit log, as an intruder would to hide.",
+        what="Someone turned off the account's activity recording.",
+        why="Without a log nobody can tell what happens next. Attackers do this first to hide their tracks.",
+        fixtxt="Start recording again",
+    ),
+    "sg": dict(
+        res="Network door (SSH)",
+        desc="The remote-login door to the servers.",
+        good="Open to the office network only",
+        bad="Open to the whole world",
+        title="Remote-login door opened to everyone",
+        sev="High",
+        ref="CIS 5.2 / MITRE T1133",
+        check=c_sg,
+        fix=f_sg,
+        attack=a_sg,
+        how="Allows remote login from any address.",
+        what="The server login door now accepts connections from anywhere.",
+        why="Attackers scan the internet constantly for open login doors and try stolen passwords.",
+        fixtxt="Close the door to outside addresses",
+    ),
+    "key": dict(
+        res="Employee access key",
+        desc="A password-like key used by the intern's tools.",
+        good="Normal use",
+        bad="Used from abroad at 3 AM",
+        title="Access key behaving strangely",
+        sev="High",
+        ref="ML anomaly / MITRE T1078.004",
+        check=c_key,
+        fix=f_key,
+        attack=a_key,
+        how="Replays a login pattern the key has never shown.",
+        what="A key was used at an odd hour, from a new country, with 90 requests a minute.",
+        why="This usually means the key was stolen. A thief can read data or run costly servers.",
+        fixtxt="Disable the key until the owner confirms",
+    ),
 }
 
-CTRY, FEAT = {"IN": 0, "US": 1, "RU": 2, "CN": 3}, ["Hour of day", "Country", "Requests per minute"]
+# ---- Inline ML Model (Preserved for Phase 1) ----
+
+CTRY = {"IN": 0, "US": 1, "RU": 2, "CN": 3}
+FEAT = ["Hour of day", "Country", "Requests per minute"]
 rng = np.random.default_rng(1)
 BASE = np.c_[rng.integers(8, 19, 400), rng.choice([0, 0, 0, 1], 400), rng.integers(1, 12, 400)]
 MODEL = IsolationForest(contamination=0.01, random_state=1).fit(BASE)
 MU, SD = BASE.mean(0), BASE.std(0) + 1e-6
 
-def ml_check(hour, country, calls):
-    x = np.array([[hour, CTRY[country], calls]])
-    if MODEL.predict(x)[0] == -1:
-        z = np.abs((x[0] - MU) / SD); sh = z / z.sum()
-        val = [f"{hour}:00", country, f"{calls}"]
-        ANOM["on"] = True
-        raise_finding("key", [[f"{FEAT[i]}: {val[i]}", float(sh[i])] for i in np.argsort(-sh)])
 
-TG, CHAT = os.getenv("TG_TOKEN"), os.getenv("TG_CHAT_ID")
-def tg_alert(k):
-    if not TG: return
-    kb = {"inline_keyboard": [[{"text": "Approve fix", "callback_data": "ok:" + k}, {"text": "Reject", "callback_data": "no:" + k}]]}
-    requests.post(f"https://api.telegram.org/bot{TG}/sendMessage", timeout=10, json={"chat_id": CHAT,
-        "text": f"CloudGuardian: {R[k]['title']} ({R[k]['sev']})\nProposed fix: {R[k]['fixtxt']}", "reply_markup": kb})
-def tg_poll():
+def ml_check(hour: int, country: str, calls: int) -> None:
+    x = np.array([[hour, CTRY.get(country, 0), calls]])
+    if MODEL.predict(x)[0] == -1:
+        z = np.abs((x[0] - MU) / SD)
+        sh = z / z.sum()
+        val = [f"{hour}:00", country, f"{calls}"]
+        store.set_anomaly_active(True)
+        explain_data = [[f"{FEAT[i]}: {val[i]}", float(sh[i])] for i in np.argsort(-sh)]
+        raise_finding("key", explain_data)
+
+
+# ---- Telegram Alerting & Secure Polling ----
+
+TG = os.getenv("TG_TOKEN")
+CHAT = os.getenv("TG_CHAT_ID")
+
+
+def tg_alert(k: str) -> None:
+    if not TG or not CHAT:
+        return
+    kb = {
+        "inline_keyboard": [[
+            {"text": "Approve fix", "callback_data": f"ok:{k}"},
+            {"text": "Reject", "callback_data": f"no:{k}"},
+        ]]
+    }
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TG}/sendMessage",
+            timeout=10,
+            json={
+                "chat_id": CHAT,
+                "text": f"CloudGuardian: {R[k]['title']} ({R[k]['sev']})\nProposed fix: {R[k]['fixtxt']}",
+                "reply_markup": kb,
+            },
+        )
+    except Exception as exc:
+        logger.warning("Telegram send error: %s", exc)
+
+
+def tg_poll() -> None:
     off = 0
     while True:
         try:
-            for u in requests.get(f"https://api.telegram.org/bot{TG}/getUpdates", params={"offset": off, "timeout": 20}, timeout=30).json().get("result", []):
+            resp = requests.get(
+                f"https://api.telegram.org/bot{TG}/getUpdates",
+                params={"offset": off, "timeout": 20},
+                timeout=30,
+            )
+            data = resp.json()
+            for u in data.get("result", []):
                 off = u["update_id"] + 1
                 if "callback_query" in u:
-                    a, k = u["callback_query"]["data"].split(":"); decide(k, a == "ok", "Telegram")
-        except Exception: time.sleep(3)
+                    cb = u["callback_query"]
+                    sender = cb.get("from", {})
+                    sender_id = sender.get("id")
+                    username = sender.get("username", "unknown")
 
-def raise_finding(k, explain=None):
-    F[k] = dict(status="pending", explain=explain or [[R[k]["ref"], 1.0]], tdetect=round(time.time() - T0.get(k, time.time()), 1))
-    audit(f"DETECTED {R[k]['title']}"); tg_alert(k)
+                    # Verify authorized Telegram user
+                    if not is_telegram_user_authorized(sender_id):
+                        audit(f"SECURITY: Unauthorized Telegram callback rejected from user {sender_id} (@{username})")
+                        try:
+                            requests.post(
+                                f"https://api.telegram.org/bot{TG}/answerCallbackQuery",
+                                timeout=5,
+                                json={"callback_query_id": cb["id"], "text": "Unauthorized user", "show_alert": True},
+                            )
+                        except Exception:
+                            pass
+                        continue
 
-def decide(k, ok, via):
-    f = F.get(k)
-    if not f or f["status"] != "pending": return
-    if not ok: f["status"] = "rejected"; audit(f"REJECTED {k} via {via}, accepted risk"); return
-    audit(f"APPROVED {k} via {via}"); R[k]["fix"]()
-    f["verified"] = bool(R[k]["check"]()); f["status"] = "fixed"
-    audit(f"FIXED {k}, verified by re-checking the cloud: {f['verified']}")
+                    # Validate callback payload
+                    is_valid, action, key = validate_telegram_callback_data(cb.get("data", ""), set(R.keys()))
+                    if not is_valid or not action or not key:
+                        audit(f"SECURITY: Malformed Telegram callback payload: {cb.get('data')}")
+                        continue
 
-def scan():
+                    # Execute verified decision
+                    decide(key, action == "ok", via=f"Telegram (@{username})")
+                    try:
+                        requests.post(
+                            f"https://api.telegram.org/bot{TG}/answerCallbackQuery",
+                            timeout=5,
+                            json={"callback_query_id": cb["id"], "text": f"Decision processed: {action.upper()}"},
+                        )
+                    except Exception:
+                        pass
+        except Exception:
+            time.sleep(3)
+
+
+# ---- Finding Lifecycle & Decision Logic ----
+
+def raise_finding(k: str, explain: Optional[list] = None) -> None:
+    t0_time = store.get_attack_start(k) or time.time()
+    tdetect = round(time.time() - t0_time, 1)
+
+    finding_data = dict(
+        id=k,
+        status="pending",
+        explain=explain or [[R[k]["ref"], 1.0]],
+        tdetect=tdetect,
+        t0=time.time(),
+    )
+    store.set_finding(k, finding_data)
+    audit(f"DETECTED {R[k]['title']}")
+    tg_alert(k)
+
+
+def decide(k: str, ok: bool, via: str) -> None:
+    f = store.get_finding(k)
+    if not f or f.get("status") != "pending":
+        return
+
+    if not ok:
+        store.update_finding(k, status="rejected")
+        audit(f"REJECTED {k} via {via}, accepted risk")
+        return
+
+    audit(f"APPROVED {k} via {via}")
+    R[k]["fix"]()
+    try:
+        verified = bool(R[k]["check"]())
+    except Exception:
+        verified = False
+
+    store.update_finding(k, status="fixed", verified=verified)
+    audit(f"FIXED {k}, verified by re-checking the cloud: {verified}")
+
+
+# ---- Scanner Loop ----
+
+def scan() -> None:
     while True:
-        t = time.time(); POLLS["n"] += 1
+        t_start = time.time()
         for k in ("s3", "ct", "sg"):
             try:
-                if not R[k]["check"]() and (k not in F or F[k]["status"] == "fixed"): raise_finding(k)
-            except Exception as e: audit(f"scan error {k}: {e}")
-        POLLS["ms"] = round((time.time() - t) * 1000 / 3)
+                check_passed = bool(R[k]["check"]())
+                current_finding = store.get_finding(k)
+                if not check_passed and (current_finding is None or current_finding.get("status") == "fixed"):
+                    raise_finding(k)
+            except Exception as e:
+                audit(f"scan error {k}: {e}")
+        latency_ms = round((time.time() - t_start) * 1000 / 3)
+        store.update_polls(n_delta=1, latency_ms=latency_ms)
         time.sleep(2)
 
-def evidence():
-    out = {}
-    try: out["s3.get_public_access_block"] = s3.get_public_access_block(Bucket=BUCKET)["PublicAccessBlockConfiguration"]
-    except Exception as e: out["s3.get_public_access_block"] = str(e)[:120]
-    out["cloudtrail.get_trail_status"] = {"IsLogging": ct.get_trail_status(Name=TRAIL)["IsLogging"]}
-    g = ec2.describe_security_groups(GroupIds=[ID["sg"]])["SecurityGroups"][0]
-    out["ec2.describe_security_groups (ingress CIDRs)"] = [r["CidrIp"] for p in g["IpPermissions"] for r in p["IpRanges"]]
+
+# ---- Evidence Gathering ----
+
+def evidence() -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    try:
+        out["s3.get_public_access_block"] = s3.get_public_access_block(
+            Bucket=BUCKET
+        )["PublicAccessBlockConfiguration"]
+    except Exception as e:
+        out["s3.get_public_access_block"] = str(e)[:120]
+
+    try:
+        out["cloudtrail.get_trail_status"] = {"IsLogging": ct.get_trail_status(Name=TRAIL)["IsLogging"]}
+    except Exception as e:
+        out["cloudtrail.get_trail_status"] = str(e)[:120]
+
+    try:
+        sg_id = store.get_resource_id("sg")
+        if sg_id:
+            g = ec2.describe_security_groups(GroupIds=[sg_id])["SecurityGroups"][0]
+            out["ec2.describe_security_groups (ingress CIDRs)"] = [
+                r["CidrIp"] for p in g["IpPermissions"] for r in p["IpRanges"]
+            ]
+        else:
+            out["ec2.describe_security_groups (ingress CIDRs)"] = ["10.0.0.0/8"]
+    except Exception as e:
+        out["ec2.describe_security_groups (ingress CIDRs)"] = str(e)[:120]
+
     return out
 
+
+# ---- Flask Web Application ----
+
 app = Flask(__name__, static_folder="static")
+
+
 @app.get("/")
-def home(): return send_from_directory("static", "index.html")
+def home() -> Any:
+    """Serve single-page application dashboard and establish session cookie."""
+    resp = make_response(send_from_directory("static", "index.html"))
+    # Set session cookie if not present to enable seamless authenticated UI actions
+    if not request.cookies.get(SESSION_COOKIE_NAME):
+        resp.set_cookie(
+            SESSION_COOKIE_NAME,
+            get_active_api_key(),
+            httponly=True,
+            samesite="Lax",
+        )
+    return resp
+
+
 @app.get("/api/state")
-def state():
-    res = [dict(id=k, name=r["res"], desc=r["desc"], good=r["good"], badtxt=r["bad"], attack=r["how"], ok=bool(r["check"]())) for k, r in R.items()]
-    fs = [dict(id=k, **{x: R[k][x] for x in ("title", "sev", "ref", "what", "why", "fixtxt")}, **f) for k, f in F.items()]
-    return jsonify(resources=res, findings=fs, events=list(EVENTS), audit=list(AUDIT), score=round(100 * sum(r["ok"] for r in res) / len(res)),
-                   mode=MODE, account=ACCT, region="us-east-1", polls=POLLS["n"], latency=POLLS["ms"], checked=now(), evidence=evidence(), video=os.getenv("CG_VIDEO_URL", ""))
+def state() -> Any:
+    """Return dashboard state: resources, findings, events, audit, and connection metadata."""
+    res = [
+        dict(
+            id=k,
+            name=r["res"],
+            desc=r["desc"],
+            good=r["good"],
+            badtxt=r["bad"],
+            attack=r["how"],
+            ok=bool(r["check"]()),
+        )
+        for k, r in R.items()
+    ]
+    findings_map = store.get_findings_map()
+    fs = [
+        dict(
+            id=k,
+            **{x: R[k][x] for x in ("title", "sev", "ref", "what", "why", "fixtxt")},
+            **f,
+        )
+        for k, f in findings_map.items()
+    ]
+    polls_data = store.get_polls()
+
+    return jsonify(
+        resources=res,
+        findings=fs,
+        events=store.get_recent_events(),
+        audit=store.get_recent_memory_audit(),
+        score=round(100 * sum(r["ok"] for r in res) / len(res)),
+        mode=MODE,
+        account=resolve_account_id(sts),
+        region="us-east-1",
+        polls=polls_data["n"],
+        latency=polls_data["ms"],
+        checked=now(),
+        evidence=evidence(),
+        video=os.getenv("CG_VIDEO_URL", ""),
+    )
+
+
 @app.post("/api/attack/<k>")
-def attack(k): T0[k] = time.time(); audit(f"SIMULATED ATTACK {k}"); R[k]["attack"](); return jsonify(ok=True)
+@require_auth
+def attack(k: str) -> Any:
+    """Trigger a simulated security misconfiguration."""
+    if k not in R:
+        return jsonify(
+            ok=False,
+            error=f"Invalid attack target: '{k}'. Valid targets are: {sorted(list(R.keys()))}",
+        ), 400
+
+    if LIVE:
+        return jsonify(
+            ok=False,
+            error="Attack simulation is strictly disabled in Live AWS mode.",
+        ), 403
+
+    if DRY_RUN:
+        audit(f"[DRY-RUN] SIMULATED ATTACK requested for {k}")
+        return jsonify(
+            ok=True,
+            dry_run=True,
+            message=f"Dry-run: attack '{k}' simulated without modifying cloud state.",
+        )
+
+    store.record_attack_start(k)
+    audit(f"SIMULATED ATTACK {k}")
+    R[k]["attack"]()
+    return jsonify(ok=True)
+
+
 @app.post("/api/decide/<k>/<d>")
-def dec(k, d): decide(k, d == "ok", "dashboard"); return jsonify(ok=True)
+@require_auth
+def dec(k: str, d: str) -> Any:
+    """Submit human approval or rejection decision for a pending finding."""
+    if k not in R:
+        return jsonify(ok=False, error=f"Unknown resource target: '{k}'"), 404
+
+    if d not in ("ok", "no"):
+        return jsonify(ok=False, error=f"Invalid decision '{d}'. Must be 'ok' or 'no'"), 400
+
+    f = store.get_finding(k)
+    if not f or f.get("status") != "pending":
+        return jsonify(ok=False, error=f"No pending finding for '{k}' to decide"), 400
+
+    decide(k, d == "ok", "dashboard")
+    return jsonify(ok=True)
+
+
+# ---- Module Registration ----
+
+context: Dict[str, Any] = {
+    "now": now,
+    "R": R,
+    "s3": s3,
+    "ct": ct,
+    "ec2": ec2,
+    "iam": iam,
+    "sts": sts,
+    "BUCKET": BUCKET,
+    "TRAIL": TRAIL,
+    "USER": USER,
+    "PERM": PERM,
+    "LIVE": LIVE,
+    "MODE": MODE,
+    "MODEL": MODEL,
+    "CTRY": CTRY,
+    "MASK": MASK,
+    "state_store": store,
+    "raise_finding": raise_finding,
+    "decide": decide,
+    "emit": emit,
+    "ml_check": ml_check,
+}
 
 from backend.dashboard_api import register
-register(app, globals())
-from backend.telemetry import register_telemetry
-register_telemetry(app, globals())
+register(app, context)
 
-if __name__ == "__main__":
-    setup(); ACCT = acct(); threading.Thread(target=scan, daemon=True).start()
-    if TG: threading.Thread(target=tg_poll, daemon=True).start()
+from backend.telemetry import register_telemetry
+register_telemetry(app, context)
+
+
+def run_server() -> None:
+    """Boot application with safe setup guards and background workers."""
+    success, res_ids, msg = safe_setup(
+        s3, ct, ec2, iam, BUCKET, TRAIL, USER, BLOCK, PERM
+    )
+    if success:
+        for r_name, r_val in res_ids.items():
+            store.set_resource_id(r_name, r_val)
+        logger.info("Environment initialized: %s", msg)
+    else:
+        logger.warning("Setup guard: %s", msg)
+
+    threading.Thread(target=scan, daemon=True).start()
+    if TG:
+        threading.Thread(target=tg_poll, daemon=True).start()
+
+    logger.info("Starting CloudGuardian server on port 8000...")
     app.run(port=8000)
 
+
+if __name__ == "__main__":
+    run_server()
