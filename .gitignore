@@ -13,3 +13,4 @@ terraform/.terraform/
 *.sqlite-shm
 *.sqlite-wal
 .mcp.json
+.cg_key

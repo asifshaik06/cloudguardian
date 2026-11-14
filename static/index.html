@@ -226,7 +226,7 @@ function alertModal({ title, message, type="info" }){
 }
 window.alertModal = alertModal;
 
-async function act(p){const r=await fetch(p,{method:"POST"});if(!r.ok){const j=await r.json().catch(()=>({}));showToast(j.error||"Action failed","bad")}SIG="";await poll()}
+async function act(p){const r=await (window.authFetch?window.authFetch(p,{method:"POST"}):fetch(p,{method:"POST",credentials:"include"}));if(!r.ok){const j=await r.json().catch(()=>({}));showToast(j.error||"Action failed","bad")}SIG="";await poll()}
 async function poll(){const s=await get("/api/state");if(!s)return;S=s;if(!BOOT){BOOT=true;S.events.forEach(e=>SEEN.add(evk(e)));S.findings.forEach(f=>FSEEN.add(f.id+f.status))}head();const g=JSON.stringify([s.findings,s.resources,s.events,s.score,s.evidence]);if(g!==SIG){SIG=g;render()}}
 async function loadStatic(){ML=(await get("/api/ml"))||ML;DS=(await get("/api/datasets"))||[];RU=(await get("/api/rules"))||[];await loadGraph();render()}
 async function loadAudit(){AU=(await get("/api/audit?q="+encodeURIComponent(Views.q())))||AU;if(route()=="audit")render()}

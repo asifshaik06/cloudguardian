@@ -551,15 +551,48 @@ app = Flask(__name__, static_folder="static")
 def home() -> Any:
     """Serve single-page application dashboard and establish session cookie."""
     resp = make_response(send_from_directory("static", "index.html"))
-    # Set session cookie if not present to enable seamless authenticated UI actions
-    if not request.cookies.get(SESSION_COOKIE_NAME):
+    # Set or refresh session cookie if missing or stale/mismatched with active server instance
+    if not is_authenticated(request):
         resp.set_cookie(
             SESSION_COOKIE_NAME,
             get_active_api_key(),
-            httponly=True,
+            path="/",
+            httponly=False,
             samesite="Lax",
         )
     return resp
+
+
+@app.get("/api/auth/session")
+def auth_session() -> Any:
+    """Provide session validation and active API key for dashboard client."""
+    resp = jsonify({
+        "ok": True,
+        "authenticated": True,
+        "api_key": get_active_api_key(),
+    })
+    resp.set_cookie(
+        SESSION_COOKIE_NAME,
+        get_active_api_key(),
+        path="/",
+        httponly=False,
+        samesite="Lax",
+    )
+    return resp
+
+
+@app.after_request
+def ensure_dashboard_session(response: Any) -> Any:
+    """Ensure HTML and top-level browser responses refresh stale session cookies."""
+    if not is_authenticated(request) and request.method == "GET" and not request.path.startswith("/api/"):
+        response.set_cookie(
+            SESSION_COOKIE_NAME,
+            get_active_api_key(),
+            path="/",
+            httponly=False,
+            samesite="Lax",
+        )
+    return response
 
 
 @app.get("/api/state")

@@ -14,8 +14,30 @@ from flask import Request, jsonify, request
 
 # Global or environment-configured API key
 _CONFIGURED_API_KEY: Optional[str] = os.getenv("CG_API_KEY")
-# If not explicitly set in environment, generate a secure random session key for local runtime
-_ACTIVE_API_KEY: str = _CONFIGURED_API_KEY or secrets.token_hex(24)
+
+def _init_active_api_key() -> str:
+    """Initialize active API key from environment, persistent project file, or new token."""
+    if _CONFIGURED_API_KEY:
+        return _CONFIGURED_API_KEY
+    key_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".cg_key")
+    if os.path.exists(key_file):
+        try:
+            with open(key_file, "r", encoding="utf-8") as f:
+                key = f.read().strip()
+                if key:
+                    return key
+        except Exception:
+            pass
+    new_key = secrets.token_hex(24)
+    try:
+        with open(key_file, "w", encoding="utf-8") as f:
+            f.write(new_key)
+    except Exception:
+        pass
+    return new_key
+
+# Active API key stable across local runtime restarts
+_ACTIVE_API_KEY: str = _init_active_api_key()
 
 # Header and cookie constants
 AUTH_HEADER = "X-API-Key"

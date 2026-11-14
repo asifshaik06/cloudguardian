@@ -1,7 +1,34 @@
 /* Page views that need more than a template: overview, findings, events, audit and the investigation drawer.
    Uses the globals defined in index.html (S, ML, AU, DS, BOOT, esc, tg, none, ring, stepper, evalTable, get, route). */
 const Views=(()=>{
-const _get=async p=>{if(typeof window.get==="function")return await window.get(p);try{return await(await fetch(p)).json()}catch(e){return null}};
+const _get=async p=>{if(typeof window.get==="function")return await window.get(p);try{return await(await fetch(p,{credentials:"include"})).json()}catch(e){return null}};
+const authFetch = async (url, opts = {}) => {
+  opts.credentials = "include";
+  opts.headers = opts.headers || {};
+  let key = window.CG_API_KEY;
+  if (!key) {
+    const m = document.cookie.match(/(^| )cg_session=([^;]+)/);
+    if (m && m[2]) key = m[2];
+  }
+  if (!key) {
+    try {
+      const s = await (await fetch("/api/auth/session", { credentials: "include" })).json();
+      if (s && s.api_key) {
+        window.CG_API_KEY = s.api_key;
+        key = s.api_key;
+      }
+    } catch (e) {}
+  }
+  if (key) {
+    if (opts.headers instanceof Headers) {
+      opts.headers.set("X-API-Key", key);
+    } else {
+      opts.headers["X-API-Key"] = key;
+    }
+  }
+  return fetch(url, opts);
+};
+window.authFetch = authFetch;
 let M={posture:[],anomaly:[],threshold:null,buckets:[],events_total:0,rem:{items:[],fixed:0,verified:0,rolled_back:0}},EVR=[],ES=new Set(),EBOOT=false,Q="",FSEV="",FST="",EK="",DR=null;
 const ctx=()=>({S,ML,M}),mid=x=>(x.ref.match(/T\d{4}(\.\d{3})?/)||["n/a"])[0],$$=id=>document.getElementById(id);
 const stat=s=>({pending:tg("Awaiting approval","wr"),fixed:tg("Remediated","ok"),rejected:tg("Rejected","gr")}[s]||tg(s,"gr"));
@@ -346,7 +373,7 @@ async function loadScenarioCatalog() {
 }
 
 async function launchScenarioRun(scenarioId) {
-  const res = await fetch(`/api/scenarios/${encodeURIComponent(scenarioId)}/launch`, { method: "POST" });
+  const res = await authFetch(`/api/scenarios/${encodeURIComponent(scenarioId)}/launch`, { method: "POST" });
   if (res.ok) {
     const data = await res.json();
     await loadRunDetails(data.run_id);
@@ -372,7 +399,7 @@ async function remediateRun(runId, action) {
   if (!runId) return;
   showToast("Applying remediation to simulated environment...", "info");
   try {
-    const res = await fetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/remediate`, {
+    const res = await authFetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/remediate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: action || { type: "generic_remediation" } }),
@@ -396,7 +423,7 @@ async function reanalyzeRun(runId) {
   if (!runId) return;
   showToast("Re-analyzing capability graph & blast radius...", "info");
   try {
-    const res = await fetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/analyze`, {
+    const res = await authFetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
@@ -418,7 +445,7 @@ async function verifyRun(runId) {
   if (!runId) return;
   showToast("Verifying post-remediation security state...", "info");
   try {
-    const res = await fetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/verify`, {
+    const res = await authFetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/verify`, {
       method: "POST",
     });
     if (res.ok) {
@@ -443,7 +470,7 @@ async function resetRun(runId) {
     "Are you sure you want to reset this simulated scenario to its initial baseline? All applied remediations will be reverted.",
     async () => {
       try {
-        const res = await fetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/reset`, {
+        const res = await authFetch(`/api/scenarios/runs/${encodeURIComponent(runId)}/reset`, {
           method: "POST",
         });
         if (res.ok) {
@@ -1884,7 +1911,7 @@ function bind(){const r=route();
         const eff=($$("b-stmt-effect")||{}).value||"Allow";
         const acts=(($$("b-stmt-actions")||{}).value||"").split(",").map(x=>x.trim()).filter(Boolean);
         const res=(($$("b-stmt-resources")||{}).value||"").split(",").map(x=>x.trim()).filter(Boolean);
-        const resp=await fetch("/api/scenarios/validate-policy",{
+        const resp=await authFetch("/api/scenarios/validate-policy",{
           method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({statements:[{effect:eff,actions:acts,resources:res}]})
         });
@@ -1915,7 +1942,7 @@ function bind(){const r=route();
           relationships:BUILDER_STATE.relationships,
           policies:[]
         };
-        const res=await fetch("/api/scenarios/custom",{
+        const res=await authFetch("/api/scenarios/custom",{
           method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify(payload)
         });
@@ -1954,7 +1981,7 @@ function bind(){const r=route();
 
       const bAck = $$("btn-al-ack");
       if (bAck) bAck.onclick = async () => {
-        await fetch(`/api/alerts/${bAck.dataset.id}/action`, {
+        await authFetch(`/api/alerts/${bAck.dataset.id}/action`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "acknowledge" })
         });
@@ -1963,7 +1990,7 @@ function bind(){const r=route();
 
       const bInv = $$("btn-al-inv");
       if (bInv) bInv.onclick = async () => {
-        await fetch(`/api/alerts/${bInv.dataset.id}/action`, {
+        await authFetch(`/api/alerts/${bInv.dataset.id}/action`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "investigate" })
         });
@@ -1972,7 +1999,7 @@ function bind(){const r=route();
 
       const bRes = $$("btn-al-res");
       if (bRes) bRes.onclick = async () => {
-        await fetch(`/api/alerts/${bRes.dataset.id}/action`, {
+        await authFetch(`/api/alerts/${bRes.dataset.id}/action`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "resolve" })
         });
@@ -1981,7 +2008,7 @@ function bind(){const r=route();
 
       const bSup = $$("btn-al-sup");
       if (bSup) bSup.onclick = async () => {
-        await fetch(`/api/alerts/${bSup.dataset.id}/action`, {
+        await authFetch(`/api/alerts/${bSup.dataset.id}/action`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "suppress" })
         });
@@ -1997,7 +2024,7 @@ function bind(){const r=route();
           defaultValue: "Escalated: Alert " + alertId,
           confirmText: "Escalate Incident",
           onConfirm: async (title) => {
-            await fetch(`/api/alerts/${alertId}/escalate`, {
+            await authFetch(`/api/alerts/${alertId}/escalate`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ title, severity: "Critical", summary: "Formal escalation from Alert " + alertId })
             });
@@ -2024,7 +2051,7 @@ function bind(){const r=route();
       if (bNote) bNote.onclick = async () => {
         const val = ($$("inp-inc-note") || {}).value;
         if (val) {
-          await fetch(`/api/incidents/${bNote.dataset.id}/action`, {
+          await authFetch(`/api/incidents/${bNote.dataset.id}/action`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ notes: val })
           });
@@ -2039,7 +2066,7 @@ function bind(){const r=route();
         if (inc) {
           const curIdx = STAGES.indexOf(inc.status);
           const next = STAGES[Math.min(STAGES.length - 1, curIdx + 1)];
-          await fetch(`/api/incidents/${bNext.dataset.id}/action`, {
+          await authFetch(`/api/incidents/${bNext.dataset.id}/action`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status: next })
           });
@@ -2049,7 +2076,7 @@ function bind(){const r=route();
 
       const bContain = $$("btn-inc-record-contain");
       if (bContain) bContain.onclick = async () => {
-        await fetch(`/api/incidents/${bContain.dataset.id}/action`, {
+        await authFetch(`/api/incidents/${bContain.dataset.id}/action`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             containment_evidence: {
@@ -2072,7 +2099,7 @@ function bind(){const r=route();
           defaultValue: "Threat contained and posture verified.",
           confirmText: "Close Incident",
           onConfirm: async (reason) => {
-            await fetch(`/api/incidents/${incId}/action`, {
+            await authFetch(`/api/incidents/${incId}/action`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ status: "Closed", closure_reason: reason })
             });
@@ -2091,7 +2118,7 @@ function bind(){const r=route();
           placeholder: "e.g. Unauthorized S3 Bucket Exfiltration",
           confirmText: "Create Incident",
           onConfirm: async (title) => {
-            await fetch("/api/incidents", {
+            await authFetch("/api/incidents", {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 title,
@@ -2119,7 +2146,7 @@ function bind(){const r=route();
 
       const bAppr = $$("btn-rem-approve");
       if (bAppr) bAppr.onclick = async () => {
-        await fetch(`/api/remediations/${bAppr.dataset.id}/approve`, {
+        await authFetch(`/api/remediations/${bAppr.dataset.id}/approve`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user: "Security Operator" })
         });
@@ -2128,7 +2155,7 @@ function bind(){const r=route();
 
       const bApply = $$("btn-rem-apply");
       if (bApply) bApply.onclick = async () => {
-        await fetch(`/api/remediations/${bApply.dataset.id}/apply`, {
+        await authFetch(`/api/remediations/${bApply.dataset.id}/apply`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user: "Security Operator" })
         });
@@ -2138,7 +2165,7 @@ function bind(){const r=route();
 
       const bRever = $$("btn-rem-reverify");
       if (bRever) bRever.onclick = async () => {
-        await fetch(`/api/remediations/${bRever.dataset.id}/verify`, { method: "POST" });
+        await authFetch(`/api/remediations/${bRever.dataset.id}/verify`, { method: "POST" });
         loadRemediations();
       };
 
@@ -2151,7 +2178,7 @@ function bind(){const r=route();
           confirmText: "Roll Back Fix",
           danger: true,
           onConfirm: async () => {
-            await fetch(`/api/remediations/${remId}/rollback`, { method: "POST" });
+            await authFetch(`/api/remediations/${remId}/rollback`, { method: "POST" });
             showToast("Remediation successfully rolled back", "ok");
             loadRemediations();
             poll();
