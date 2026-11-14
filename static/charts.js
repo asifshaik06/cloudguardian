@@ -29,7 +29,42 @@ B.calib=function(D){const{o,ax}=base(),r=(D.ML&&D.ML.results)||{},ks=Object.keys
 B.iam_graph=function(D){
  const g=(D&&D.GRAPH)||window.GRAPH||{nodes:[],links:[],categories:[]};
  if(!g.nodes||!g.nodes.length)return empty("Loading IAM capability graph…");
- const mu=cv("--mu"),ln=cv("--ln"),tx=cv("--tx"),esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+ const mu=cv("--mu"),ln=cv("--ln"),tx=cv("--tx"),sf=cv("--sf")||"#0f172a",esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+ let displayNodes = g.nodes;
+ let displayLinks = g.links;
+
+ if(window.GRAPH_FILTER_NODE_TYPE && window.GRAPH_FILTER_NODE_TYPE !== "all"){
+  const filterType = window.GRAPH_FILTER_NODE_TYPE.toLowerCase();
+  const matchedNodeIds = new Set();
+  displayNodes = g.nodes.filter(n=>{
+   const match = (n.value||"").toLowerCase().includes(filterType) || (n.name||"").toLowerCase().includes(filterType);
+   if(match) matchedNodeIds.add(n.id);
+   return match;
+  });
+  displayLinks = g.links.filter(l=>matchedNodeIds.has(l.source) && matchedNodeIds.has(l.target));
+ }
+
+ if(window.GRAPH_FILTER_REL_TYPE && window.GRAPH_FILTER_REL_TYPE !== "all"){
+  const filterRel = window.GRAPH_FILTER_REL_TYPE.toLowerCase();
+  displayLinks = displayLinks.filter(l=>(l.relationship||"").toLowerCase() === filterRel);
+ }
+
+ if(window.GRAPH_SEARCH_QUERY){
+  const q = window.GRAPH_SEARCH_QUERY.toLowerCase();
+  displayNodes = displayNodes.map(n=>{
+   const match = n.name.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
+   if(match){
+    return{
+     ...n,
+     symbolSize: n.symbolSize + 8,
+     itemStyle:{...(n.itemStyle||{}), borderColor:"#ffd43b", borderWidth:3.5}
+    };
+   }
+   return n;
+  });
+ }
+
  return{
   animation:true,
   animationDuration:600,
@@ -41,16 +76,17 @@ B.iam_graph=function(D){
    formatter:p=>{
     if(p.dataType=="node"){
      const d=p.data;
-     const adm=d.is_admin?'<br><span style="color:var(--bad)">★ Administrator</span>':'';
+     const adm=d.is_admin?'<br><span style="color:var(--bad)">★ AdministratorAccess</span>':'';
      const sens=d.is_sensitive?'<br><span style="color:var(--wr)">⚠ Sensitive Asset</span>':'';
      const path=d.in_attack_path?'<br><span style="color:var(--bad)">● Active Attack Path Node</span>':'';
-     return`<b>${esc(d.name)}</b><br><span style="color:${mu}">Type:</span> ${esc(d.value)}${adm}${sens}${path}`;
+     return`<b>${esc(d.name)}</b><br><span style="color:${mu}">Type:</span> ${esc(d.value)}<br><span style="color:${mu}">ARN:</span> <code style="font-size:10px">${esc(d.arn||d.id)}</code>${adm}${sens}${path}<br><span style="color:${mu};font-size:10px">Click node to inspect capabilities</span>`;
     }
     if(p.dataType=="edge"){
      const l=p.data;
-     const acts=l.actions&&l.actions.length?`<br><span style="color:${mu}">Actions:</span> ${esc(l.actions.join(", "))}`:"";
+     const step=l.step_number?`<span style="color:var(--bad)">Step ${l.step_number}:</span> `:'';
+     const acts=l.actions&&l.actions.length?`<br><span style="color:${mu}">Permitted Actions:</span> ${esc(l.actions.slice(0,4).join(", "))}${l.actions.length>4?'…':''}`:"";
      const path=l.in_attack_path?'<br><span style="color:var(--bad)">● Active Escalation Edge</span>':'';
-     return`<b>${esc(l.relationship)}</b><br>${esc(l.source)} → ${esc(l.target)}${acts}${path}`;
+     return`<b>${step}${esc(l.relationship)}</b><br>${esc(l.source)} → ${esc(l.target)}${acts}${path}<br><span style="color:${mu};font-size:10px">Click edge to inspect policy evidence</span>`;
     }
     return"";
    }
@@ -66,23 +102,54 @@ B.iam_graph=function(D){
   series:[{
    type:"graph",
    layout:"force",
-   data:g.nodes,
-   links:g.links,
+   data:displayNodes,
+   links:displayLinks,
    categories:g.categories,
    roam:true,
-   label:{show:true,position:"right",formatter:"{b}",fontSize:11,color:tx},
+   draggable:true,
+   label:{
+    show:true,
+    position:"bottom",
+    distance:6,
+    formatter:"{b}",
+    fontSize:11,
+    fontWeight:500,
+    color:tx,
+    textBorderColor:sf,
+    textBorderWidth:2
+   },
    edgeSymbol:["none","arrow"],
-   edgeSymbolSize:[4,8],
-   lineStyle:{curveness:0.12},
-   emphasis:{focus:"adjacency",lineStyle:{width:3.5}},
-   force:{repulsion:220,gravity:0.08,edgeLength:[70,140]}
+   edgeSymbolSize:[5,12],
+   edgeLabel:{show:false},
+   emphasis:{focus:"adjacency",lineStyle:{width:4.0}},
+   force:{repulsion:950,gravity:0.035,edgeLength:[140,250],friction:0.6}
   }]
  };
 };
 function paint(k,D){const c=CH[k];if(!c||!c.inst||!c.el.isConnected||!B[k])return;const o=B[k](D),e=!!o.graphic;c.inst.setOption(o,{notMerge:c.empty!==e||e});c.empty=e}
 function mount(D){document.querySelectorAll(".cslot").forEach(s=>{const k=s.dataset.key;if(!window.echarts){s.textContent="Chart library not found. Download ECharts into static/vendor (see the setup steps).";return}
  let c=CH[k];if(!c){const el=document.createElement("div");el.style.cssText="width:100%;height:100%";c=CH[k]={el,inst:null,empty:null};if(window.ResizeObserver)new ResizeObserver(()=>{if(c.inst&&c.el.isConnected)c.inst.resize()}).observe(el)}
- s.replaceChildren(c.el);if(!c.inst)c.inst=echarts.init(c.el,null,{renderer:"svg"});c.inst.resize();paint(k,D)})}
+ s.replaceChildren(c.el);
+ if(!c.inst){
+  c.inst=echarts.init(c.el,null,{renderer:"svg"});
+  if(k==="iam_graph"){
+   c.inst.on("click",params=>{
+    if(window.onGraphElementClick)window.onGraphElementClick(params);
+   });
+  }
+ }
+ c.inst.resize();paint(k,D)})}
+window.graphZoom=function(factor){
+ const c=CH["iam_graph"];if(!c||!c.inst)return;
+ const opt=c.inst.getOption();if(!opt||!opt.series||!opt.series[0])return;
+ const currentZoom=opt.series[0].zoom||1;
+ const newZoom=Math.max(0.3,Math.min(4.0,currentZoom*factor));
+ c.inst.setOption({series:[{zoom:newZoom}]});
+};
+window.graphFit=function(){
+ const c=CH["iam_graph"];if(!c||!c.inst)return;
+ c.inst.setOption({series:[{zoom:1.0,center:null}]});
+};
 function update(D){Object.keys(CH).forEach(k=>paint(k,D))}
 window.addEventListener("resize",()=>Object.values(CH).forEach(c=>c.inst&&c.el.isConnected&&c.inst.resize()));
 return{mount,update,count:()=>Object.keys(CH).length}})();

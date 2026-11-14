@@ -61,13 +61,172 @@ function drawerHTML(x){const lab={pending:["Awaiting approval","wr"],fixed:["Fix
 async function openDrawer(id){DR=id;const d=$$("drawer");d.className="drawer open";d.innerHTML='<div class="dh"><b>Loading…</b></div><div class="db"><div class="sk" style="height:200px;margin-top:12px"></div></div>';const x=await _get("/api/finding/"+id);if(DR!=id)return;d.innerHTML=x&&!x.error?drawerHTML(x):'<div class="dh"><b>Finding not available</b><button class="btn sm" id="dclose">Close</button></div>'}
 function closeDrawer(){DR=null;$$("drawer").className="drawer"}
 let KS="";async function loadMetrics(){const m=await _get("/api/metrics");if(!m)return;M=m;CG.update(ctx());const p=$$("pipe");if(p)p.innerHTML=pipe();const k=JSON.stringify([m.rem.rolled_back,m.rem.items.map(i=>i.ttr)]);if(k!==KS){KS=k;if(route()=="overview"&&BOOT)render()}}
+function renderInspectorHTML(){
+ const edge = window.SELECTED_EDGE;
+ const node = window.SELECTED_NODE;
+ const path = window.ACTIVE_ATTACK_PATH;
+ const br = window.BLAST_REPORT;
+ const g = window.GRAPH || { nodes: [], links: [] };
+
+ if(path){
+  return `<div class="ph">
+    <span class="pt">Attack Path Narrative</span>
+    <button class="btn sm" id="btn-clear-path">Clear Trace</button>
+  </div>
+  <div class="pb">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span class="mono" style="font-size:12px"><b>${esc(path.source)}</b> → <b>${esc(path.target)}</b></span>
+      ${tg(path.severity, path.severity=="Critical"?"bad":"wr")}
+    </div>
+    <div class="rk" style="margin-bottom:8px"><b>${path.risk_score}</b> <span class="mu">/ 100 Risk</span> · <span class="mu">${path.hops} hops</span></div>
+    <div class="lb">Execution Steps</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin:8px 0">
+      ${(path.steps||[]).map(s=>`
+        <div style="background:var(--sf2);border:1px solid var(--ln);border-left:3px solid var(--bad);border-radius:4px;padding:8px">
+          <div style="display:flex;justify-content:space-between;font-size:11px">
+            <b>Step ${s.step}: ${esc(s.relationship)}</b>
+            <span class="chip">${esc(s.mitre&&s.mitre.id||"T1078")}</span>
+          </div>
+          <div class="mono" style="font-size:11px;margin:3px 0">${esc(s.source)} → ${esc(s.target)}</div>
+          ${s.actions&&s.actions.length?`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${s.actions.map(a=>`<span class="chip" style="font-size:10px">${esc(a)}</span>`).join("")}</div>`:""}
+        </div>
+      `).join("")}
+    </div>
+    <div class="lb">Plain-English Summary</div>
+    <p class="mu" style="font-size:12px;white-space:pre-line;line-height:1.4">${esc(path.narrative)}</p>
+  </div>`;
+ }
+
+ if(edge){
+  const ev = edge.evidence || {};
+  return `<div class="ph">
+    <span class="pt">Edge Relationship Inspector</span>
+    <button class="btn sm" id="btn-clear-inspector">Close</button>
+  </div>
+  <div class="pb">
+    <div style="margin-bottom:10px">
+      ${tg(edge.relationship, edge.relationship=="AssumesRole"?"in":(edge.relationship=="PassRole"?"wr":(edge.relationship=="CanAccessResource"?"ok":"bad")))}
+      ${edge.in_attack_path?tg("On Active Attack Path","bad"):""}
+    </div>
+    <div class="lb">Transition</div>
+    <div style="background:var(--sf2);padding:8px;border-radius:4px;border:1px solid var(--ln);margin-bottom:10px">
+      <div style="font-size:12px"><b>Source:</b> <span class="mono">${esc(edge.source)}</span></div>
+      <div style="font-size:12px;margin-top:4px"><b>Target:</b> <span class="mono">${esc(edge.target)}</span></div>
+    </div>
+    <div class="lb">Permitted Actions</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+      ${edge.actions&&edge.actions.length?edge.actions.map(a=>`<span class="chip">${esc(a)}</span>`).join(""):`<span class="mu">Implicit trust transition</span>`}
+    </div>
+    ${ev.policy_arn?`<div class="lb">Policy ARN</div><code style="font-size:11px;display:block;margin-bottom:10px;word-break:break-all">${esc(ev.policy_arn)}</code>`:""}
+    ${ev.vulnerability?`<div class="lb">Vulnerability Note</div><p class="mu" style="font-size:12px;margin-bottom:10px">${esc(ev.vulnerability)}</p>`:""}
+    ${ev.impact?`<div class="lb">Potential Impact</div><p class="mu" style="font-size:12px;color:var(--bad);margin-bottom:10px">${esc(ev.impact)}</p>`:""}
+    ${ev.trust_relationship?`<div class="lb">Trust Relationship</div><p class="mu" style="font-size:12px;margin-bottom:10px">${esc(ev.trust_relationship)}</p>`:""}
+    <div class="lb">Evidence Provenance</div>
+    <pre style="max-height:140px;overflow:auto;font-size:11px">${esc(JSON.stringify(ev,null,2))}</pre>
+  </div>`;
+ }
+
+ if(node){
+  const ev = node.evidence || {};
+  return `<div class="ph">
+    <span class="pt">Node Entity Inspector</span>
+    <button class="btn sm" id="btn-clear-inspector">Close</button>
+  </div>
+  <div class="pb">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span class="pt" style="font-size:14px">${esc(node.name)}</span>
+      <div>
+        ${node.is_admin?tg("AdministratorAccess","bad"):""}
+        ${node.is_sensitive?tg("Sensitive Resource","wr"):""}
+        ${tg(node.value||"Entity","in")}
+      </div>
+    </div>
+    <div class="lb">Resource ARN / Identifier</div>
+    <code style="font-size:11px;display:block;margin-bottom:10px;word-break:break-all">${esc(node.arn||node.id)}</code>
+    <div class="lb">Entity Attributes</div>
+    <pre style="max-height:140px;overflow:auto;font-size:11px;margin-bottom:10px">${esc(JSON.stringify(ev,null,2))}</pre>
+    <button class="btn sm primary" style="width:100%" id="btn-inspect-node-blast" data-id="${esc(node.id)}">Calculate Blast Radius for this Node</button>
+  </div>`;
+ }
+
+ // Default: Blast Radius Investigator
+ return `<div class="ph"><span class="pt">Blast Radius Investigator</span></div>
+ <div class="pb">
+   <div class="lb">Target Identity / Resource</div>
+   <div style="display:flex;gap:6px;margin-bottom:12px">
+     <select id="sel-blast-principal" style="flex:1;padding:6px;background:var(--sf2);color:var(--tx);border:1px solid var(--ln);border-radius:4px">
+       ${(g.nodes||[]).filter(n=>n.category==0||n.category==1).map(n=>`<option value="${n.id}" ${n.id==window.SEL_PRINCIPAL?"selected":""}>${esc(n.name)} (${n.value})</option>`).join("")||'<option value="user/intern-dev">user/intern-dev</option>'}
+     </select>
+     <button class="btn sm" id="btn-investigate-blast">Check</button>
+   </div>
+   ${br?`<div class="rk"><b>${br.score}</b> <span class="mu">/ 100</span> ${tg(br.severity,br.severity=="Critical"?"bad":"wr")}</div>
+     <p class="mu" style="font-size:12px;margin:8px 0">${esc(br.summary)}</p>
+     <div class="lb">Reachable Identities (${(br.reachable_principals||[]).length})</div>
+     <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">${(br.reachable_principals||[]).map(p=>`<span class="chip">${esc(p)}</span>`).join("")||'<span class="mu">None</span>'}</div>
+     <div class="lb">Exposed Resources (${(br.reachable_resources||[]).length})</div>
+     <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">${(br.reachable_resources||[]).map(r=>`<span class="chip ${(br.sensitive_resources_exposed||[]).includes(r)?"bad":""}">${esc(r)}</span>`).join("")||'<span class="mu">None</span>'}</div>
+     <div class="lb">Remediation Guidance</div>
+     <ul style="padding-left:16px;margin:4px 0;font-size:12px" class="mu">${(br.recommendations||[]).map(rec=>`<li>${esc(rec)}</li>`).join("")}</ul>`
+   :`<div class="empty">Select an identity and click Check.</div>`}
+ </div>`;
+}
+
+function updateGraphInspector(){
+ const el = $$("graph-inspector-panel");
+ if(el){
+  el.innerHTML = renderInspectorHTML();
+  bindInspectorEvents();
+ }
+}
+window.updateGraphInspector = updateGraphInspector;
+
+window.onGraphElementClick = function(params){
+ if(params.dataType === "edge"){
+  window.SELECTED_EDGE = params.data;
+  window.SELECTED_NODE = null;
+  window.ACTIVE_ATTACK_PATH = null;
+  updateGraphInspector();
+ } else if(params.dataType === "node"){
+  window.SELECTED_NODE = params.data;
+  window.SELECTED_EDGE = null;
+  window.ACTIVE_ATTACK_PATH = null;
+  updateGraphInspector();
+ }
+};
+
+function bindInspectorEvents(){
+ const bClear = $$("btn-clear-path");
+ if(bClear) bClear.onclick = () => {
+  window.ACTIVE_ATTACK_PATH = null;
+  window.loadGraph && loadGraph("");
+  updateGraphInspector();
+ };
+ const bClose = $$("btn-clear-inspector");
+ if(bClose) bClose.onclick = () => {
+  window.SELECTED_EDGE = null;
+  window.SELECTED_NODE = null;
+  updateGraphInspector();
+ };
+ const bNodeBlast = $$("btn-inspect-node-blast");
+ if(bNodeBlast) bNodeBlast.onclick = async () => {
+  if(window.investigateBlast) await investigateBlast(bNodeBlast.dataset.id);
+  window.SELECTED_NODE = null;
+  updateGraphInspector();
+ };
+ const bInv = $$("btn-investigate-blast");
+ if(bInv) bInv.onclick = async () => {
+  const sel = $$("sel-blast-principal");
+  if(sel && window.investigateBlast) await investigateBlast(sel.value);
+  updateGraphInspector();
+ };
+}
+
 function graph(){
  const g=window.GRAPH||{nodes:[],links:[],categories:[],stats:{}},
        st=g.stats||{},
        paths=window.ATTACK_PATHS||{},
-       totPaths=Object.values(paths).reduce((a,b)=>a+b.length,0),
-       selTarget=window.SEL_PRINCIPAL||"user/intern-dev",
-       br=window.BLAST_REPORT;
+       allPathsList=Object.values(paths).flat(),
+       totPaths=allPathsList.length;
 
  return `<div class="kpis">
    <div class="panel kp"><div class="lb">IAM Principals</div><div class="kv">${(st.users||0)+(st.roles||0)}</div><div class="mu">${st.users||0} users, ${st.roles||0} roles</div></div>
@@ -75,55 +234,72 @@ function graph(){
    <div class="panel kp"><div class="lb">Admin Entities</div><div class="kv">${st.admin_roles||0}</div><div class="mu">Full AdministratorAccess</div></div>
    <div class="panel kp"><div class="lb">Cloud Resources</div><div class="kv">${st.resources||0}</div><div class="mu">S3 &amp; EC2 assets</div></div>
  </div>
- <div class="g3 mt">
+
+ <div class="tools" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+   <input id="graph-search" type="search" placeholder="Search node name or ARN..." value="${esc(window.GRAPH_SEARCH_QUERY||"")}" style="padding:6px 10px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px;min-width:180px" />
+   
+   <select id="filter-node-type" aria-label="Filter by Node Type" style="padding:6px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px">
+     <option value="all" ${window.GRAPH_FILTER_NODE_TYPE=="all"?"selected":""}>All Node Types</option>
+     <option value="user" ${window.GRAPH_FILTER_NODE_TYPE=="user"?"selected":""}>IAM Users</option>
+     <option value="role" ${window.GRAPH_FILTER_NODE_TYPE=="role"?"selected":""}>IAM Roles</option>
+     <option value="policy" ${window.GRAPH_FILTER_NODE_TYPE=="policy"?"selected":""}>Policies</option>
+     <option value="s3" ${window.GRAPH_FILTER_NODE_TYPE=="s3"?"selected":""}>S3 Buckets</option>
+     <option value="ec2" ${window.GRAPH_FILTER_NODE_TYPE=="ec2"?"selected":""}>EC2 Instances</option>
+   </select>
+
+   <select id="filter-rel-type" aria-label="Filter by Relationship Type" style="padding:6px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px">
+     <option value="all" ${window.GRAPH_FILTER_REL_TYPE=="all"?"selected":""}>All Relationships</option>
+     <option value="assumesrole" ${window.GRAPH_FILTER_REL_TYPE=="assumesrole"?"selected":""}>AssumesRole</option>
+     <option value="passrole" ${window.GRAPH_FILTER_REL_TYPE=="passrole"?"selected":""}>PassRole</option>
+     <option value="canaccessresource" ${window.GRAPH_FILTER_REL_TYPE=="canaccessresource"?"selected":""}>CanAccessResource</option>
+     <option value="canescalateto" ${window.GRAPH_FILTER_REL_TYPE=="canescalateto"?"selected":""}>CanEscalateTo</option>
+     <option value="haspolicy" ${window.GRAPH_FILTER_REL_TYPE=="haspolicy"?"selected":""}>HasPolicy</option>
+   </select>
+
+   <div style="display:flex;gap:4px;margin-left:auto">
+     <button class="btn sm" id="btn-zoom-in" title="Zoom In">＋</button>
+     <button class="btn sm" id="btn-zoom-out" title="Zoom Out">－</button>
+     <button class="btn sm" id="btn-fit-screen" title="Fit to Screen">Fit</button>
+     <button class="btn sm" id="btn-reset-layout" title="Reset Filters &amp; View">Reset</button>
+   </div>
+ </div>
+
+ <div class="g3 mt" id="graph-section">
    <section class="panel span2">
      <div class="ph">
-       <span class="pt">IAM Capability &amp; Attack-Path Graph</span>
+       <div>
+         <span class="pt">IAM Capability &amp; Attack-Path Graph</span>
+         <span class="mu" style="margin-left:8px;font-size:11px">Click nodes or edges to inspect details</span>
+       </div>
        <div class="ac">
          <button class="btn sm primary" id="btn-trace-admin" title="Highlight multi-hop attack path from intern-dev to admin-role">Trace intern-dev → admin</button>
-         <button class="btn sm" id="btn-reset-graph" title="Reset view">Reset Graph</button>
+         <button class="btn sm" id="btn-trace-s3" title="Highlight path to sensitive student records">Trace to Sensitive S3</button>
+         <button class="btn sm" id="btn-clear-path-top" title="Clear path highlight">Clear Highlight</button>
        </div>
      </div>
      <div class="pb">
-       <div class="cslot" data-key="iam_graph" style="height:460px"></div>
+       <div class="cslot" data-key="iam_graph" style="height:530px"></div>
      </div>
    </section>
-   <section class="panel">
-     <div class="ph"><span class="pt">Blast Radius Investigator</span></div>
-     <div class="pb">
-       <div class="lb">Target Identity / Resource</div>
-       <div style="display:flex;gap:6px;margin-bottom:12px">
-         <select id="sel-blast-principal" style="flex:1;padding:6px;background:var(--sf2);color:var(--tx);border:1px solid var(--ln);border-radius:4px">
-           ${(g.nodes||[]).filter(n=>n.category==0||n.category==1).map(n=>`<option value="${n.id}" ${n.id==selTarget?"selected":""}>${esc(n.name)} (${n.value})</option>`).join("")||'<option value="user/intern-dev">user/intern-dev</option>'}
-         </select>
-         <button class="btn sm" id="btn-investigate-blast">Check</button>
-       </div>
-       ${br?`<div class="rk"><b>${br.score}</b> <span class="mu">/ 100</span> ${tg(br.severity,br.severity=="Critical"?"bad":"wr")}</div>
-         <p class="mu" style="font-size:12px;margin:8px 0">${esc(br.summary)}</p>
-         <div class="lb">Reachable Identities (${(br.reachable_principals||[]).length})</div>
-         <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">${(br.reachable_principals||[]).map(p=>`<span class="chip">${esc(p)}</span>`).join("")||'<span class="mu">None</span>'}</div>
-         <div class="lb">Exposed Resources (${(br.reachable_resources||[]).length})</div>
-         <div style="margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px">${(br.reachable_resources||[]).map(r=>`<span class="chip ${(br.sensitive_resources_exposed||[]).includes(r)?"bad":""}">${esc(r)}</span>`).join("")||'<span class="mu">None</span>'}</div>
-         <div class="lb">Remediation Guidance</div>
-         <ul style="padding-left:16px;margin:4px 0;font-size:12px" class="mu">${(br.recommendations||[]).map(rec=>`<li>${esc(rec)}</li>`).join("")}</ul>`
-       :`<div class="empty">Select an identity and click Check.</div>`}
-     </div>
+   <section class="panel" id="graph-inspector-panel">
+     ${renderInspectorHTML()}
    </section>
  </div>
+
  <section class="panel mt">
    <div class="ph"><span class="pt">Discovered Privilege Escalation Vectors</span><span class="mu">${totPaths} active vectors</span></div>
    <div class="wrap">
      <table class="tbl">
        <tr><th>Source Principal</th><th>Target Capability</th><th>Hops</th><th>Risk</th><th>Severity</th><th>MITRE ATT&amp;CK</th><th>Action</th></tr>
-       ${Object.entries(paths).flatMap(([p,list])=>list.map(pt=>`<tr>
+       ${allPathsList.map((pt,idx)=>`<tr>
          <td class="mono"><b>${esc(pt.source)}</b></td>
          <td class="mono">${esc(pt.target)}</td>
          <td>${pt.hops}</td>
          <td><b>${pt.risk_score}</b>/100</td>
          <td>${tg(pt.severity,pt.severity=="Critical"?"bad":"wr")}</td>
          <td><span class="chip">${esc((pt.steps[0]&&pt.steps[0].mitre&&pt.steps[0].mitre.id)||"T1078.004")}</span> ${esc((pt.steps[0]&&pt.steps[0].mitre&&pt.steps[0].mitre.name)||"Privilege Escalation")}</td>
-         <td><button class="btn sm" data-trace="${esc(pt.nodes.join(","))}">Trace in Graph</button></td>
-       </tr>`)).join("")||'<tr><td colspan="7"><div class="empty">No privilege escalation vectors detected.</div></td></tr>'}
+         <td><button class="btn sm" data-trace-idx="${idx}">Trace in Graph</button></td>
+       </tr>`).join("")||'<tr><td colspan="7"><div class="empty">No privilege escalation vectors detected.</div></td></tr>'}
      </table>
    </div>
  </section>`;
@@ -133,13 +309,97 @@ function bind(){const r=route();
  if(r=="findings"){$$("fsev").value=FSEV;$$("fst").value=FST;$$("fsev").onchange=e=>{FSEV=e.target.value;paintFindings()};$$("fst").onchange=e=>{FST=e.target.value;paintFindings()};paintFindings()}
  if(r=="events"){$$("ek").value=EK;$$("ek").onchange=e=>{EK=e.target.value;loadEvents()};loadEvents()}
  if(r=="graph"){
-   const bTr=$$("btn-trace-admin");if(bTr)bTr.onclick=()=>window.loadGraph&&loadGraph("user/intern-dev,role/dev-role,role/cicd-deployer,role/admin-role,s3/student-records-demo");
-   const bRs=$$("btn-reset-graph");if(bRs)bRs.onclick=()=>window.loadGraph&&loadGraph("");
-   const bInv=$$("btn-investigate-blast");if(bInv)bInv.onclick=async()=>{
-     const sel=$$("sel-blast-principal");if(sel&&window.investigateBlast)await investigateBlast(sel.value);
+   bindInspectorEvents();
+   const bSearch=$$("graph-search");
+   if(bSearch){
+     bSearch.oninput=(e)=>{
+       window.GRAPH_SEARCH_QUERY=e.target.value.trim();
+       CG.update(ctx());
+     };
+   }
+   const fNode=$$("filter-node-type");
+   if(fNode){
+     fNode.onchange=(e)=>{
+       window.GRAPH_FILTER_NODE_TYPE=e.target.value;
+       CG.update(ctx());
+     };
+   }
+   const fRel=$$("filter-rel-type");
+   if(fRel){
+     fRel.onchange=(e)=>{
+       window.GRAPH_FILTER_REL_TYPE=e.target.value;
+       CG.update(ctx());
+     };
+   }
+   const bZIn=$$("btn-zoom-in");
+   if(bZIn)bZIn.onclick=()=>window.graphZoom&&window.graphZoom(1.25);
+   const bZOut=$$("btn-zoom-out");
+   if(bZOut)bZOut.onclick=()=>window.graphZoom&&window.graphZoom(0.8);
+   const bFit=$$("btn-fit-screen");
+   if(bFit)bFit.onclick=()=>window.graphFit&&window.graphFit();
+   const bResetL=$$("btn-reset-layout");
+   if(bResetL)bResetL.onclick=()=>{
+     window.GRAPH_SEARCH_QUERY="";
+     window.GRAPH_FILTER_NODE_TYPE="all";
+     window.GRAPH_FILTER_REL_TYPE="all";
+     window.ACTIVE_ATTACK_PATH=null;
+     window.SELECTED_EDGE=null;
+     window.SELECTED_NODE=null;
+     if(bSearch)bSearch.value="";
+     if(fNode)fNode.value="all";
+     if(fRel)fRel.value="all";
+     window.loadGraph&&loadGraph("");
+     updateGraphInspector();
    };
-   document.querySelectorAll("[data-trace]").forEach(btn=>{
-     btn.onclick=()=>window.loadGraph&&loadGraph(btn.dataset.trace);
+   const bTr=$$("btn-trace-admin");
+   if(bTr)bTr.onclick=()=>{
+     const allPathsList=Object.values(window.ATTACK_PATHS||{}).flat();
+     const adminPath=allPathsList.find(p=>p.source==="user/intern-dev"&&p.target==="role/admin-role")||allPathsList[0];
+     if(adminPath){
+       window.ACTIVE_ATTACK_PATH=adminPath;
+       window.SELECTED_EDGE=null;
+       window.SELECTED_NODE=null;
+       window.loadGraph&&loadGraph(adminPath.nodes.join(","));
+       updateGraphInspector();
+     } else {
+       window.loadGraph&&loadGraph("user/intern-dev,role/dev-role,role/cicd-deployer,role/admin-role");
+     }
+   };
+   const bTrS3=$$("btn-trace-s3");
+   if(bTrS3)bTrS3.onclick=()=>{
+     const allPathsList=Object.values(window.ATTACK_PATHS||{}).flat();
+     const s3Path=allPathsList.find(p=>p.reaches_sensitive_data)||allPathsList[0];
+     if(s3Path){
+       window.ACTIVE_ATTACK_PATH=s3Path;
+       window.SELECTED_EDGE=null;
+       window.SELECTED_NODE=null;
+       window.loadGraph&&loadGraph(s3Path.nodes.join(","));
+       updateGraphInspector();
+     }
+   };
+   const bClearTop=$$("btn-clear-path-top");
+   if(bClearTop)bClearTop.onclick=()=>{
+     window.ACTIVE_ATTACK_PATH=null;
+     window.SELECTED_EDGE=null;
+     window.SELECTED_NODE=null;
+     window.loadGraph&&loadGraph("");
+     updateGraphInspector();
+   };
+   document.querySelectorAll("[data-trace-idx]").forEach(btn=>{
+     btn.onclick=()=>{
+       const idx=+btn.dataset.traceIdx;
+       const allPathsList=Object.values(window.ATTACK_PATHS||{}).flat();
+       const pt=allPathsList[idx];
+       if(pt){
+         window.ACTIVE_ATTACK_PATH=pt;
+         window.SELECTED_EDGE=null;
+         window.SELECTED_NODE=null;
+         window.loadGraph&&loadGraph(pt.nodes.join(","));
+         updateGraphInspector();
+         const gSec=$$("graph-section");
+         if(gSec)gSec.scrollIntoView({behavior:"smooth"});
+       }
+     };
    });
  }
  CG.mount(ctx())}
