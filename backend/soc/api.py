@@ -355,6 +355,9 @@ def register_soc_api(
             user=user,
         )
 
+        if not rolled_back:
+            return jsonify({"error": f"Remediation rollback could not be executed for '{rem_id}'."}), 400
+
         return jsonify({
             "message": f"Remediation '{rem_id}' rolled back.",
             "remediation": rolled_back.model_dump(),

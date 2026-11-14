@@ -354,7 +354,7 @@ async function launchScenarioRun(scenarioId) {
     WORKBENCH_TAB = "paths";
     if (route() === "lab") render();
   } else {
-    alert("Failed to launch scenario.");
+    showToast("Failed to launch scenario.", "bad");
   }
 }
 
@@ -1725,7 +1725,7 @@ function bind(){const r=route();
         const name=($$("b-ent-name")||{}).value||"";
         const type=($$("b-ent-type")||{}).value||"user";
         const flag=($$("b-ent-flag")||{}).checked||false;
-        if(!name)return alert("Please enter entity name");
+        if(!name)return showToast("Please enter entity name", "wr");
         const id=`${type}/${name.toLowerCase().replace(/[^a-z0-9-_]/g,"")}`;
         if(["user","role","group"].includes(type)){
           BUILDER_STATE.identities.push({
@@ -1745,7 +1745,7 @@ function bind(){const r=route();
         const tgt=($$("b-rel-tgt")||{}).value;
         const rel=($$("b-rel-type")||{}).value;
         const acts=(($$("b-rel-actions")||{}).value||"").split(",").map(x=>x.trim()).filter(Boolean);
-        if(!src||!tgt)return alert("Select source and target entities");
+        if(!src||!tgt)return showToast("Select source and target entities", "wr");
         BUILDER_STATE.relationships.push({
           source_id:src,target_id:tgt,relationship:rel,actions:acts.length?acts:["*"]
         });
@@ -1800,7 +1800,7 @@ function bind(){const r=route();
           render();
         } else {
           const err=await res.json().catch(()=>({}));
-          alert("Failed to build scenario: "+(err.error||"Validation error"));
+          showToast("Failed to build scenario: "+(err.error||"Validation error"), "bad");
         }
       };
     }
@@ -1862,17 +1862,23 @@ function bind(){const r=route();
       };
 
       const bEsc = $$("btn-al-esc");
-      if (bEsc) bEsc.onclick = async () => {
-        const title = prompt("Enter Incident Title:", "Escalated: Alert " + bEsc.dataset.id);
-        if (title) {
-          await fetch(`/api/alerts/${bEsc.dataset.id}/escalate`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title, severity: "Critical", summary: "Formal escalation from Alert " + bEsc.dataset.id })
-          });
-          alert("Alert successfully escalated to incident!");
-          loadAlerts();
-          location.hash = "#incidents";
-        }
+      if (bEsc) bEsc.onclick = () => {
+        const alertId = bEsc.dataset.id;
+        promptModal({
+          title: "Escalate Alert to Security Incident",
+          label: "Incident Title",
+          defaultValue: "Escalated: Alert " + alertId,
+          confirmText: "Escalate Incident",
+          onConfirm: async (title) => {
+            await fetch(`/api/alerts/${alertId}/escalate`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title, severity: "Critical", summary: "Formal escalation from Alert " + alertId })
+            });
+            showToast("Alert successfully escalated to incident!", "ok");
+            loadAlerts();
+            location.hash = "#incidents";
+          }
+        });
       };
     }
 
@@ -1931,31 +1937,45 @@ function bind(){const r=route();
       };
 
       const bClose = $$("btn-inc-close");
-      if (bClose) bClose.onclick = async () => {
-        const reason = prompt("Enter Closure Reason:", "Threat contained and posture verified.");
-        if (reason) {
-          await fetch(`/api/incidents/${bClose.dataset.id}/action`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "Closed", closure_reason: reason })
-          });
-          loadIncidents();
-        }
+      if (bClose) bClose.onclick = () => {
+        const incId = bClose.dataset.id;
+        promptModal({
+          title: "Close Security Incident",
+          label: "Closure Reason",
+          defaultValue: "Threat contained and posture verified.",
+          confirmText: "Close Incident",
+          onConfirm: async (reason) => {
+            await fetch(`/api/incidents/${incId}/action`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "Closed", closure_reason: reason })
+            });
+            showToast("Incident successfully closed", "ok");
+            loadIncidents();
+          }
+        });
       };
 
       const bNew = $$("btn-create-incident-modal");
-      if (bNew) bNew.onclick = async () => {
-        const title = prompt("Enter Incident Title:", "New Security Incident");
-        if (title) {
-          await fetch("/api/incidents", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title,
-              severity: "High",
-              summary: "Manually initiated incident response."
-            })
-          });
-          loadIncidents();
-        }
+      if (bNew) bNew.onclick = () => {
+        promptModal({
+          title: "Create Security Incident",
+          label: "Incident Title",
+          defaultValue: "New Security Incident",
+          placeholder: "e.g. Unauthorized S3 Bucket Exfiltration",
+          confirmText: "Create Incident",
+          onConfirm: async (title) => {
+            await fetch("/api/incidents", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title,
+                severity: "High",
+                summary: "Manually initiated incident response."
+              })
+            });
+            showToast("Security incident created successfully", "ok");
+            loadIncidents();
+          }
+        });
       };
     }
 
@@ -1996,12 +2016,20 @@ function bind(){const r=route();
       };
 
       const bRoll = $$("btn-rem-rollback");
-      if (bRoll) bRoll.onclick = async () => {
-        if (confirm("Are you sure you want to roll back this remediation fix?")) {
-          await fetch(`/api/remediations/${bRoll.dataset.id}/rollback`, { method: "POST" });
-          loadRemediations();
-          poll();
-        }
+      if (bRoll) bRoll.onclick = () => {
+        const remId = bRoll.dataset.id;
+        confirmModal({
+          title: "Confirm Remediation Rollback",
+          message: "Are you sure you want to roll back this remediation fix? Previous resource configuration will be restored.",
+          confirmText: "Roll Back Fix",
+          danger: true,
+          onConfirm: async () => {
+            await fetch(`/api/remediations/${remId}/rollback`, { method: "POST" });
+            showToast("Remediation successfully rolled back", "ok");
+            loadRemediations();
+            poll();
+          }
+        });
       };
     }
 
@@ -2048,7 +2076,7 @@ function bind(){const r=route();
   CG.mount(ctx())}
 let tm;$$("gq").addEventListener("input",e=>{clearTimeout(tm);tm=setTimeout(()=>{Q=e.target.value.trim();if(!["findings","events","audit"].includes(route()))location.hash="#findings";else refresh()},180)});
 document.addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o)openDrawer(o.dataset.open);if(e.target.id=="dclose")closeDrawer();if(e.target.closest("[data-p]")&&DR)setTimeout(()=>DR&&openDrawer(DR),900)});
-document.addEventListener("keydown",e=>{if(e.key=="Escape")closeDrawer();if(e.key=="/"&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$$("gq").focus()}});
+document.addEventListener("keydown",e=>{if(e.key=="Escape"){if(window.closeModal)closeModal();closeDrawer()}if(e.key=="/"&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$$("gq")?.focus()}});
 new MutationObserver(()=>CG.update(ctx())).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 $$("menu").onclick=()=>document.body.classList.toggle("navopen");$$("scrim").onclick=()=>document.body.classList.remove("navopen");window.addEventListener("hashchange",()=>document.body.classList.remove("navopen"));
 setTimeout(loadMetrics,0);setInterval(loadMetrics,3000);setInterval(()=>{if(route()=="events")loadEvents()},2000);

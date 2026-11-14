@@ -60,11 +60,30 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:10
 @media(max-width:1024px){:root{--pad:16px}.shell{grid-template-columns:minmax(0,1fr)}.side{position:fixed;left:0;top:0;width:240px;z-index:30;transform:translateX(-100%);visibility:hidden;transition:transform .2s ease,visibility .2s}body.navopen .side{transform:none;visibility:visible}.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}body.navopen .scrim{display:block}.menu{display:inline-flex}.bar{flex-wrap:wrap}.sq{order:3;flex-basis:100%;max-width:none;margin:0}.g2,.cols2,.cmp{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.g3,.kpis{grid-template-columns:minmax(0,1fr)}.pipe{grid-template-columns:repeat(2,minmax(0,1fr))}.stg{border-bottom:1px solid var(--ln)}.live span{display:none}.feed .ev{grid-template-columns:64px 1fr}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.cg-modal-backdrop{position:fixed;inset:0;background:rgba(5,9,18,0.78);backdrop-filter:blur(4px);z-index:90;display:flex;align-items:center;justify-content:center;padding:16px}
+.cg-modal-box{background:var(--card);border:1px solid var(--b);border-radius:12px;padding:22px;max-width:500px;width:100%;box-shadow:0 24px 48px rgba(0,0,0,0.55);animation:fadeIn .2s ease-out}
+.cg-modal-header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--ln);padding-bottom:12px}
+.cg-toast-container{position:fixed;bottom:24px;right:24px;z-index:95;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.cg-toast{pointer-events:auto;padding:12px 18px;border-radius:8px;background:var(--card);border:1px solid var(--b);font-size:13px;color:var(--fg);display:flex;align-items:center;gap:10px;box-shadow:0 10px 25px rgba(0,0,0,0.4);animation:fadeIn .2s ease-out;max-width:380px}
+.cg-toast.bad{border-color:var(--bad);background:rgba(239,68,68,0.08)}
+.cg-toast.ok{border-color:var(--ok);background:rgba(16,185,129,0.08)}
+.cg-toast.wr{border-color:var(--wr);background:rgba(245,158,11,0.08)}
 </style></head><body>
 <div class="shell"><aside class="side"><div class="logo"><i></i>CloudGuardian</div><nav id="nav"></nav></aside>
 <div class="mainc"><div class="bar"><button class="btn menu" id="menu" aria-label="Open navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><h1 id="title"></h1><input id="gq" class="sq" type="search" placeholder="Search findings, events and audit   ( / )" aria-label="Search"><div class="rt"><span id="mode" class="tg in"></span><span class="live"><i class="pd"></i><span id="ver">Connecting</span></span><button class="btn sm" id="theme">Theme</button></div></div><div id="modebar" class="mb sim"></div><main class="content" id="app"></main></div></div>
 <div class="scrim" id="scrim"></div>
 <div class="drawer" id="drawer" aria-label="Finding details"></div>
+<div class="cg-modal-backdrop" id="cg-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cg-modal-title">
+  <div class="cg-modal-box">
+    <div class="cg-modal-header">
+      <h3 id="cg-modal-title" style="margin:0;font-size:15px;font-weight:600;">Dialog</h3>
+      <button class="btn sm" id="cg-modal-x" aria-label="Close dialog" style="padding:2px 8px;border:none;background:transparent;cursor:pointer;font-size:18px;color:var(--mu);line-height:1;">&times;</button>
+    </div>
+    <div class="cg-modal-body" id="cg-modal-body" style="margin:16px 0;font-size:13px;line-height:1.5;"></div>
+    <div class="cg-modal-footer" id="cg-modal-footer" style="display:flex;justify-content:flex-end;gap:8px;"></div>
+  </div>
+</div>
+<div class="cg-toast-container" id="cg-toast" aria-live="polite"></div>
 <script src="/static/vendor/echarts.min.js"></script>
 <script src="/static/charts.js"></script>
 <script src="/static/views.js"></script>
@@ -120,7 +139,94 @@ let S={resources:[],findings:[],events:[],audit:[],evidence:{},score:100,mode:""
 const route=()=>{const r=(location.hash||"#overview").slice(1);return V[r]?r:"overview"},evk=e=>e.t+e.name+e.user;
 async function get(p){try{return await (await fetch(p)).json()}catch(e){return null}}
 window.get=get;
-async function act(p){const r=await fetch(p,{method:"POST"});if(!r.ok){const j=await r.json().catch(()=>({}));alert(j.error||"Action failed")}SIG="";await poll()}
+function showToast(msg, type="info", duration=4000){
+  const c = $("cg-toast");
+  if(!c) return;
+  const t = document.createElement("div");
+  t.className = "cg-toast " + (type || "info");
+  t.innerHTML = `<span>${esc(msg)}</span>`;
+  c.appendChild(t);
+  setTimeout(()=>{
+    t.style.opacity = "0";
+    t.style.transform = "translateY(10px)";
+    t.style.transition = "opacity 0.2s, transform 0.2s";
+    setTimeout(()=>t.remove(), 250);
+  }, duration);
+}
+window.showToast = showToast;
+
+function closeModal(){
+  const m = $("cg-modal");
+  if(m) m.style.display = "none";
+}
+window.closeModal = closeModal;
+
+function promptModal({ title, label, defaultValue="", placeholder="", confirmText="Submit", onConfirm }){
+  const m = $("cg-modal");
+  if(!m) return;
+  $("cg-modal-title").textContent = title || "Prompt";
+  $("cg-modal-body").innerHTML = `
+    ${label ? `<label for="cg-modal-inp" style="display:block;margin-bottom:8px;font-weight:500;color:var(--fg);">${esc(label)}</label>` : ''}
+    <input type="text" id="cg-modal-inp" class="inp" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--sf2);color:var(--fg);border:1px solid var(--b);border-radius:6px;" value="${esc(defaultValue)}" placeholder="${esc(placeholder)}" />
+  `;
+  $("cg-modal-footer").innerHTML = `
+    <button class="btn" id="cg-modal-cancel">Cancel</button>
+    <button class="btn primary" id="cg-modal-confirm">${esc(confirmText)}</button>
+  `;
+  m.style.display = "flex";
+  const inp = $("cg-modal-inp");
+  if(inp){ inp.focus(); inp.select(); }
+  
+  const handleConfirm = () => {
+    const val = inp ? inp.value.trim() : "";
+    closeModal();
+    if(onConfirm && val) onConfirm(val);
+  };
+
+  $("cg-modal-confirm").onclick = handleConfirm;
+  $("cg-modal-cancel").onclick = closeModal;
+  $("cg-modal-x").onclick = closeModal;
+  inp.onkeydown = (e) => {
+    if(e.key === "Enter") { e.preventDefault(); handleConfirm(); }
+    if(e.key === "Escape") { e.preventDefault(); closeModal(); }
+  };
+}
+window.promptModal = promptModal;
+
+function confirmModal({ title, message, confirmText="Confirm", cancelText="Cancel", danger=false, onConfirm }){
+  const m = $("cg-modal");
+  if(!m) return;
+  $("cg-modal-title").textContent = title || "Confirm Action";
+  $("cg-modal-body").innerHTML = `<p style="margin:0;color:var(--fg);">${esc(message)}</p>`;
+  $("cg-modal-footer").innerHTML = `
+    <button class="btn" id="cg-modal-cancel">${esc(cancelText)}</button>
+    <button class="btn ${danger ? 'danger' : 'primary'}" id="cg-modal-confirm">${esc(confirmText)}</button>
+  `;
+  m.style.display = "flex";
+  $("cg-modal-confirm").focus();
+  $("cg-modal-confirm").onclick = () => {
+    closeModal();
+    if(onConfirm) onConfirm();
+  };
+  $("cg-modal-cancel").onclick = closeModal;
+  $("cg-modal-x").onclick = closeModal;
+}
+window.confirmModal = confirmModal;
+
+function alertModal({ title, message, type="info" }){
+  const m = $("cg-modal");
+  if(!m) return;
+  $("cg-modal-title").textContent = title || "Notification";
+  $("cg-modal-body").innerHTML = `<p style="margin:0;color:var(--fg);">${esc(message)}</p>`;
+  $("cg-modal-footer").innerHTML = `<button class="btn primary" id="cg-modal-confirm">OK</button>`;
+  m.style.display = "flex";
+  $("cg-modal-confirm").focus();
+  $("cg-modal-confirm").onclick = closeModal;
+  $("cg-modal-x").onclick = closeModal;
+}
+window.alertModal = alertModal;
+
+async function act(p){const r=await fetch(p,{method:"POST"});if(!r.ok){const j=await r.json().catch(()=>({}));showToast(j.error||"Action failed","bad")}SIG="";await poll()}
 async function poll(){const s=await get("/api/state");if(!s)return;S=s;if(!BOOT){BOOT=true;S.events.forEach(e=>SEEN.add(evk(e)));S.findings.forEach(f=>FSEEN.add(f.id+f.status))}head();const g=JSON.stringify([s.findings,s.resources,s.events,s.score,s.evidence]);if(g!==SIG){SIG=g;render()}}
 async function loadStatic(){ML=(await get("/api/ml"))||ML;DS=(await get("/api/datasets"))||[];RU=(await get("/api/rules"))||[];await loadGraph();render()}
 async function loadAudit(){AU=(await get("/api/audit?q="+encodeURIComponent(Views.q())))||AU;if(route()=="audit")render()}
