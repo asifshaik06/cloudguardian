@@ -51,7 +51,7 @@ function drawerHTML(x){const lab={pending:["Awaiting approval","wr"],fixed:["Fix
      ${tg("Blast Risk: "+x.blast_radius.score+" / 100",x.blast_radius.severity=="Critical"?"bad":"wr")}
    </div>
    <p class="mu" style="margin-top:4px;font-size:12px">${esc(x.blast_radius.summary)}</p>
-   ${x.blast_radius.admin_reachable?`<div style="margin-top:4px"><span class="chip" style="background:rgba(255,107,107,0.15);color:var(--bad);border:1px solid var(--bad)">★ Escalation Path to AdministratorAccess Detected</span></div>`:""}
+   ${x.blast_radius.admin_reachable?`<div style="margin-top:4px"><span class="chip" style="background:rgba(255,107,107,0.15);color:var(--bad);border:1px solid var(--bad)">[CRITICAL] Escalation Path to AdministratorAccess Detected</span></div>`:""}
    ${x.blast_radius.recommendations&&x.blast_radius.recommendations.length?`<div class="mu" style="margin-top:6px;font-size:11px"><b>Mitigation:</b> ${esc(x.blast_radius.recommendations[0])}</div>`:""}
  </div>`:""}
  <div class="lb">Evidence</div>${bars}${x.events.length?`<div class="lb">CloudTrail-style events</div><pre>${esc(JSON.stringify(x.events,null,1))}</pre>`:""}
@@ -473,8 +473,8 @@ function renderWorkbenchInspector() {
         </div>
         <div style="font-size:11px" class="mu mono">ARN: ${esc(node.arn || node.id)}</div>
         <div style="margin:8px 0">
-          ${node.is_admin ? '<span class="tg bad">★ AdministratorAccess</span>' : ''}
-          ${node.is_sensitive ? '<span class="tg wr">⚠ Sensitive Cloud Resource</span>' : ''}
+          ${node.is_admin ? '<span class="tg bad">[ADMIN] AdministratorAccess</span>' : ''}
+          ${node.is_sensitive ? '<span class="tg wr">[SENSITIVE] Sensitive Cloud Resource</span>' : ''}
         </div>
         <div class="lb">Evidence &amp; Policies</div>
         <pre>${esc(JSON.stringify(node.evidence || {}, null, 2))}</pre>
@@ -507,7 +507,7 @@ function renderWorkbenchInspector() {
         <div class="lb">Independent Verification Result</div>
         <div style="background:var(--sf2);border:1px solid ${vr.verified ? "var(--ok)" : "var(--bad)"};border-radius:6px;padding:12px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:14px;font-weight:600">${vr.verified ? "✓ Verification PASSED" : "✕ Verification FAILED"}</span>
+            <span style="font-size:14px;font-weight:600">${vr.verified ? "[PASS] Verification PASSED" : "[FAIL] Verification FAILED"}</span>
             ${tg(vr.status, vr.verified ? "ok" : "bad")}
           </div>
           <p style="font-size:12px;margin-bottom:8px">${esc(vr.summary)}</p>
@@ -527,7 +527,7 @@ function renderWorkbenchInspector() {
             </div>
           ` : `
             <div style="margin-top:8px;padding:6px;background:rgba(63,178,127,0.1);border:1px solid var(--ok);border-radius:4px;font-size:11px;color:var(--ok)">
-              ✓ All discovered attack vectors completely mitigated.
+              [PASS] All discovered attack vectors completely mitigated.
             </div>
           `}
         </div>
@@ -647,10 +647,10 @@ function renderWorkbenchView() {
         <div class="mu" style="font-size:11px;margin-top:3px">${esc(def.category || "")} · ${esc(def.difficulty || "")} · Isolated Moto Simulation</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn sm" id="btn-wb-reanalyze">🔄 Re-Analyze</button>
-        <button class="btn sm" id="btn-wb-verify">✓ Verify State</button>
-        <button class="btn sm danger" id="btn-wb-reset">↩ Reset Scenario</button>
-        <button class="btn sm" id="btn-wb-switch">✕ Switch Scenario</button>
+        <button class="btn sm" id="btn-wb-reanalyze">Re-Analyze</button>
+        <button class="btn sm" id="btn-wb-verify">Verify State</button>
+        <button class="btn sm danger" id="btn-wb-reset">Reset Scenario</button>
+        <button class="btn sm" id="btn-wb-switch">Switch Scenario</button>
       </div>
     </div>
 
@@ -658,7 +658,7 @@ function renderWorkbenchView() {
       <div class="panel kp">
         <div class="lb">Blast Risk Score</div>
         <div class="kv ${br.score >= 70 ? "bad" : br.score >= 40 ? "wr" : "ok"}">${br.score || 0} <span class="mu" style="font-size:14px">/ 100</span></div>
-        <div class="mu">${br.admin_reachable ? "★ Admin Reachable" : "Admin Contained"}</div>
+        <div class="mu">${br.admin_reachable ? "[ADMIN] Admin Reachable" : "Admin Contained"}</div>
       </div>
       <div class="panel kp">
         <div class="lb">Attack Paths</div>
@@ -757,8 +757,8 @@ function renderBuilderView() {
 
             <div class="lb">Configured Topology Entities (${b.identities.length + b.resources.length})</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px">
-              ${b.identities.map(i => `<span class="chip">${esc(i.id)} ${i.is_admin ? "★" : ""}</span>`).join("")}
-              ${b.resources.map(r => `<span class="chip" style="border-color:var(--wr)">${esc(r.id)} ${r.is_sensitive ? "⚠" : ""}</span>`).join("")}
+              ${b.identities.map(i => `<span class="chip">${esc(i.id)} ${i.is_admin ? "[ADMIN]" : ""}</span>`).join("")}
+              ${b.resources.map(r => `<span class="chip" style="border-color:var(--wr)">${esc(r.id)} ${r.is_sensitive ? "[SENSITIVE]" : ""}</span>`).join("")}
             </div>
           </div>
         </section>
@@ -828,7 +828,7 @@ function renderBuilderView() {
               Compiles your custom cloud entities, capability edges, and policy statements into an isolated NetworkX capability graph, discovers all transitive escalation paths, and calculates attack blast radius.
             </p>
             <button class="btn primary" id="btn-build-and-launch-custom" style="width:100%;height:36px;font-size:13px">
-              🚀 Build &amp; Launch in Workbench
+              Build &amp; Launch in Workbench
             </button>
           </div>
         </section>
@@ -851,9 +851,9 @@ function lab() {
         <div class="mu" style="font-size:12px;margin-top:2px">Isolated Moto AWS attack scenarios, deterministic IAM policy evaluation, and independent post-remediation verification.</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="btn ${LAB_MODE === "catalog" ? "primary" : ""}" id="tab-lab-catalog">📚 Scenario Library (12)</button>
-        <button class="btn ${LAB_MODE === "workbench" ? "primary" : ""}" id="tab-lab-workbench">⚡ Workbench ${ACTIVE_RUN ? `(${esc(ACTIVE_RUN.scenario_name)})` : ""}</button>
-        <button class="btn ${LAB_MODE === "builder" ? "primary" : ""}" id="tab-lab-builder">🛠 Custom Builder</button>
+        <button class="btn ${LAB_MODE === "catalog" ? "primary" : ""}" id="tab-lab-catalog">Scenario Library (12)</button>
+        <button class="btn ${LAB_MODE === "workbench" ? "primary" : ""}" id="tab-lab-workbench">Workbench ${ACTIVE_RUN ? `(${esc(ACTIVE_RUN.scenario_name)})` : ""}</button>
+        <button class="btn ${LAB_MODE === "builder" ? "primary" : ""}" id="tab-lab-builder">Custom Builder</button>
       </div>
     </div>
 
@@ -863,7 +863,676 @@ function lab() {
   `;
 }
 
-function refresh(){const r=route();if(r=="findings")paintFindings();if(r=="events")loadEvents();if(r=="audit")loadAudit();if(r=="graph"&&window.loadGraph)loadGraph()}
+// =========================================================================
+// SOC LAYER: ALERTS, INCIDENTS, REMEDIATION, ARCHITECTURE, GUIDED DEMO
+// =========================================================================
+
+let ALERTS_DATA = { alerts: [], total: 0 }, ALERTS_STATS = { total: 0, by_severity: {}, by_status: {} },
+    ALERTS_SEV = "", ALERTS_ST = "", ALERTS_SRC = "", ALERTS_Q = "", SELECTED_ALERT_ID = null, ALERTS_BOOT = false;
+
+async function loadAlerts() {
+  const query = new URLSearchParams();
+  if (ALERTS_SEV) query.set("severity", ALERTS_SEV);
+  if (ALERTS_ST) query.set("status", ALERTS_ST);
+  if (ALERTS_SRC) query.set("source", ALERTS_SRC);
+  if (ALERTS_Q) query.set("q", ALERTS_Q);
+  const data = await _get(`/api/alerts?${query.toString()}`);
+  if (data) ALERTS_DATA = data;
+  const stats = await _get("/api/alerts/stats");
+  if (stats) ALERTS_STATS = stats;
+  ALERTS_BOOT = true;
+  if (route() === "alerts") render();
+}
+
+function alerts() {
+  if (!ALERTS_BOOT) {
+    loadAlerts();
+    return `<div class="panel sk" style="height:400px"></div>`;
+  }
+  const st = ALERTS_STATS || {};
+  const items = ALERTS_DATA.alerts || [];
+  const selected = items.find(a => a.id === SELECTED_ALERT_ID) || items[0] || null;
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0;font-size:18px;font-weight:600">Security Alerts Management</h2>
+        <div class="mu" style="font-size:12px;margin-top:2px">Real-time alerts correlated from CIS rule scanner, ML anomaly detector, and IAM attack graph intelligence.</div>
+      </div>
+      <button class="btn sm" id="btn-refresh-alerts">Refresh Alerts</button>
+    </div>
+
+    <div class="kpis">
+      <div class="panel kp">
+        <div class="lb">Total Alerts</div>
+        <div class="kv">${st.total || 0}</div>
+        <div class="mu">All recorded detections</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Unresolved</div>
+        <div class="kv ${(st.unresolved_count||0)>0?'bad':'ok'}">${st.unresolved_count || 0}</div>
+        <div class="mu">Active investigation queue</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Critical Severity</div>
+        <div class="kv bad">${(st.by_severity && st.by_severity.Critical) || 0}</div>
+        <div class="mu">Immediate threat response</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">High Severity</div>
+        <div class="kv wr">${(st.by_severity && st.by_severity.High) || 0}</div>
+        <div class="mu">Elevated risk posture</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Investigating</div>
+        <div class="kv">${(st.by_status && st.by_status.Investigating) || 0}</div>
+        <div class="mu">Assigned to analysts</div>
+      </div>
+    </div>
+
+    <div class="tools">
+      <select id="sel-al-sev" aria-label="Severity filter">
+        <option value="" ${ALERTS_SEV===""?"selected":""}>All Severities</option>
+        <option value="Critical" ${ALERTS_SEV==="Critical"?"selected":""}>Critical</option>
+        <option value="High" ${ALERTS_SEV==="High"?"selected":""}>High</option>
+        <option value="Medium" ${ALERTS_SEV==="Medium"?"selected":""}>Medium</option>
+        <option value="Low" ${ALERTS_SEV==="Low"?"selected":""}>Low</option>
+      </select>
+      <select id="sel-al-st" aria-label="Status filter">
+        <option value="" ${ALERTS_ST===""?"selected":""}>All Statuses</option>
+        <option value="New" ${ALERTS_ST==="New"?"selected":""}>New</option>
+        <option value="Acknowledged" ${ALERTS_ST==="Acknowledged"?"selected":""}>Acknowledged</option>
+        <option value="Investigating" ${ALERTS_ST==="Investigating"?"selected":""}>Investigating</option>
+        <option value="Resolved" ${ALERTS_ST==="Resolved"?"selected":""}>Resolved</option>
+        <option value="Suppressed" ${ALERTS_ST==="Suppressed"?"selected":""}>Suppressed</option>
+      </select>
+      <select id="sel-al-src" aria-label="Source filter">
+        <option value="" ${ALERTS_SRC===""?"selected":""}>All Sources</option>
+        <option value="Rule Engine" ${ALERTS_SRC==="Rule Engine"?"selected":""}>Rule Engine</option>
+        <option value="ML Anomaly Detector" ${ALERTS_SRC==="ML Anomaly Detector"?"selected":""}>ML Anomaly Detector</option>
+        <option value="IAM Graph" ${ALERTS_SRC==="IAM Graph"?"selected":""}>IAM Graph</option>
+        <option value="Simulation Lab" ${ALERTS_SRC==="Simulation Lab"?"selected":""}>Simulation Lab</option>
+      </select>
+      <input type="search" id="inp-al-q" placeholder="Filter alerts by title or resource..." value="${esc(ALERTS_Q)}" style="min-width:240px">
+      <span class="mu" style="margin-left:auto">${items.length} of ${st.total || 0} alerts</span>
+    </div>
+
+    <div class="cols2">
+      <!-- Alerts Table -->
+      <section class="panel">
+        <div class="ph">
+          <span class="pt">Alerts Queue</span>
+          <span class="mu">Click row to investigate</span>
+        </div>
+        <div class="wrap">
+          <table class="tbl">
+            <tr>
+              <th>ID</th><th>Severity</th><th>Title</th><th>Resource</th><th>Status</th>
+            </tr>
+            ${items.length ? items.map(a => `
+              <tr class="clk ${selected && selected.id === a.id ? 'fresh' : ''}" data-select-alert="${esc(a.id)}">
+                <td class="mono"><b>${esc(a.id)}</b></td>
+                <td>${tg(a.severity, a.severity === 'Critical' ? 'crit' : a.severity === 'High' ? 'high' : 'med')}</td>
+                <td><b>${esc(a.title)}</b><div class="mu" style="font-size:11px">${esc(a.detection_source)} · ${esc(a.timestamp)}</div></td>
+                <td class="mono" style="font-size:11px">${esc(a.affected_resource)}</td>
+                <td>${tg(a.status, a.status === 'Resolved' ? 'ok' : a.status === 'New' ? 'bad' : 'wr')}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="5">${none("No alerts match active filters.")}</td></tr>`}
+          </table>
+        </div>
+      </section>
+
+      <!-- Alert Investigation Inspector -->
+      <section class="panel">
+        <div class="ph">
+          <span class="pt">Alert Investigation &amp; Triage</span>
+          ${selected ? tg(selected.status, selected.status === 'Resolved' ? 'ok' : 'wr') : ''}
+        </div>
+        ${selected ? `
+          <div class="pb">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+              <div>
+                <h3 style="margin:0 0 4px;font-size:15px;font-weight:600">${esc(selected.title)}</h3>
+                <div class="mu mono" style="font-size:11px">Alert ID: ${esc(selected.id)} · Account: ${esc(selected.account_id)}</div>
+              </div>
+              ${tg(selected.severity, selected.severity === 'Critical' ? 'crit' : selected.severity === 'High' ? 'high' : 'med')}
+            </div>
+
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px;margin-bottom:12px">
+              <div class="lb" style="margin-top:0">Trigger Explanation</div>
+              <p style="font-size:12px;margin:0 0 4px">${esc(selected.trigger_reason || 'Condition violated baseline security threshold.')}</p>
+              <div class="mu" style="font-size:11px">Detection Source: <b>${esc(selected.detection_source)}</b> · Reference: <code class="mono">${esc(selected.rule_ref || 'N/A')}</code></div>
+            </div>
+
+            ${selected.ml_anomaly_score ? `
+              <div style="background:rgba(76,141,255,0.08);border:1px solid var(--ac);border-radius:6px;padding:10px;margin-bottom:12px">
+                <div class="lb" style="margin-top:0">ML Anomaly Detector Score</div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                  <span>Isolation Forest Anomaly Score:</span>
+                  <b>${selected.ml_anomaly_score.toFixed(3)} (Threshold: 0.650)</b>
+                </div>
+                ${selected.ml_explanation ? `
+                  <div class="mu" style="font-size:11px;margin-top:4px">Feature Contributions:</div>
+                  <pre style="margin-top:4px;font-size:11px">${esc(JSON.stringify(selected.ml_explanation, null, 2))}</pre>
+                ` : ''}
+              </div>
+            ` : ''}
+
+            <div class="lb">Raw Evidence &amp; Telemetry</div>
+            <pre style="max-height:160px;font-size:11px">${esc(JSON.stringify(selected.evidence || selected.raw_event || {}, null, 2))}</pre>
+
+            <div class="lb">Audit Timeline (${selected.timeline ? selected.timeline.length : 0})</div>
+            <div class="tl" style="max-height:140px;overflow-y:auto;margin-bottom:14px">
+              ${(selected.timeline || []).map(t => `<div><span class="mu">${esc(t.timestamp)}:</span> ${esc(t.event)} ${t.user ? `<b class="mono">(${esc(t.user)})</b>` : ''}</div>`).join('')}
+            </div>
+
+            <div class="lb">SOC Analyst Actions</div>
+            <div class="ac" style="margin-top:8px">
+              <button class="btn sm" id="btn-al-ack" data-id="${esc(selected.id)}">Acknowledge</button>
+              <button class="btn sm" id="btn-al-inv" data-id="${esc(selected.id)}">Investigate</button>
+              <button class="btn sm primary" id="btn-al-res" data-id="${esc(selected.id)}">Resolve Alert</button>
+              <button class="btn sm danger" id="btn-al-sup" data-id="${esc(selected.id)}">Suppress</button>
+              <button class="btn sm primary" id="btn-al-esc" data-id="${esc(selected.id)}" style="background:var(--bad);border-color:var(--bad)">Escalate to Incident</button>
+            </div>
+
+            ${selected.related_finding_id ? `
+              <div style="margin-top:14px;border-top:1px solid var(--ln);padding-top:10px;display:flex;gap:12px;font-size:12px">
+                <a class="lk" href="#findings" data-open="${esc(selected.related_finding_id)}">View Correlated Finding (${esc(selected.related_finding_id)})</a>
+                <a class="lk" href="#remediation">View Remediation Workflow</a>
+                <a class="lk" href="#graph">Inspect Target in Graph</a>
+              </div>
+            ` : ''}
+          </div>
+        ` : `<div class="pb">${none("Select an alert from the table to inspect details.")}</div>`}
+      </section>
+    </div>
+  `;
+}
+
+let INCIDENTS_DATA = { incidents: [], total: 0 }, SELECTED_INCIDENT_ID = null, INCIDENTS_BOOT = false;
+
+async function loadIncidents() {
+  const data = await _get("/api/incidents");
+  if (data) INCIDENTS_DATA = data;
+  INCIDENTS_BOOT = true;
+  if (route() === "incidents") render();
+}
+
+function incidents() {
+  if (!INCIDENTS_BOOT) {
+    loadIncidents();
+    return `<div class="panel sk" style="height:400px"></div>`;
+  }
+
+  const items = INCIDENTS_DATA.incidents || [];
+  const selected = items.find(i => i.id === SELECTED_INCIDENT_ID) || items[0] || null;
+  const STAGES = ["Triage", "Investigation", "Containment", "Remediation", "Verification", "Closed"];
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0;font-size:18px;font-weight:600">Security Incident Management</h2>
+        <div class="mu" style="font-size:12px;margin-top:2px">Formal SOC incident coordination with phased response: Triage -> Investigation -> Containment -> Remediation -> Verification -> Closed.</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm" id="btn-refresh-incidents">Refresh</button>
+        <button class="btn sm primary" id="btn-create-incident-modal">+ Create Incident</button>
+      </div>
+    </div>
+
+    <div class="cols2">
+      <!-- Incidents List -->
+      <section class="panel">
+        <div class="ph">
+          <span class="pt">Active Incidents (${items.length})</span>
+          <span class="mu">Click to open workspace</span>
+        </div>
+        <div class="wrap">
+          <table class="tbl">
+            <tr>
+              <th>ID</th><th>Severity</th><th>Title</th><th>Stage</th><th>Responder</th>
+            </tr>
+            ${items.length ? items.map(inc => `
+              <tr class="clk ${selected && selected.id === inc.id ? 'fresh' : ''}" data-select-incident="${esc(inc.id)}">
+                <td class="mono"><b>${esc(inc.id)}</b></td>
+                <td>${tg(inc.severity, inc.severity === 'Critical' ? 'crit' : 'high')}</td>
+                <td><b>${esc(inc.title)}</b><div class="mu" style="font-size:11px">${esc(inc.created_at)} · ${inc.linked_alert_ids ? inc.linked_alert_ids.length : 0} alerts</div></td>
+                <td>${tg(inc.status, inc.status === 'Closed' ? 'ok' : inc.status === 'Containment' ? 'crit' : 'wr')}</td>
+                <td style="font-size:11px" class="mu">${esc(inc.lead_responder)}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="5">${none("No active incidents. Escalate an alert to create one.")}</td></tr>`}
+          </table>
+        </div>
+      </section>
+
+      <!-- Incident Workspace -->
+      <section class="panel">
+        <div class="ph">
+          <span class="pt">Incident Response Workspace</span>
+          ${selected ? tg(selected.status, selected.status === 'Closed' ? 'ok' : 'wr') : ''}
+        </div>
+        ${selected ? `
+          <div class="pb">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+              <div>
+                <h3 style="margin:0 0 4px;font-size:16px;font-weight:600">${esc(selected.title)}</h3>
+                <div class="mu mono" style="font-size:11px">Incident ID: ${esc(selected.id)} · Lead: ${esc(selected.lead_responder)}</div>
+              </div>
+              ${tg(selected.severity, selected.severity === 'Critical' ? 'crit' : 'high')}
+            </div>
+
+            <!-- Phased Lifecycle Stepper -->
+            <div class="lb">Incident Response Lifecycle</div>
+            <div class="st" style="margin-bottom:16px">
+              ${STAGES.map((stg, i) => {
+                const curIdx = STAGES.indexOf(selected.status);
+                const cls = i < curIdx || selected.status === 'Closed' ? 'd' : i === curIdx ? 'a' : '';
+                return `<span class="s ${cls}">${stg}</span>`;
+              }).join("")}
+            </div>
+
+            <div class="lb">Incident Summary</div>
+            <p style="font-size:12px;margin-bottom:12px">${esc(selected.summary)}</p>
+
+            <div class="lb">Affected Cloud Assets (${selected.affected_assets ? selected.affected_assets.length : 0})</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+              ${(selected.affected_assets || []).map(a => `<span class="chip" style="border-color:var(--bad)">${esc(a)}</span>`).join("") || '<span class="mu">No assets registered.</span>'}
+            </div>
+
+            <div class="lb">Linked Alerts &amp; Findings</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+              ${(selected.linked_alert_ids || []).map(aid => `<a class="chip lk" href="#alerts" style="text-decoration:none">${esc(aid)}</a>`).join("")}
+              ${(selected.linked_finding_ids || []).map(fid => `<a class="chip lk" href="#findings" style="text-decoration:none">Finding: ${esc(fid)}</a>`).join("")}
+            </div>
+
+            ${selected.containment_evidence ? `
+              <div class="lb">Containment Evidence</div>
+              <pre style="font-size:11px;margin-bottom:12px">${esc(JSON.stringify(selected.containment_evidence, null, 2))}</pre>
+            ` : ''}
+
+            <div class="lb">Incident Timeline &amp; Notes (${selected.timeline ? selected.timeline.length : 0})</div>
+            <div class="tl" style="max-height:140px;overflow-y:auto;margin-bottom:14px">
+              ${(selected.timeline || []).map(t => `<div><span class="mu">${esc(t.timestamp)}:</span> ${esc(t.event)} ${t.user ? `<b>(${esc(t.user)})</b>` : ''}</div>`).join('')}
+            </div>
+
+            <!-- Add Note -->
+            <div style="display:flex;gap:8px;margin-bottom:14px">
+              <input type="text" id="inp-inc-note" placeholder="Add responder note to audit log..." style="flex:1">
+              <button class="btn sm" id="btn-inc-add-note" data-id="${esc(selected.id)}">Add Note</button>
+            </div>
+
+            <!-- Incident Actions -->
+            <div class="lb">Response Actions</div>
+            <div class="ac" style="margin-top:8px">
+              ${selected.status !== 'Closed' ? `
+                <button class="btn sm primary" id="btn-inc-next-stage" data-id="${esc(selected.id)}">Advance Phase (${STAGES[Math.min(STAGES.length-1, STAGES.indexOf(selected.status)+1)]})</button>
+                <button class="btn sm" id="btn-inc-record-contain" data-id="${esc(selected.id)}">Record Containment</button>
+                <button class="btn sm danger" id="btn-inc-close" data-id="${esc(selected.id)}">Close Incident</button>
+              ` : `<span class="mu" style="font-size:12px">Incident closed on ${esc(selected.updated_at)}. Reason: ${esc(selected.closure_reason || 'Resolved')}</span>`}
+            </div>
+          </div>
+        ` : `<div class="pb">${none("Select an incident to view details.")}</div>`}
+      </section>
+    </div>
+  `;
+}
+
+let REM_DATA = { remediations: [], total: 0, stats: {} }, SELECTED_REM_ID = null, REM_BOOT = false, REM_SEV = "", REM_ST = "";
+
+async function loadRemediations() {
+  const query = new URLSearchParams();
+  if (REM_SEV) query.set("severity", REM_SEV);
+  if (REM_ST) query.set("status", REM_ST);
+  const data = await _get(`/api/remediations?${query.toString()}`);
+  if (data) REM_DATA = data;
+  REM_BOOT = true;
+  if (route() === "remediation" || route() === "response") render();
+}
+
+function remediation() {
+  if (!REM_BOOT) {
+    loadRemediations();
+    return `<div class="panel sk" style="height:400px"></div>`;
+  }
+
+  const st = REM_DATA.stats || {};
+  const items = REM_DATA.remediations || [];
+  const selected = items.find(r => r.id === SELECTED_REM_ID) || items[0] || null;
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0;font-size:18px;font-weight:600">Remediation Management &amp; Independent Verification</h2>
+        <div class="mu" style="font-size:12px;margin-top:2px">Human-in-the-loop approval workflow with before/after diffs and strict independent post-remediation verification (PASS/PARTIAL/FAIL).</div>
+      </div>
+      <button class="btn sm" id="btn-refresh-rem">Refresh Tasks</button>
+    </div>
+
+    <div class="kpis">
+      <div class="panel kp">
+        <div class="lb">Total Tasks</div>
+        <div class="kv">${st.total || 0}</div>
+        <div class="mu">Remediation actions</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Pending Approval</div>
+        <div class="kv ${(st.pending_approval||0)>0?'wr':'ok'}">${st.pending_approval || 0}</div>
+        <div class="mu">Requires human review</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Approved</div>
+        <div class="kv">${st.approved || 0}</div>
+        <div class="mu">Ready for deployment</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Independently Verified</div>
+        <div class="kv ok">${st.independently_verified || 0}</div>
+        <div class="mu">Cloud state confirmed PASS</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Pass Rate</div>
+        <div class="kv ok">${st.verification_pass_rate != null ? st.verification_pass_rate : 100}%</div>
+        <div class="mu">Post-fix verification score</div>
+      </div>
+    </div>
+
+    <div class="cols2">
+      <!-- Tasks List -->
+      <section class="panel">
+        <div class="ph">
+          <span class="pt">Remediation Tasks Queue (${items.length})</span>
+          <span class="mu">Click row to inspect diff</span>
+        </div>
+        <div class="wrap">
+          <table class="tbl">
+            <tr>
+              <th>ID</th><th>Severity</th><th>Title</th><th>Status</th><th>Verification</th>
+            </tr>
+            ${items.length ? items.map(r => `
+              <tr class="clk ${selected && selected.id === r.id ? 'fresh' : ''}" data-select-rem="${esc(r.id)}">
+                <td class="mono"><b>${esc(r.id)}</b></td>
+                <td>${tg(r.severity, r.severity === 'Critical' ? 'crit' : 'high')}</td>
+                <td><b>${esc(r.title)}</b><div class="mu mono" style="font-size:11px">${esc(r.affected_resource)}</div></td>
+                <td>${tg(r.status, r.status === 'Verified' ? 'ok' : r.status === 'Pending' ? 'wr' : 'in')}</td>
+                <td>${tg(r.verification_state, r.verification_state === 'PASS' ? 'pass' : r.verification_state === 'FAIL' ? 'fail' : 'gr')}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="5">${none("No remediation tasks.")}</td></tr>`}
+          </table>
+        </div>
+      </section>
+
+      <!-- Task Inspector -->
+      <section class="panel">
+        <div class="ph">
+          <span class="pt">Remediation Inspection &amp; Verification Diff</span>
+          ${selected ? tg(selected.status, selected.status === 'Verified' ? 'ok' : 'wr') : ''}
+        </div>
+        ${selected ? `
+          <div class="pb">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+              <div>
+                <h3 style="margin:0 0 4px;font-size:16px;font-weight:600">${esc(selected.title)}</h3>
+                <div class="mu mono" style="font-size:11px">Target: ${esc(selected.affected_resource)} · Assigned: ${esc(selected.assigned_owner)}</div>
+              </div>
+              <div style="display:flex;gap:6px">
+                ${tg(selected.severity, selected.severity === 'Critical' ? 'crit' : 'high')}
+                ${tg(selected.verification_state, selected.verification_state === 'PASS' ? 'pass' : selected.verification_state === 'FAIL' ? 'fail' : 'gr')}
+              </div>
+            </div>
+
+            <div class="lb">Technical Explanation</div>
+            <p style="font-size:12px;margin-bottom:6px">${esc(selected.technical_explanation || 'Remediation eliminates security misconfiguration and closes attack paths.')}</p>
+
+            <div class="lb">Why It Matters</div>
+            <p style="font-size:12px;margin-bottom:12px">${esc(selected.why_it_matters || 'Prevents unauthorized privilege escalation and maintains compliance.')}</p>
+
+            <!-- Before / After Diff Viewer -->
+            <div class="lb">Configuration Before &amp; Proposed Change</div>
+            <div class="diff-view" style="margin-bottom:12px">
+              <div>
+                <div class="mu" style="font-size:11px;margin-bottom:4px">Before (Current Cloud State)</div>
+                <pre style="font-size:11px;max-height:120px">${esc(JSON.stringify(selected.before_config || {"status": "Vulnerable configuration"}, null, 2))}</pre>
+              </div>
+              <div>
+                <div class="mu" style="font-size:11px;margin-bottom:4px">Proposed Secure State</div>
+                <pre class="chg" style="font-size:11px;max-height:120px">${esc(JSON.stringify(selected.proposed_change || {"action": selected.recommended_action}, null, 2))}</pre>
+              </div>
+            </div>
+
+            <!-- Independent Verification Status Box -->
+            <div class="lb">Independent Post-Remediation Verification</div>
+            <div style="background:var(--sf2);border:1px solid ${selected.verification_state === 'PASS' ? 'var(--ok)' : selected.verification_state === 'FAIL' ? 'var(--bad)' : 'var(--ln)'};border-radius:6px;padding:12px;margin-bottom:14px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span style="font-weight:600;font-size:13px">
+                  ${selected.verification_state === 'PASS' ? '[PASS] Confirmed by Independent Re-Inspection' :
+                    selected.verification_state === 'FAIL' ? '[FAIL] Verification Failed - Risk Persists' :
+                    selected.verification_state === 'PARTIAL' ? '[PARTIAL] Secondary Vectors Remain' :
+                    'Awaiting Post-Remediation Execution'}
+                </span>
+                ${tg(selected.verification_state, selected.verification_state === 'PASS' ? 'pass' : 'fail')}
+              </div>
+              <div style="font-size:11px;color:var(--mu)">
+                ${selected.verified_at ? `Verified at ${esc(selected.verified_at)} via live cloud re-inspection.` : 'Remediation must be applied and verified.'}
+              </div>
+              ${selected.verification_evidence && Object.keys(selected.verification_evidence).length ? `
+                <pre style="margin-top:6px;font-size:11px">${esc(JSON.stringify(selected.verification_evidence, null, 2))}</pre>
+              ` : ''}
+            </div>
+
+            <div class="lb">Remediation Workflow Actions</div>
+            <div class="ac" style="margin-top:8px">
+              ${selected.status === 'Pending' ? `
+                <button class="btn primary sm" id="btn-rem-approve" data-id="${esc(selected.id)}">Approve Fix</button>
+              ` : ''}
+              ${selected.status === 'Approved' || selected.status === 'Pending' ? `
+                <button class="btn primary sm" id="btn-rem-apply" data-id="${esc(selected.id)}">Apply &amp; Independently Verify</button>
+              ` : ''}
+              ${selected.status === 'Verified' || selected.status === 'Applied' || selected.status === 'Failed' ? `
+                <button class="btn sm" id="btn-rem-reverify" data-id="${esc(selected.id)}">Re-Verify Cloud State</button>
+                <button class="btn sm danger" id="btn-rem-rollback" data-id="${esc(selected.id)}">Roll Back Fix</button>
+              ` : ''}
+              ${selected.status === 'Rolled Back' ? `
+                <span class="mu" style="font-size:12px">This task has been rolled back and recorded in the audit trail.</span>
+              ` : ''}
+            </div>
+          </div>
+        ` : `<div class="pb">${none("Select a remediation task to inspect.")}</div>`}
+      </section>
+    </div>
+  `;
+}
+
+let ARCH_DATA = null, SELECTED_ARCH_STAGE = 1, ARCH_BOOT = false;
+
+async function loadArchitecture() {
+  const data = await _get("/api/architecture");
+  if (data) ARCH_DATA = data;
+  ARCH_BOOT = true;
+  if (route() === "architecture") render();
+}
+
+function architecture() {
+  if (!ARCH_BOOT) {
+    loadArchitecture();
+    return `<div class="panel sk" style="height:400px"></div>`;
+  }
+
+  const d = ARCH_DATA || {};
+  const stages = d.pipeline || d.pipeline_stages || [];
+  const curStage = stages.find(s => s.step === SELECTED_ARCH_STAGE) || stages[0] || {};
+  const diffs = d.core_differentiators || [];
+  const stack = d.tech_stack || {};
+
+  return `
+    <div style="margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px">
+      <h2 style="margin:0 0 4px;font-size:18px;font-weight:600">Project Architecture &amp; Technical Reference</h2>
+      <div class="mu" style="font-size:12px">
+        <b>${esc(d.academic_context || "Final Year B.Tech CSE (AI & ML) Project")}</b> · Author: <b>${esc(d.author || "Asif Shaik")}</b> · <a class="lk" href="${esc(d.repository || 'https://github.com/asifshaik06/cloudguardian')}" target="_blank">GitHub Repository</a>
+      </div>
+    </div>
+
+    <!-- Problem Statement & Core Differentiators -->
+    <div class="cols2">
+      <section class="panel">
+        <div class="ph"><span class="pt">Problem Statement &amp; Research Motivation</span></div>
+        <div class="pb">
+          <p style="font-size:12.5px;line-height:1.6;margin-bottom:10px">${esc(d.problem_statement)}</p>
+          <div class="lb">Proposed Solution</div>
+          <p style="font-size:12.5px;line-height:1.6">${esc(d.solution_overview)}</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="ph"><span class="pt">Core Differentiators vs Traditional CSPMs</span></div>
+        <div class="pb">
+          <ul style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.7">
+            ${diffs.map(df => `<li>${esc(df)}</li>`).join("")}
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <!-- 10-Stage Interactive Pipeline Flowchart -->
+    <section class="panel mt">
+      <div class="ph">
+        <span class="pt">End-to-End Security Pipeline Flowchart (10 Stages)</span>
+        <span class="mu">Click any stage to inspect underlying mechanics</span>
+      </div>
+      <div class="pb">
+        <div class="flow-grid">
+          ${stages.map(stg => `
+            <div class="flow-card ${stg.step === SELECTED_ARCH_STAGE ? 'active' : ''}" data-select-stage="${stg.step}">
+              <div style="font-size:11px;font-weight:600;color:var(--ac);margin-bottom:4px">STAGE ${stg.step}</div>
+              <div style="font-weight:600;font-size:13px;margin-bottom:4px">${esc(stg.name)}</div>
+              <div class="mu" style="font-size:11px">${esc(stg.tech)}</div>
+            </div>
+          `).join("")}
+        </div>
+
+        <!-- Stage Inspector Box -->
+        <div style="background:var(--sf);border:1px solid var(--ac);border-radius:6px;padding:14px;margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <h4 style="margin:0;font-size:15px;color:var(--ac)">Stage ${curStage.step}: ${esc(curStage.name)}</h4>
+            <span class="chip mono">${esc(curStage.tech)}</span>
+          </div>
+          <p style="font-size:13px;line-height:1.6;margin-bottom:8px">${esc(curStage.description)}</p>
+          <div class="cols2" style="font-size:12px;margin-top:10px">
+            <div>
+              <div class="lb" style="margin-top:0">Operational Role</div>
+              <div class="mu">Processes security telemetry continuously within isolated Moto sandbox or live AWS.</div>
+            </div>
+            <div>
+              <div class="lb" style="margin-top:0">Verifiable Output</div>
+              <div class="mu">Produces structured evidence, deterministic reachability graphs, and cryptographically chained audit hashes.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Technology Stack Breakdown -->
+    <section class="panel mt">
+      <div class="ph"><span class="pt">Complete Technology Stack</span></div>
+      <div class="pb">
+        <div class="g3">
+          ${Object.entries(stack).map(([k, v]) => `
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+              <div class="lb" style="margin-top:0">${esc(k)}</div>
+              <div class="mono" style="font-size:12px;font-weight:600">${esc(v)}</div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+let DEMO_DATA = null, CURRENT_DEMO_STEP = 1, DEMO_BOOT = false;
+
+async function loadDemo() {
+  const data = await _get("/api/demo");
+  if (data) DEMO_DATA = data;
+  DEMO_BOOT = true;
+  if (route() === "demo") render();
+}
+
+function demo() {
+  if (!DEMO_BOOT) {
+    loadDemo();
+    return `<div class="panel sk" style="height:400px"></div>`;
+  }
+
+  const d = DEMO_DATA || {};
+  const steps = d.steps || [];
+  const curStep = steps.find(s => s.step === CURRENT_DEMO_STEP) || steps[0] || {};
+  const total = steps.length || 17;
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0;font-size:18px;font-weight:600">Guided Viva Demonstration Mode</h2>
+        <div class="mu" style="font-size:12px;margin-top:2px">17-Step interactive walkthrough designed for external university examiners, technical evaluators, and project presentation.</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="chip">Step ${curStep.step || 1} of ${total}</span>
+        <button class="btn sm primary" id="btn-demo-jump-dash" data-target="${esc(curStep.target_page || 'overview')}">Launch in Dashboard</button>
+      </div>
+    </div>
+
+    <!-- Step Navigation Bar -->
+    <div class="step-nav">
+      <button class="btn sm" id="btn-demo-prev" ${curStep.step <= 1 ? 'disabled' : ''}>&larr; Previous Step</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-weight:600;font-size:13px">Jump to Step:</span>
+        <select id="sel-demo-step" style="height:28px;font-size:12px">
+          ${steps.map(s => `
+            <option value="${s.step}" ${s.step === CURRENT_DEMO_STEP ? 'selected' : ''}>
+              ${s.step}. ${esc(s.title)} (${esc(s.target_page)})
+            </option>
+          `).join("")}
+        </select>
+      </div>
+      <button class="btn sm primary" id="btn-demo-next" ${curStep.step >= total ? 'disabled' : ''}>Next Step &rarr;</button>
+    </div>
+
+    <!-- Active Step Presentation Card -->
+    <section class="panel">
+      <div class="ph">
+        <span class="pt">Step ${curStep.step}: ${esc(curStep.title)}</span>
+        <span class="chip mono" style="color:var(--ac)">Target: #${esc(curStep.target_page)}</span>
+      </div>
+      <div class="pb">
+        <div class="lb" style="margin-top:0">Evaluator Question / Viva Context</div>
+        <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">
+          <b>Faculty / Examiner Question:</b> "${esc(curStep.evaluator_question || 'Explain the technical architecture and verifiable guarantees of this stage.')}"
+        </div>
+
+        <div class="cols2" style="margin-bottom:14px">
+          <div style="background:rgba(76,141,255,0.06);border:1px solid var(--ac);border-radius:6px;padding:12px">
+            <div class="lb" style="margin-top:0;color:var(--ac)">Demonstration Action to Perform</div>
+            <p style="font-size:12.5px;line-height:1.6;margin:0">${esc(curStep.demonstration_action || 'Demonstrate live UI feature.')}</p>
+          </div>
+
+          <div style="background:rgba(63,178,127,0.06);border:1px solid var(--ok);border-radius:6px;padding:12px">
+            <div class="lb" style="margin-top:0;color:var(--ok)">Technical Architecture Evidence to Cite</div>
+            <p style="font-size:12.5px;line-height:1.6;margin:0">${esc(curStep.architecture_evidence || 'Refer to algorithms and data structures.')}</p>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--ln);padding-top:12px;flex-wrap:wrap;gap:8px">
+          <div class="mu" style="font-size:12px">
+            Pressing <b>"Launch in Dashboard"</b> will automatically switch the page view to <code>#${esc(curStep.target_page)}</code>.
+          </div>
+          <button class="btn primary" id="btn-demo-action-launch" data-target="${esc(curStep.target_page || 'overview')}">
+            Switch to #${esc(curStep.target_page)} &rarr;
+          </button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function refresh(){const r=route();if(r=="findings")paintFindings();if(r=="events")loadEvents();if(r=="audit")loadAudit();if(r=="graph"&&window.loadGraph)loadGraph();if(r=="alerts")loadAlerts();if(r=="incidents")loadIncidents();if(r=="remediation"||r=="response")loadRemediations();if(r=="architecture")loadArchitecture();if(r=="demo")loadDemo()}
 function bind(){const r=route();
  if(r=="findings"){$$("fsev").value=FSEV;$$("fst").value=FST;$$("fsev").onchange=e=>{FSEV=e.target.value;paintFindings()};$$("fst").onchange=e=>{FST=e.target.value;paintFindings()};paintFindings()}
  if(r=="events"){$$("ek").value=EK;$$("ek").onchange=e=>{EK=e.target.value;loadEvents()};loadEvents()}
@@ -1098,11 +1767,11 @@ function bind(){const r=route();
           el.style.display="block";
           el.innerHTML=`
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <b>${data.valid?"✓ Statement Validated":"✕ Invalid Statement"}</b>
+              <b>${data.valid?"[PASS] Statement Validated":"[FAIL] Invalid Statement"}</b>
               ${tg("Risk: "+(data.risk_level||"Low"),data.risk_level=="Critical"?"bad":data.risk_level=="High"?"wr":"ok")}
             </div>
             ${data.has_explicit_deny?'<div class="tg bad" style="margin-bottom:4px">Explicit Deny Rule Active</div>':''}
-            ${(data.warnings||[]).map(w=>`<div class="mu" style="color:var(--wr);font-size:11px">⚠ ${esc(w)}</div>`).join("")||'<div style="color:var(--ok);font-size:11px">Zero security warnings detected.</div>'}
+            ${(data.warnings||[]).map(w=>`<div class="mu" style="color:var(--wr);font-size:11px">[WARN] ${esc(w)}</div>`).join("")||'<div style="color:var(--ok);font-size:11px">Zero security warnings detected.</div>'}
           `;
         }
       };
@@ -1135,6 +1804,247 @@ function bind(){const r=route();
         }
       };
     }
+
+    if (r === "alerts") {
+      const sSev = $$("sel-al-sev");
+      if (sSev) sSev.onchange = e => { ALERTS_SEV = e.target.value; loadAlerts(); };
+      const sSt = $$("sel-al-st");
+      if (sSt) sSt.onchange = e => { ALERTS_ST = e.target.value; loadAlerts(); };
+      const sSrc = $$("sel-al-src");
+      if (sSrc) sSrc.onchange = e => { ALERTS_SRC = e.target.value; loadAlerts(); };
+      const inQ = $$("inp-al-q");
+      if (inQ) inQ.oninput = e => { ALERTS_Q = e.target.value.trim(); loadAlerts(); };
+
+      const bRef = $$("btn-refresh-alerts");
+      if (bRef) bRef.onclick = () => loadAlerts();
+
+      document.querySelectorAll("[data-select-alert]").forEach(tr => {
+        tr.onclick = () => {
+          SELECTED_ALERT_ID = tr.dataset.selectAlert;
+          render();
+        };
+      });
+
+      const bAck = $$("btn-al-ack");
+      if (bAck) bAck.onclick = async () => {
+        await fetch(`/api/alerts/${bAck.dataset.id}/action`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "acknowledge" })
+        });
+        loadAlerts();
+      };
+
+      const bInv = $$("btn-al-inv");
+      if (bInv) bInv.onclick = async () => {
+        await fetch(`/api/alerts/${bInv.dataset.id}/action`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "investigate" })
+        });
+        loadAlerts();
+      };
+
+      const bRes = $$("btn-al-res");
+      if (bRes) bRes.onclick = async () => {
+        await fetch(`/api/alerts/${bRes.dataset.id}/action`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "resolve" })
+        });
+        loadAlerts();
+      };
+
+      const bSup = $$("btn-al-sup");
+      if (bSup) bSup.onclick = async () => {
+        await fetch(`/api/alerts/${bSup.dataset.id}/action`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "suppress" })
+        });
+        loadAlerts();
+      };
+
+      const bEsc = $$("btn-al-esc");
+      if (bEsc) bEsc.onclick = async () => {
+        const title = prompt("Enter Incident Title:", "Escalated: Alert " + bEsc.dataset.id);
+        if (title) {
+          await fetch(`/api/alerts/${bEsc.dataset.id}/escalate`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, severity: "Critical", summary: "Formal escalation from Alert " + bEsc.dataset.id })
+          });
+          alert("Alert successfully escalated to incident!");
+          loadAlerts();
+          location.hash = "#incidents";
+        }
+      };
+    }
+
+    if (r === "incidents") {
+      const bRef = $$("btn-refresh-incidents");
+      if (bRef) bRef.onclick = () => loadIncidents();
+
+      document.querySelectorAll("[data-select-incident]").forEach(tr => {
+        tr.onclick = () => {
+          SELECTED_INCIDENT_ID = tr.dataset.selectIncident;
+          render();
+        };
+      });
+
+      const bNote = $$("btn-inc-add-note");
+      if (bNote) bNote.onclick = async () => {
+        const val = ($$("inp-inc-note") || {}).value;
+        if (val) {
+          await fetch(`/api/incidents/${bNote.dataset.id}/action`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ notes: val })
+          });
+          loadIncidents();
+        }
+      };
+
+      const bNext = $$("btn-inc-next-stage");
+      if (bNext) bNext.onclick = async () => {
+        const STAGES = ["Triage", "Investigation", "Containment", "Remediation", "Verification", "Closed"];
+        const inc = (INCIDENTS_DATA.incidents || []).find(i => i.id === bNext.dataset.id);
+        if (inc) {
+          const curIdx = STAGES.indexOf(inc.status);
+          const next = STAGES[Math.min(STAGES.length - 1, curIdx + 1)];
+          await fetch(`/api/incidents/${bNext.dataset.id}/action`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: next })
+          });
+          loadIncidents();
+        }
+      };
+
+      const bContain = $$("btn-inc-record-contain");
+      if (bContain) bContain.onclick = async () => {
+        await fetch(`/api/incidents/${bContain.dataset.id}/action`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            containment_evidence: {
+              quarantine_enacted: true,
+              sessions_terminated: true,
+              ingress_restricted: true,
+              timestamp: new Date().toISOString()
+            }
+          })
+        });
+        loadIncidents();
+      };
+
+      const bClose = $$("btn-inc-close");
+      if (bClose) bClose.onclick = async () => {
+        const reason = prompt("Enter Closure Reason:", "Threat contained and posture verified.");
+        if (reason) {
+          await fetch(`/api/incidents/${bClose.dataset.id}/action`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "Closed", closure_reason: reason })
+          });
+          loadIncidents();
+        }
+      };
+
+      const bNew = $$("btn-create-incident-modal");
+      if (bNew) bNew.onclick = async () => {
+        const title = prompt("Enter Incident Title:", "New Security Incident");
+        if (title) {
+          await fetch("/api/incidents", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title,
+              severity: "High",
+              summary: "Manually initiated incident response."
+            })
+          });
+          loadIncidents();
+        }
+      };
+    }
+
+    if (r === "remediation" || r === "response") {
+      const bRef = $$("btn-refresh-rem");
+      if (bRef) bRef.onclick = () => loadRemediations();
+
+      document.querySelectorAll("[data-select-rem]").forEach(tr => {
+        tr.onclick = () => {
+          SELECTED_REM_ID = tr.dataset.selectRem;
+          render();
+        };
+      });
+
+      const bAppr = $$("btn-rem-approve");
+      if (bAppr) bAppr.onclick = async () => {
+        await fetch(`/api/remediations/${bAppr.dataset.id}/approve`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user: "Security Operator" })
+        });
+        loadRemediations();
+      };
+
+      const bApply = $$("btn-rem-apply");
+      if (bApply) bApply.onclick = async () => {
+        await fetch(`/api/remediations/${bApply.dataset.id}/apply`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user: "Security Operator" })
+        });
+        loadRemediations();
+        poll();
+      };
+
+      const bRever = $$("btn-rem-reverify");
+      if (bRever) bRever.onclick = async () => {
+        await fetch(`/api/remediations/${bRever.dataset.id}/verify`, { method: "POST" });
+        loadRemediations();
+      };
+
+      const bRoll = $$("btn-rem-rollback");
+      if (bRoll) bRoll.onclick = async () => {
+        if (confirm("Are you sure you want to roll back this remediation fix?")) {
+          await fetch(`/api/remediations/${bRoll.dataset.id}/rollback`, { method: "POST" });
+          loadRemediations();
+          poll();
+        }
+      };
+    }
+
+    if (r === "architecture") {
+      document.querySelectorAll("[data-select-stage]").forEach(card => {
+        card.onclick = () => {
+          SELECTED_ARCH_STAGE = +card.dataset.selectStage;
+          render();
+        };
+      });
+    }
+
+    if (r === "demo") {
+      const bPrev = $$("btn-demo-prev");
+      if (bPrev) bPrev.onclick = () => {
+        CURRENT_DEMO_STEP = Math.max(1, CURRENT_DEMO_STEP - 1);
+        render();
+      };
+
+      const bNext = $$("btn-demo-next");
+      if (bNext) bNext.onclick = () => {
+        const total = (DEMO_DATA && DEMO_DATA.steps) ? DEMO_DATA.steps.length : 17;
+        CURRENT_DEMO_STEP = Math.min(total, CURRENT_DEMO_STEP + 1);
+        render();
+      };
+
+      const selStep = $$("sel-demo-step");
+      if (selStep) selStep.onchange = e => {
+        CURRENT_DEMO_STEP = +e.target.value;
+        render();
+      };
+
+      const bJump = $$("btn-demo-jump-dash");
+      if (bJump) bJump.onclick = () => {
+        location.hash = "#" + bJump.dataset.target;
+      };
+
+      const bActLaunch = $$("btn-demo-action-launch");
+      if (bActLaunch) bActLaunch.onclick = () => {
+        location.hash = "#" + bActLaunch.dataset.target;
+      };
+    }
+
   CG.mount(ctx())}
 let tm;$$("gq").addEventListener("input",e=>{clearTimeout(tm);tm=setTimeout(()=>{Q=e.target.value.trim();if(!["findings","events","audit"].includes(route()))location.hash="#findings";else refresh()},180)});
 document.addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o)openDrawer(o.dataset.open);if(e.target.id=="dclose")closeDrawer();if(e.target.closest("[data-p]")&&DR)setTimeout(()=>DR&&openDrawer(DR),900)});
@@ -1142,4 +2052,4 @@ document.addEventListener("keydown",e=>{if(e.key=="Escape")closeDrawer();if(e.ke
 new MutationObserver(()=>CG.update(ctx())).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 $$("menu").onclick=()=>document.body.classList.toggle("navopen");$$("scrim").onclick=()=>document.body.classList.remove("navopen");window.addEventListener("hashchange",()=>document.body.classList.remove("navopen"));
 setTimeout(loadMetrics,0);setInterval(loadMetrics,3000);setInterval(()=>{if(route()=="events")loadEvents()},2000);
-return{overview,findings,events,audit,graph,lab,bind,slot,q:()=>Q,open:openDrawer}})();
+return{overview,findings,events,audit,graph,lab,alerts,incidents,remediation,architecture,demo,bind,slot,q:()=>Q,open:openDrawer}})();

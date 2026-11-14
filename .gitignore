@@ -12,3 +12,4 @@ terraform/.terraform/
 *.db-wal
 *.sqlite-shm
 *.sqlite-wal
+.mcp.json

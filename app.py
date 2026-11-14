@@ -43,6 +43,13 @@ from backend.security import (
     validate_telegram_callback_data,
 )
 from backend.state import StateStore
+from backend.soc.models import (
+    AlertSeverity,
+    RemediationStatus,
+    VerificationState,
+)
+from backend.soc.store import soc_store
+from backend.soc.api import register_soc_api
 
 # Load environment configuration
 load_dotenv()
@@ -69,6 +76,7 @@ sts = get_aws_client("sts")
 
 # State & Audit Manager
 store = StateStore()
+soc_store._state_store = store
 
 # 12-Feature Streaming Window Aggregator & Runtime Multi-Detector
 aggregator = StreamingWindowAggregator(window_minutes=5)
@@ -415,6 +423,31 @@ def raise_finding(k: str, explain: Optional[list] = None) -> None:
     audit(f"DETECTED {R[k]['title']}")
     tg_alert(k)
 
+    # Sync with SOC Alert Layer
+    try:
+        sev_str = R[k].get("sev", "HIGH").upper()
+        sev_enum = {
+            "CRITICAL": AlertSeverity.CRITICAL,
+            "HIGH": AlertSeverity.HIGH,
+            "MEDIUM": AlertSeverity.MEDIUM,
+            "LOW": AlertSeverity.LOW,
+        }.get(sev_str, AlertSeverity.HIGH)
+
+        soc_store.create_alert(
+            title=R[k]["title"],
+            severity=sev_enum,
+            affected_resource=R[k]["res"],
+            detection_source="Rule Engine (CIS)",
+            category="Security Posture",
+            rule_ref=R[k]["ref"],
+            trigger_reason=R[k]["bad"],
+            related_finding_id=k,
+            risk_score=95 if sev_enum == AlertSeverity.CRITICAL else (80 if sev_enum == AlertSeverity.HIGH else 60),
+            evidence={"explanation": explain or [[R[k]["ref"], 1.0]]},
+        )
+    except Exception as _alert_err:
+        logger.warning("Failed syncing SOC alert for %s: %s", k, _alert_err)
+
 
 def decide(k: str, ok: bool, via: str) -> None:
     f = store.get_finding(k)
@@ -424,6 +457,13 @@ def decide(k: str, ok: bool, via: str) -> None:
     if not ok:
         store.update_finding(k, status="rejected")
         audit(f"REJECTED {k} via {via}, accepted risk")
+        try:
+            for task in soc_store._remediations.values():
+                if task.related_finding_id == k:
+                    task.status = RemediationStatus.ROLLED_BACK
+                    task.updated_at = time.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception as _rem_err:
+            logger.warning("Failed syncing rejected remediation for %s: %s", k, _rem_err)
         return
 
     audit(f"APPROVED {k} via {via}")
@@ -435,6 +475,22 @@ def decide(k: str, ok: bool, via: str) -> None:
 
     store.update_finding(k, status="fixed", verified=verified)
     audit(f"FIXED {k}, verified by re-checking the cloud: {verified}")
+
+    try:
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        for task in soc_store._remediations.values():
+            if task.related_finding_id == k:
+                task.status = RemediationStatus.VERIFIED if verified else RemediationStatus.FAILED
+                task.verification_state = VerificationState.PASS if verified else VerificationState.FAIL
+                task.verified_at = now_str
+                task.updated_at = now_str
+                task.verification_evidence = {
+                    "verified_by": "independent_recheck",
+                    "check_passed": verified,
+                    "resource": R[k]["res"],
+                }
+    except Exception as _rem_err:
+        logger.warning("Failed syncing approved remediation for %s: %s", k, _rem_err)
 
 
 # ---- Scanner Loop ----
@@ -622,6 +678,7 @@ context: Dict[str, Any] = {
     "emit": emit,
     "ml_check": ml_check,
     "iam_graph": iam_graph,
+    "soc_store": soc_store,
     "clients": {"iam": iam, "s3": s3, "ec2": ec2, "ct": ct},
 }
 
@@ -635,6 +692,7 @@ register_replay_api(app, pipeline)
 
 register_graph_api(app, iam_graph, {"iam": iam, "s3": s3, "ec2": ec2, "ct": ct})
 register_scenarios_api(app, scenario_session_manager, store)
+register_soc_api(app, soc_store, R)
 
 
 def run_server() -> None:

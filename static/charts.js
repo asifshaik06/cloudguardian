@@ -76,8 +76,8 @@ B.iam_graph=function(D){
    formatter:p=>{
     if(p.dataType=="node"){
      const d=p.data;
-     const adm=d.is_admin?'<br><span style="color:var(--bad)">★ AdministratorAccess</span>':'';
-     const sens=d.is_sensitive?'<br><span style="color:var(--wr)">⚠ Sensitive Asset</span>':'';
+     const adm=d.is_admin?'<br><span style="color:var(--bad)">[ADMIN] AdministratorAccess</span>':'';
+     const sens=d.is_sensitive?'<br><span style="color:var(--wr)">[SENSITIVE] Sensitive Asset</span>':'';
      const path=d.in_attack_path?'<br><span style="color:var(--bad)">● Active Attack Path Node</span>':'';
      return`<b>${esc(d.name)}</b><br><span style="color:${mu}">Type:</span> ${esc(d.value)}<br><span style="color:${mu}">ARN:</span> <code style="font-size:10px">${esc(d.arn||d.id)}</code>${adm}${sens}${path}<br><span style="color:${mu};font-size:10px">Click node to inspect capabilities</span>`;
     }
@@ -142,8 +142,8 @@ B.scenario_graph=function(D){
    formatter:p=>{
     if(p.dataType=="node"){
      const d=p.data;
-     const adm=d.is_admin?'<br><span style="color:var(--bad)">★ AdministratorAccess</span>':'';
-     const sens=d.is_sensitive?'<br><span style="color:var(--wr)">⚠ Sensitive Asset</span>':'';
+     const adm=d.is_admin?'<br><span style="color:var(--bad)">[ADMIN] AdministratorAccess</span>':'';
+     const sens=d.is_sensitive?'<br><span style="color:var(--wr)">[SENSITIVE] Sensitive Asset</span>':'';
      const path=d.in_attack_path?'<br><span style="color:var(--bad)">● Active Attack Path Node</span>':'';
      return`<b>${esc(d.name)}</b><br><span style="color:${mu}">Type:</span> ${esc(d.value)}<br><span style="color:${mu}">ARN:</span> <code style="font-size:10px">${esc(d.arn||d.id)}</code>${adm}${sens}${path}<br><span style="color:${mu};font-size:10px">Click node to inspect details</span>`;
     }

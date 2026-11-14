@@ -43,6 +43,20 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:10
 .draw{stroke-dasharray:1}.pop{transform-box:fill-box;transform-origin:center}.rc{transition:stroke-dasharray .9s cubic-bezier(.2,.7,.2,1)}
 .anim{animation:fade .28s ease-out}.anim .pop{animation:pop .5s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i)*90ms + .4s)}.anim .draw{animation:draw .8s ease-out both;animation-delay:calc(var(--i)*90ms)}.anim .gx,.enter .gx,.drawer.open .gx{animation:sx .7s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i)*80ms)}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}}@keyframes sx{from{transform:scaleX(0)}}@keyframes pop{from{transform:scale(0)}}@keyframes draw{from{stroke-dashoffset:1}}@keyframes slide{from{opacity:0;transform:translateY(10px)}}@keyframes flash{from{background:var(--fl)}}@keyframes pulse{0%{box-shadow:0 0 0 0 var(--oka)}100%{box-shadow:0 0 0 8px transparent}}@keyframes scan{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}@keyframes sk{50%{opacity:.5}}
+.tg.crit{background:rgba(229,72,77,.18);color:var(--bad);border:1px solid var(--bad)}
+.tg.high{background:rgba(217,160,47,.18);color:var(--wr);border:1px solid var(--wr)}
+.tg.med{background:rgba(76,141,255,.18);color:var(--ac);border:1px solid var(--ac)}
+.tg.pass{background:rgba(63,178,127,.18);color:var(--ok);border:1px solid var(--ok)}
+.tg.fail{background:rgba(229,72,77,.18);color:var(--bad);border:1px solid var(--bad)}
+.flow-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:1100px){.flow-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.flow-grid{grid-template-columns:1fr}}
+.flow-card{background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px;cursor:pointer;transition:border-color .15s,background .15s}
+.flow-card:hover{border-color:var(--ac)}
+.flow-card.active{background:var(--fl);border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}
+.diff-view{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:768px){.diff-view{grid-template-columns:1fr}}
+.step-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;background:var(--sf2);border-radius:6px;border:1px solid var(--ln);margin-bottom:16px}
 @media(max-width:1100px){.g3{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.span2{grid-column:auto}}
 @media(max-width:1024px){:root{--pad:16px}.shell{grid-template-columns:minmax(0,1fr)}.side{position:fixed;left:0;top:0;width:240px;z-index:30;transform:translateX(-100%);visibility:hidden;transition:transform .2s ease,visibility .2s}body.navopen .side{transform:none;visibility:visible}.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}body.navopen .scrim{display:block}.menu{display:inline-flex}.bar{flex-wrap:wrap}.sq{order:3;flex-basis:100%;max-width:none;margin:0}.g2,.cols2,.cmp{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.g3,.kpis{grid-template-columns:minmax(0,1fr)}.pipe{grid-template-columns:repeat(2,minmax(0,1fr))}.stg{border-bottom:1px solid var(--ln)}.live span{display:none}.feed .ev{grid-template-columns:64px 1fr}}
@@ -58,8 +72,36 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:10
 <script>
 const $=i=>document.getElementById(i);
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const IC={findings:'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>',events:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',overview:'<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/>',graph:'<circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="8.5" y1="7.5" x2="10.5" y2="15.5"/><line x1="15.5" y1="7.5" x2="13.5" y2="15.5"/><line x1="9" y1="6" x2="15" y2="6"/>',lab:'<path d="M10 2v7.31L4.14 19.3A2 2 0 0 0 6 22h12a2 2 0 0 0 1.86-2.7L14 9.31V2"/><path d="M8.5 2h7M7 16h10"/>',inventory:'<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/>',threats:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',response:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',audit:'<path d="M5 6h14M5 12h14M5 18h9"/>'};
-const PAGES=[["overview","Overview"],["findings","Findings"],["events","Event viewer"],["graph","IAM Attack Graph"],["lab","Simulation Lab"],["threats","Detection and XAI"],["inventory","Inventory and posture"],["response","Response queue"],["audit","Audit and evaluation"]];
+const IC={
+  overview:'<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/>',
+  alerts:'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  findings:'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>',
+  incidents:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="1"/><line x1="12" y1="7" x2="12" y2="9"/>',
+  graph:'<circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="8.5" y1="7.5" x2="10.5" y2="15.5"/><line x1="15.5" y1="7.5" x2="13.5" y2="15.5"/><line x1="9" y1="6" x2="15" y2="6"/>',
+  lab:'<path d="M10 2v7.31L4.14 19.3A2 2 0 0 0 6 22h12a2 2 0 0 0 1.86-2.7L14 9.31V2"/><path d="M8.5 2h7M7 16h10"/>',
+  remediation:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  inventory:'<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/>',
+  threats:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  events:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  audit:'<path d="M5 6h14M5 12h14M5 18h9"/>',
+  architecture:'<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  demo:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polygon points="10 8 16 10 10 12 10 8" fill="currentColor"/>'
+};
+const PAGES=[
+  ["overview","Overview"],
+  ["alerts","Alerts"],
+  ["findings","Findings"],
+  ["incidents","Incidents"],
+  ["graph","IAM Attack Graph"],
+  ["lab","Simulation Lab"],
+  ["remediation","Remediation"],
+  ["inventory","Inventory and posture"],
+  ["threats","Detection and XAI"],
+  ["events","Event viewer"],
+  ["audit","Audit and evaluation"],
+  ["architecture","Architecture & Viva"],
+  ["demo","Guided Demo"]
+];
 const NAMES={zscore:"Z-score",isolation_forest:"Isolation Forest",lof:"LocalOutlierFactor",ocsvm:"OneClassSVM"};
 const MET=[["precision","Precision"],["recall","Recall"],["f1","F1"],["pr_auc","PR-AUC"]],COL=["var(--c1)","var(--c2)","var(--c3)","var(--c4)"];
 let S={resources:[],findings:[],events:[],audit:[],evidence:{},score:100,mode:"",account:"",region:"",polls:0,latency:0,checked:"",video:""},ML={results:{},card:{},multi:"",top:[]},AU={rows:[],chain_ok:true,count:0},DS=[],RU=[],GRAPH={nodes:[],links:[],categories:[]},ATTACK_PATHS={},BLAST_REPORT=null,SEL_PRINCIPAL="user/intern-dev",PREV={},SEEN=new Set(),FSEEN=new Set(),SIG="",BOOT=false;
@@ -106,7 +148,17 @@ function evalTable(){const r=ML.results,ks=Object.keys(NAMES).filter(k=>r[k]);if
  return`<div class="wrap"><table class="tbl"><tr><th>Detector</th><th>Controlled F1 (synthetic)</th><th>False alarms per hour</th><th>Real attack windows flagged</th><th>flaws.cloud alert rate</th></tr>${ks.map((k,i)=>{const c=r[k].controlled,nr=r[k].new_real_recall||{},t=Object.values(nr).reduce((a,v)=>a+v.windows,0),h=Math.round(Object.values(nr).reduce((a,v)=>a+v.windows*v.recall,0)),o=r[k].old_real_unlabelled;
  return`<tr><td>${NAMES[k]}</td><td style="min-width:140px">${c.f1}<div class="bt"><i class="gx" style="width:${c.f1*100}%;--i:${i}"></i></div></td><td>${c.false_alarms_per_hour}</td><td>${h} of ${t}</td><td>${o?(o.alert_rate*100).toFixed(1)+"%":"n/a"}</td></tr>`}).join("")}</table></div>`}
 const V={
-overview(){return Views.overview()},findings(){return Views.findings()},events(){return Views.events()},graph(){return Views.graph()},lab(){return Views.lab()},
+overview(){return Views.overview()},
+alerts(){return Views.alerts()},
+findings(){return Views.findings()},
+incidents(){return Views.incidents()},
+events(){return Views.events()},
+graph(){return Views.graph()},
+lab(){return Views.lab()},
+remediation(){return Views.remediation()},
+response(){return Views.remediation()},
+architecture(){return Views.architecture()},
+demo(){return Views.demo()},
 inventory(){const ev=esc(JSON.stringify(S.evidence,null,2)).replace(/&quot;([^&]*?)&quot;:/g,'<span class="k">&quot;$1&quot;:</span>');
  return`<section class="panel"><div class="ph"><span class="pt">Resources</span></div><div class="wrap"><table class="tbl"><tr><th>Resource</th><th>Description</th><th>State</th><th>Simulated attack</th></tr>${S.resources.map(r=>`<tr><td>${esc(r.name)}</td><td class="mu">${esc(r.desc)}</td><td>${tg(r.ok?r.good:r.badtxt,r.ok?"ok":"bad")}</td><td class="mu">${esc(r.attack)}</td></tr>`).join("")}</table></div></section>
  <section class="panel mt"><div class="ph"><span class="pt">Security rules</span></div><div class="wrap"><table class="tbl"><tr><th>Resource</th><th>Rule</th><th>Reference</th><th>Severity</th><th>Status</th></tr>${RU.map(u=>{const ok=(S.resources.find(r=>r.id==u.id)||{ok:u.ok}).ok;return`<tr><td>${esc(u.name)}</td><td>${esc(u.title)}</td><td class="mu">${esc(u.ref)}</td><td>${esc(u.sev)}</td><td>${tg(ok?"Pass":"Fail",ok?"ok":"bad")}</td></tr>`}).join("")}</table></div></section>

@@ -735,8 +735,8 @@ class IAMCapabilityGraph:
                         f"<b>{data.get('name', n_id)}</b><br/>"
                         f"Type: {data.get('type')}<br/>"
                         f"ARN: {data.get('arn', n_id)}<br/>"
-                        f"{'★ Administrator<br/>' if is_adm else ''}"
-                        f"{'⚠ Sensitive Asset<br/>' if is_sens else ''}"
+                        f"{'[ADMIN] Administrator<br/>' if is_adm else ''}"
+                        f"{'[SENSITIVE] Sensitive Asset<br/>' if is_sens else ''}"
                     )
                 },
             }
