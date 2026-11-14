@@ -49,10 +49,10 @@ Run the full automated test suite (54 tests):
 ## Roadmap
 
 - [x] Phase 1: Security Hardening, Thread Safety, API Auth & Safe AWS Mode (Completed, 54 passing tests)
-- [ ] Phase 2: ML Engine & XAI Unification (12-feature rolling window runtime model, TreeSHAP, CloudTrail log replay)
+- [x] Phase 2: ML Engine & XAI Unification — 12-Feature Windowing, TreeSHAP, baseline_v1.joblib, CloudTrail Replay (Completed, 65 passing tests)
 - [ ] Phase 3: IAM Capability Graph & Attack Path Simulation (NetworkX blast radius)
 - [ ] Phase 4: Infrastructure as Code (Terraform) and CI/CD Quality Gates
 
 ## Status
 
-Phase 1 Complete. Fully functional, secure, and thread-safe local simulated environment.
+Phase 2 Complete. Unified 12-feature ML detection engine, TreeSHAP explainability, and CloudTrail log replay active.

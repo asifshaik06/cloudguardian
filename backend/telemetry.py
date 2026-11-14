@@ -58,9 +58,31 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
     MODEL = g["MODEL"]
     CTRY = g["CTRY"]
 
-    THR = float(-MODEL.offset_)  # Isolation Forest threshold
+    detector = g.get("detector")
+    if detector and getattr(detector, "thresholds", None):
+        THR = float(detector.thresholds.get("isolation_forest", 0.610))
+    else:
+        THR = float(-MODEL.offset_) if hasattr(MODEL, "offset_") else 0.610
 
     def calc_score(hour: int, country: str, calls: int) -> float:
+        if detector:
+            # Score synthetic baseline through 12-feature detector
+            feat = {
+                "call_count": float(calls),
+                "call_velocity": 1.0,
+                "error_ratio": 0.0,
+                "unique_services": 1.0,
+                "unique_events": 1.0,
+                "enumeration_ratio": 0.2,
+                "sensitive_count": 0.0,
+                "iam_change_count": 0.0,
+                "first_service_ratio": 0.0,
+                "first_ip": 0.0,
+                "off_hours": 0.0 if (8 <= hour <= 18) else 1.0,
+                "event_entropy": 0.5,
+            }
+            res = detector.score_window(feat)
+            return float(res["score"])
         country_code = CTRY.get(country, 0)
         x = np.array([[hour, country_code, calls]])
         return float(-MODEL.score_samples(x)[0])

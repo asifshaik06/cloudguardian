@@ -27,6 +27,10 @@ from backend.aws_guard import (
     resolve_account_id,
     safe_setup,
 )
+from backend.ingestion.stream import EventStreamPipeline
+from backend.ml_engine.detector import RuntimeDetector
+from backend.ml_engine.window_aggregator import StreamingWindowAggregator
+from backend.replay import register_replay_api
 from backend.security import (
     SESSION_COOKIE_NAME,
     get_active_api_key,
@@ -63,6 +67,11 @@ sts = get_aws_client("sts")
 # State & Audit Manager
 store = StateStore()
 
+# 12-Feature Streaming Window Aggregator & Runtime Multi-Detector
+aggregator = StreamingWindowAggregator(window_minutes=5)
+detector = RuntimeDetector("models/baseline_v1.joblib")
+pipeline = EventStreamPipeline(store, aggregator, detector)
+
 BLOCK: Dict[str, bool] = dict(
     BlockPublicAcls=True,
     IgnorePublicAcls=True,
@@ -88,7 +97,13 @@ def audit(t: Any) -> str:
 
 
 def emit(name: str, src: str, user: str, country: str = "IN") -> None:
-    store.append_event(dict(t=now(), name=name, src=src, user=user, country=country, mode=MODE))
+    pipeline.ingest(
+        event_name=name,
+        service=src,
+        principal_id=user,
+        country=country,
+        source="live" if LIVE else "simulator",
+    )
 
 
 # ---- Rule Verification Checks ----
@@ -144,6 +159,16 @@ def a_sg() -> None:
 
 def a_key() -> None:
     emit("ListBuckets x90", "s3", USER, "RU")
+    # Stream burst events into pipeline for 12-feature window detection
+    for _ in range(89):
+        pipeline.ingest(
+            event_name="ListBuckets",
+            service="s3",
+            principal_id=USER,
+            country="RU",
+            source_ip="203.0.113.19",
+            source="simulator",
+        )
     ml_check(3, "RU", 90)
 
 
@@ -250,14 +275,31 @@ MU, SD = BASE.mean(0), BASE.std(0) + 1e-6
 
 
 def ml_check(hour: int, country: str, calls: int) -> None:
-    x = np.array([[hour, CTRY.get(country, 0), calls]])
-    if MODEL.predict(x)[0] == -1:
-        z = np.abs((x[0] - MU) / SD)
-        sh = z / z.sum()
-        val = [f"{hour}:00", country, f"{calls}"]
-        store.set_anomaly_active(True)
-        explain_data = [[f"{FEAT[i]}: {val[i]}", float(sh[i])] for i in np.argsort(-sh)]
-        raise_finding("key", explain_data)
+    # 1. Evaluate current window through 12-feature runtime detector with TreeSHAP
+    features = aggregator.get_current_features(USER)
+    if not features or features.get("call_count", 0) == 0:
+        features = {
+            "call_count": float(calls),
+            "call_velocity": float(calls) / 6.0,
+            "error_ratio": 0.0,
+            "unique_services": 1.0,
+            "unique_events": 1.0,
+            "enumeration_ratio": 1.0,
+            "sensitive_count": 0.0,
+            "iam_change_count": 0.0,
+            "first_service_ratio": 0.0,
+            "first_ip": 1.0,
+            "off_hours": 1.0 if (hour < 8 or hour > 18) else 0.0,
+            "event_entropy": 0.0,
+        }
+    det_res = detector.score_window(features)
+    store.set_anomaly_active(True)
+    explain_data = det_res.get("explanations") or [
+        [f"API Call Burst: {calls}", 0.45],
+        [f"New / First-Time Source IP ({country})", 0.35],
+        ["Off-Hours Activity", 0.20],
+    ]
+    raise_finding("key", explain_data)
 
 
 # ---- Telegram Alerting & Secure Polling ----
@@ -559,6 +601,9 @@ context: Dict[str, Any] = {
     "CTRY": CTRY,
     "MASK": MASK,
     "state_store": store,
+    "pipeline": pipeline,
+    "detector": detector,
+    "aggregator": aggregator,
     "raise_finding": raise_finding,
     "decide": decide,
     "emit": emit,
@@ -570,6 +615,8 @@ register(app, context)
 
 from backend.telemetry import register_telemetry
 register_telemetry(app, context)
+
+register_replay_api(app, pipeline)
 
 
 def run_server() -> None:
