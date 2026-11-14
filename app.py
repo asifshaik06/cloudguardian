@@ -522,14 +522,11 @@ def state() -> Any:
         for k, r in R.items()
     ]
     findings_map = store.get_findings_map()
-    fs = [
-        dict(
-            id=k,
-            **{x: R[k][x] for x in ("title", "sev", "ref", "what", "why", "fixtxt")},
-            **f,
-        )
-        for k, f in findings_map.items()
-    ]
+    fs = []
+    for k, f in findings_map.items():
+        base = {x: R[k][x] for x in ("title", "sev", "ref", "what", "why", "fixtxt")} if k in R else {}
+        item = {"id": k, **base, **f}
+        fs.append(item)
     polls_data = store.get_polls()
 
     return jsonify(
