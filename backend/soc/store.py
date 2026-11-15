@@ -233,13 +233,26 @@ class SOCStore:
         title: str,
         severity: IncidentSeverity,
         summary: str,
+        description: str = "",
         affected_assets: Optional[List[str]] = None,
         linked_alert_ids: Optional[List[str]] = None,
         linked_finding_ids: Optional[List[str]] = None,
         lead_responder: str = "SOC Lead Responder",
+        escalation_evidence: Optional[Dict[str, Any]] = None,
+        detection_source: str = "",
+        mitre_technique: str = "",
+        region: str = "",
+        account_id: str = "",
     ) -> IncidentRecord:
         """Promote alerts/findings to a formal Security Incident."""
         with self._lock:
+            # Duplicate escalation prevention: if any linked alert already has an incident, return it
+            for a_id in (linked_alert_ids or []):
+                if a_id in self._alerts:
+                    existing_inc_id = self._alerts[a_id].incident_id
+                    if existing_inc_id and existing_inc_id in self._incidents:
+                        return self._incidents[existing_inc_id].model_copy(deep=True)
+
             self._incident_seq += 1
             inc_id = f"INC-{self._incident_seq:04d}"
             now_str = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -252,10 +265,16 @@ class SOCStore:
                 created_at=now_str,
                 updated_at=now_str,
                 lead_responder=lead_responder,
+                description=description,
                 summary=summary,
                 affected_assets=affected_assets or [],
                 linked_alert_ids=linked_alert_ids or [],
                 linked_finding_ids=linked_finding_ids or [],
+                escalation_evidence=escalation_evidence,
+                detection_source=detection_source,
+                mitre_technique=mitre_technique,
+                region=region,
+                account_id=account_id,
                 timeline=[
                     {"timestamp": now_str, "event": f"Incident created and triaged by {lead_responder}."}
                 ],
@@ -284,10 +303,13 @@ class SOCStore:
         self,
         severity: Optional[str] = None,
         status: Optional[str] = None,
+        exclude_closed: bool = False,
     ) -> List[Dict[str, Any]]:
         with self._lock:
             incidents = [i.model_copy(deep=True) for i in self._incidents.values()]
 
+        if exclude_closed:
+            incidents = [i for i in incidents if i.status != IncidentStatus.CLOSED]
         if severity:
             incidents = [i for i in incidents if i.severity.value.lower() == severity.lower()]
         if status:

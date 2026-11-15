@@ -97,6 +97,7 @@ class IncidentRecord(BaseModel):
     created_at: str = Field(default_factory=lambda: time.strftime("%Y-%m-%d %H:%M:%S"))
     updated_at: str = Field(default_factory=lambda: time.strftime("%Y-%m-%d %H:%M:%S"))
     lead_responder: str = "Security Operations Team"
+    description: str = ""
     summary: str = ""
     investigation_notes: List[Dict[str, Any]] = Field(default_factory=list)
     affected_assets: List[str] = Field(default_factory=list)
@@ -106,6 +107,12 @@ class IncidentRecord(BaseModel):
     timeline: List[Dict[str, Any]] = Field(default_factory=list)
     containment_evidence: Optional[Dict[str, Any]] = None
     closure_reason: Optional[str] = None
+    # Enriched escalation context
+    escalation_evidence: Optional[Dict[str, Any]] = None
+    detection_source: str = ""
+    mitre_technique: str = ""
+    region: str = ""
+    account_id: str = ""
 
 
 class RemediationTask(BaseModel):

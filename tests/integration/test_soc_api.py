@@ -66,7 +66,9 @@ def test_alert_lifecycle_actions_api(client, auth_headers):
 
 
 def test_alert_escalation_to_incident_api(client, auth_headers):
-    """Test escalating an alert into a new incident."""
+    """Test escalating an alert into an incident (duplicate prevention for seeded data)."""
+    # ALT-0001 is already linked to INC-0001 by seed data.
+    # Duplicate escalation must return the existing incident (200), not create a new one.
     resp = client.post(
         "/api/alerts/ALT-0001/escalate",
         headers=auth_headers,
@@ -77,11 +79,30 @@ def test_alert_escalation_to_incident_api(client, auth_headers):
             "lead_responder": "Incident Commander",
         },
     )
-    assert resp.status_code == 201
+    assert resp.status_code == 200  # Duplicate returns existing
     data = resp.get_json()
     assert "incident" in data
-    assert data["incident"]["id"].startswith("INC-")
-    assert "ALT-0001" in data["incident"]["linked_alert_ids"]
+    assert data["incident"]["id"] == "INC-0001"  # Returns the existing linked incident
+    assert data.get("duplicate") is True
+
+    # Now test creating a NEW incident from an unescalated alert
+    from backend.soc.store import soc_store
+    from backend.soc.models import AlertSeverity
+    fresh_alert = soc_store.create_alert(
+        title="Unrestricted Inbound SSH Fresh Test",
+        severity=AlertSeverity.HIGH,
+        affected_resource="ec2/security-group/sg-fresh-soc-test",
+        detection_source="Rule Engine (CIS 5.2)",
+    )
+    resp2 = client.post(
+        f"/api/alerts/{fresh_alert.id}/escalate",
+        headers=auth_headers,
+        json={"title": "SSH Exposure Incident"},
+    )
+    assert resp2.status_code == 201
+    data2 = resp2.get_json()
+    assert data2["incident"]["id"].startswith("INC-")
+    assert fresh_alert.id in data2["incident"]["linked_alert_ids"]
 
 
 def test_alert_stats_api(client):

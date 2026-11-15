@@ -105,25 +105,109 @@ def register_soc_api(
     @app.post("/api/alerts/<alert_id>/escalate")
     @require_auth
     def escalate_alert_to_incident(alert_id: str) -> Any:
-        """Promote an alert into a formal Security Incident."""
+        """Promote an alert into a formal Security Incident with full context preservation."""
         alert = s_store.get_alert(alert_id)
         if not alert:
             return jsonify({"error": f"Alert '{alert_id}' not found."}), 404
 
+        # Duplicate escalation prevention — check if already escalated
+        if alert.incident_id:
+            existing = s_store.get_incident(alert.incident_id)
+            if existing:
+                return jsonify({
+                    "message": f"Alert '{alert_id}' is already linked to incident '{alert.incident_id}'.",
+                    "incident": existing.model_dump(),
+                    "duplicate": True,
+                }), 200
+
         payload = request.get_json(silent=True) or {}
-        title = payload.get("title") or f"Incident: {alert.title}"
-        summary = payload.get("summary") or f"Escalated from alert {alert_id} regarding {alert.affected_resource}."
         user = payload.get("user", "SOC Triage Lead")
+
+        # Extract resource short name for title generation
+        resource_name = alert.affected_resource.split("/")[-1] if alert.affected_resource else "Unknown"
+
+        # Generate meaningful title from alert data (caller can override)
+        title = payload.get("title") or f"{alert.title} — {resource_name}"
+
+        # Generate meaningful description from alert context
+        description_parts = []
+        if alert.trigger_reason:
+            description_parts.append(f"Detection Trigger: {alert.trigger_reason}")
+        if alert.detection_source:
+            description_parts.append(f"Detected by: {alert.detection_source}")
+        if alert.rule_ref:
+            description_parts.append(f"Rule Reference: {alert.rule_ref}")
+        if alert.category:
+            description_parts.append(f"Category: {alert.category}")
+        description = payload.get("description") or "\n".join(description_parts)
+
+        # Generate meaningful summary from actual alert evidence
+        summary_parts = [f"Security incident escalated from alert {alert_id}."]
+        if alert.trigger_reason:
+            summary_parts.append(f"Root Cause: {alert.trigger_reason}")
+        summary_parts.append(f"Affected Resource: {alert.affected_resource}")
+        if alert.risk_score:
+            summary_parts.append(f"Risk Score: {alert.risk_score}/100")
+        if alert.ml_anomaly_score is not None:
+            summary_parts.append(f"ML Anomaly Score: {alert.ml_anomaly_score:.3f}")
+        if alert.evidence:
+            key_evidence = ", ".join(f"{k}={v}" for k, v in list(alert.evidence.items())[:5])
+            summary_parts.append(f"Key Evidence: {key_evidence}")
+        summary = payload.get("summary") or " ".join(summary_parts)
+
+        # Build escalation evidence snapshot (deep copy of all alert context at escalation time)
+        escalation_evidence = {
+            "source_alert_id": alert_id,
+            "alert_title": alert.title,
+            "alert_severity": alert.severity.value,
+            "alert_status": alert.status.value,
+            "alert_timestamp": alert.timestamp,
+            "detection_source": alert.detection_source,
+            "category": alert.category,
+            "rule_ref": alert.rule_ref,
+            "trigger_reason": alert.trigger_reason,
+            "risk_score": alert.risk_score,
+            "affected_resource": alert.affected_resource,
+            "account_id": alert.account_id,
+            "environment": alert.environment,
+            "evidence": alert.evidence,
+            "escalated_by": user,
+            "escalated_at": __import__("time").strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        if alert.raw_event:
+            escalation_evidence["raw_event"] = alert.raw_event
+        if alert.ml_anomaly_score is not None:
+            escalation_evidence["ml_anomaly_score"] = alert.ml_anomaly_score
+        if alert.ml_explanation:
+            escalation_evidence["ml_explanation"] = alert.ml_explanation
+        if alert.principal_id:
+            escalation_evidence["principal_id"] = alert.principal_id
+        if alert.attack_path_id:
+            escalation_evidence["attack_path_id"] = alert.attack_path_id
+
+        # Extract MITRE technique from rule_ref if present
+        mitre = ""
+        if alert.rule_ref:
+            import re
+            mitre_match = re.search(r"(MITRE\s+T\d+(?:\.\d+)?)", alert.rule_ref)
+            if mitre_match:
+                mitre = mitre_match.group(1)
 
         inc_sev = IncidentSeverity.CRITICAL if alert.severity in (AlertSeverity.CRITICAL, AlertSeverity.HIGH) else IncidentSeverity.MEDIUM
         incident = s_store.create_incident(
             title=title,
             severity=inc_sev,
             summary=summary,
+            description=description,
             affected_assets=[alert.affected_resource],
             linked_alert_ids=[alert_id],
             linked_finding_ids=[alert.related_finding_id] if alert.related_finding_id else [],
             lead_responder=user,
+            escalation_evidence=escalation_evidence,
+            detection_source=alert.detection_source,
+            mitre_technique=mitre,
+            region="us-east-1",
+            account_id=alert.account_id,
         )
 
         return jsonify({
@@ -142,22 +226,71 @@ def register_soc_api(
 
     @app.get("/api/incidents")
     def list_incidents() -> Any:
-        """List all incidents with optional severity/status filters."""
+        """List incidents with optional severity/status/view filters."""
         severity = request.args.get("severity")
         status = request.args.get("status")
-        incidents = s_store.list_incidents(severity=severity, status=status)
+        view = request.args.get("view", "active")  # "active" excludes Closed; "all" includes everything
+
+        exclude_closed = (view == "active") and not status  # Don't double-filter if explicit status is given
+        incidents = s_store.list_incidents(severity=severity, status=status, exclude_closed=exclude_closed)
+
+        # Also compute total and active counts for the frontend
+        all_incidents = s_store.list_incidents()
+        active_count = sum(1 for i in all_incidents if i.get("status") != "Closed")
+        total_count = len(all_incidents)
+
         return jsonify({
             "total": len(incidents),
+            "active_count": active_count,
+            "total_count": total_count,
             "incidents": incidents,
         })
 
     @app.get("/api/incidents/<incident_id>")
     def get_incident_detail(incident_id: str) -> Any:
-        """Get full incident details with timeline and investigation notes."""
+        """Get full incident details enriched with linked alert, finding, and remediation context."""
         inc = s_store.get_incident(incident_id)
         if not inc:
             return jsonify({"error": f"Incident '{incident_id}' not found."}), 404
-        return jsonify(inc.model_dump())
+
+        data = inc.model_dump()
+
+        # Enrich with linked alert details
+        linked_alerts_detail = []
+        for a_id in inc.linked_alert_ids:
+            alert = s_store.get_alert(a_id)
+            if alert:
+                linked_alerts_detail.append({
+                    "id": alert.id,
+                    "title": alert.title,
+                    "severity": alert.severity.value,
+                    "affected_resource": alert.affected_resource,
+                    "detection_source": alert.detection_source,
+                    "category": alert.category,
+                    "timestamp": alert.timestamp,
+                    "rule_ref": alert.rule_ref,
+                    "trigger_reason": alert.trigger_reason,
+                    "risk_score": alert.risk_score,
+                    "evidence": alert.evidence,
+                })
+        data["linked_alerts_detail"] = linked_alerts_detail
+
+        # Enrich with linked remediation details
+        linked_remediations_detail = []
+        for r_id in inc.linked_remediation_ids:
+            rem = s_store.get_remediation_task(r_id)
+            if rem:
+                linked_remediations_detail.append({
+                    "id": rem.id,
+                    "title": rem.title,
+                    "status": rem.status.value,
+                    "verification_state": rem.verification_state.value,
+                    "recommended_action": rem.recommended_action,
+                    "affected_resource": rem.affected_resource,
+                })
+        data["linked_remediations_detail"] = linked_remediations_detail
+
+        return jsonify(data)
 
     @app.post("/api/incidents")
     @require_auth

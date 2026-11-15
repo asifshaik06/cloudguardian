@@ -1203,10 +1203,10 @@ function alerts() {
   `;
 }
 
-let INCIDENTS_DATA = { incidents: [], total: 0 }, SELECTED_INCIDENT_ID = null, INCIDENTS_BOOT = false;
+let INCIDENTS_DATA = { incidents: [], total: 0, active_count: 0, total_count: 0 }, SELECTED_INCIDENT_ID = null, INCIDENTS_BOOT = false, INC_VIEW = "active";
 
 async function loadIncidents() {
-  const data = await _get("/api/incidents");
+  const data = await _get(`/api/incidents?view=${INC_VIEW}`);
   if (data) INCIDENTS_DATA = data;
   INCIDENTS_BOOT = true;
   if (route() === "incidents") render();
@@ -1221,6 +1221,8 @@ function incidents() {
   const items = INCIDENTS_DATA.incidents || [];
   const selected = items.find(i => i.id === SELECTED_INCIDENT_ID) || items[0] || null;
   const STAGES = ["Triage", "Investigation", "Containment", "Remediation", "Verification", "Closed"];
+  const activeCount = INCIDENTS_DATA.active_count || 0;
+  const totalCount = INCIDENTS_DATA.total_count || 0;
 
   return `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:12px">
@@ -1228,7 +1230,9 @@ function incidents() {
         <h2 style="margin:0;font-size:18px;font-weight:600">Security Incident Management</h2>
         <div class="mu" style="font-size:12px;margin-top:2px">Formal SOC incident coordination with phased response: Triage -> Investigation -> Containment -> Remediation -> Verification -> Closed.</div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn sm ${INC_VIEW==='active'?'primary':''}" id="btn-inc-view-active">Active (${activeCount})</button>
+        <button class="btn sm ${INC_VIEW==='all'?'primary':''}" id="btn-inc-view-all">All (${totalCount})</button>
         <button class="btn sm" id="btn-refresh-incidents">Refresh</button>
         <button class="btn sm primary" id="btn-create-incident-modal">+ Create Incident</button>
       </div>
@@ -1238,7 +1242,7 @@ function incidents() {
       <!-- Incidents List -->
       <section class="panel">
         <div class="ph">
-          <span class="pt">Active Incidents (${items.length})</span>
+          <span class="pt">${INC_VIEW === 'active' ? 'Active' : 'All'} Incidents (${items.length})</span>
           <span class="mu">Click to open workspace</span>
         </div>
         <div class="wrap">
@@ -1254,12 +1258,12 @@ function incidents() {
                 <td>${tg(inc.status, inc.status === 'Closed' ? 'ok' : inc.status === 'Containment' ? 'crit' : 'wr')}</td>
                 <td style="font-size:11px" class="mu">${esc(inc.lead_responder)}</td>
               </tr>
-            `).join("") : `<tr><td colspan="5">${none("No active incidents. Escalate an alert to create one.")}</td></tr>`}
+            `).join("") : `<tr><td colspan="5">${none("No " + (INC_VIEW === 'active' ? 'active ' : '') + "incidents. Escalate an alert to create one.")}</td></tr>`}
           </table>
         </div>
       </section>
 
-      <!-- Incident Workspace -->
+      <!-- Incident Response Workspace -->
       <section class="panel">
         <div class="ph">
           <span class="pt">Incident Response Workspace</span>
@@ -1267,10 +1271,12 @@ function incidents() {
         </div>
         ${selected ? `
           <div class="pb">
+            <!-- A: Incident Overview -->
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
               <div>
                 <h3 style="margin:0 0 4px;font-size:16px;font-weight:600">${esc(selected.title)}</h3>
                 <div class="mu mono" style="font-size:11px">Incident ID: ${esc(selected.id)} · Lead: ${esc(selected.lead_responder)}</div>
+                ${selected.account_id ? `<div class="mu" style="font-size:11px;margin-top:2px">Account: ${esc(selected.account_id)} · Region: ${esc(selected.region || 'N/A')}</div>` : ''}
               </div>
               ${tg(selected.severity, selected.severity === 'Critical' ? 'crit' : 'high')}
             </div>
@@ -1285,18 +1291,75 @@ function incidents() {
               }).join("")}
             </div>
 
+            <!-- B: Security Issue Description -->
+            ${selected.description ? `
+              <div class="lb">Security Issue Description</div>
+              <div style="font-size:12px;margin-bottom:12px;white-space:pre-line;background:var(--bg2);padding:10px;border-radius:6px;border:1px solid var(--ln)">${esc(selected.description)}</div>
+            ` : ''}
+
             <div class="lb">Incident Summary</div>
             <p style="font-size:12px;margin-bottom:12px">${esc(selected.summary)}</p>
 
+            <!-- C: Detection Evidence -->
+            ${selected.escalation_evidence ? `
+              <div class="lb">Detection Evidence</div>
+              <div style="background:var(--bg2);padding:12px;border-radius:6px;border:1px solid var(--ln);margin-bottom:12px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+                  <div><b>Detection Source:</b> ${esc(selected.escalation_evidence.detection_source || selected.detection_source || 'N/A')}</div>
+                  <div><b>Rule Ref:</b> ${esc(selected.escalation_evidence.rule_ref || 'N/A')}</div>
+                  <div><b>Risk Score:</b> ${selected.escalation_evidence.risk_score || 'N/A'}/100</div>
+                  ${selected.mitre_technique ? `<div><b>MITRE ATT&amp;CK:</b> ${esc(selected.mitre_technique)}</div>` : ''}
+                  ${selected.escalation_evidence.ml_anomaly_score !== undefined ? `<div><b>ML Anomaly Score:</b> ${Number(selected.escalation_evidence.ml_anomaly_score).toFixed(3)}</div>` : ''}
+                  <div><b>Category:</b> ${esc(selected.escalation_evidence.category || 'N/A')}</div>
+                  <div><b>Alert Timestamp:</b> ${esc(selected.escalation_evidence.alert_timestamp || 'N/A')}</div>
+                  <div><b>Escalated By:</b> ${esc(selected.escalation_evidence.escalated_by || 'N/A')}</div>
+                </div>
+                ${selected.escalation_evidence.trigger_reason ? `
+                  <div style="margin-top:10px;font-size:12px"><b>Trigger Reason:</b> ${esc(selected.escalation_evidence.trigger_reason)}</div>
+                ` : ''}
+                ${selected.escalation_evidence.evidence && Object.keys(selected.escalation_evidence.evidence).length ? `
+                  <details style="margin-top:10px">
+                    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--ac)">Evidence Payload (JSON)</summary>
+                    <pre style="font-size:11px;margin-top:6px;max-height:200px;overflow-y:auto">${esc(JSON.stringify(selected.escalation_evidence.evidence, null, 2))}</pre>
+                  </details>
+                ` : ''}
+                ${selected.escalation_evidence.ml_explanation ? `
+                  <details style="margin-top:8px">
+                    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--ac)">ML Explanation (JSON)</summary>
+                    <pre style="font-size:11px;margin-top:6px;max-height:200px;overflow-y:auto">${esc(JSON.stringify(selected.escalation_evidence.ml_explanation, null, 2))}</pre>
+                  </details>
+                ` : ''}
+                ${selected.escalation_evidence.raw_event ? `
+                  <details style="margin-top:8px">
+                    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--ac)">Raw Event (JSON)</summary>
+                    <pre style="font-size:11px;margin-top:6px;max-height:200px;overflow-y:auto">${esc(JSON.stringify(selected.escalation_evidence.raw_event, null, 2))}</pre>
+                  </details>
+                ` : ''}
+              </div>
+            ` : ''}
+
+            <!-- D: Affected Cloud Assets -->
             <div class="lb">Affected Cloud Assets (${selected.affected_assets ? selected.affected_assets.length : 0})</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
-              ${(selected.affected_assets || []).map(a => `<span class="chip" style="border-color:var(--bad)">${esc(a)}</span>`).join("") || '<span class="mu">No assets registered.</span>'}
+              ${(selected.affected_assets || []).map(a => `<a class="chip lk" href="#inventory" style="text-decoration:none;border-color:var(--bad)">${esc(a)}</a>`).join("") || '<span class="mu">No assets registered.</span>'}
             </div>
 
+            <!-- E: Linked Alerts, Findings & Remediations -->
             <div class="lb">Linked Alerts &amp; Findings</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
               ${(selected.linked_alert_ids || []).map(aid => `<a class="chip lk" href="#alerts" style="text-decoration:none">${esc(aid)}</a>`).join("")}
               ${(selected.linked_finding_ids || []).map(fid => `<a class="chip lk" href="#findings" style="text-decoration:none">Finding: ${esc(fid)}</a>`).join("")}
+              ${(selected.linked_remediation_ids || []).length ? (selected.linked_remediation_ids || []).map(rid => `<a class="chip lk" href="#remediation" style="text-decoration:none">${esc(rid)}</a>`).join("") : ''}
+            </div>
+
+            <!-- F: Cross-Module Navigation -->
+            <div class="lb">Cross-Module Links</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+              <a class="chip lk" href="#alerts" style="text-decoration:none">Alerts</a>
+              <a class="chip lk" href="#findings" style="text-decoration:none">Findings</a>
+              <a class="chip lk" href="#graph" style="text-decoration:none">IAM Attack Graph</a>
+              <a class="chip lk" href="#remediation" style="text-decoration:none">Remediation</a>
+              <a class="chip lk" href="#audit" style="text-decoration:none">Audit Trail</a>
             </div>
 
             ${selected.containment_evidence ? `
@@ -1304,6 +1367,7 @@ function incidents() {
               <pre style="font-size:11px;margin-bottom:12px">${esc(JSON.stringify(selected.containment_evidence, null, 2))}</pre>
             ` : ''}
 
+            <!-- G: Incident Timeline -->
             <div class="lb">Incident Timeline &amp; Notes (${selected.timeline ? selected.timeline.length : 0})</div>
             <div class="tl" style="max-height:140px;overflow-y:auto;margin-bottom:14px">
               ${(selected.timeline || []).map(t => `<div><span class="mu">${esc(t.timestamp)}:</span> ${esc(t.event)} ${t.user ? `<b>(${esc(t.user)})</b>` : ''}</div>`).join('')}
@@ -1315,7 +1379,7 @@ function incidents() {
               <button class="btn sm" id="btn-inc-add-note" data-id="${esc(selected.id)}">Add Note</button>
             </div>
 
-            <!-- Incident Actions -->
+            <!-- H: Incident Actions -->
             <div class="lb">Response Actions</div>
             <div class="ac" style="margin-top:8px">
               ${selected.status !== 'Closed' ? `
@@ -2018,18 +2082,21 @@ function bind(){const r=route();
       const bEsc = $$("btn-al-esc");
       if (bEsc) bEsc.onclick = () => {
         const alertId = bEsc.dataset.id;
+        const alert = (ALERTS_DATA.alerts || []).find(a => a.id === alertId);
+        const defaultTitle = alert ? alert.title : "Escalated: Alert " + alertId;
         promptModal({
           title: "Escalate Alert to Security Incident",
-          label: "Incident Title",
-          defaultValue: "Escalated: Alert " + alertId,
+          label: "Incident Title (auto-generated from alert context)",
+          defaultValue: defaultTitle,
           confirmText: "Escalate Incident",
           onConfirm: async (title) => {
             await authFetch(`/api/alerts/${alertId}/escalate`, {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ title, severity: "Critical", summary: "Formal escalation from Alert " + alertId })
+              body: JSON.stringify({ title })
             });
             showToast("Alert successfully escalated to incident!", "ok");
             loadAlerts();
+            INCIDENTS_BOOT = false;
             location.hash = "#incidents";
           }
         });
@@ -2039,6 +2106,11 @@ function bind(){const r=route();
     if (r === "incidents") {
       const bRef = $$("btn-refresh-incidents");
       if (bRef) bRef.onclick = () => loadIncidents();
+
+      const bActive = $$("btn-inc-view-active");
+      if (bActive) bActive.onclick = () => { INC_VIEW = "active"; INCIDENTS_BOOT = false; loadIncidents(); };
+      const bAll = $$("btn-inc-view-all");
+      if (bAll) bAll.onclick = () => { INC_VIEW = "all"; INCIDENTS_BOOT = false; loadIncidents(); };
 
       document.querySelectorAll("[data-select-incident]").forEach(tr => {
         tr.onclick = () => {
