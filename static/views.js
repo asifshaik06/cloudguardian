@@ -1129,7 +1129,10 @@ function alerts() {
                 <td>${tg(a.severity, a.severity === 'Critical' ? 'crit' : a.severity === 'High' ? 'high' : 'med')}</td>
                 <td><b>${esc(a.title)}</b><div class="mu" style="font-size:11px">${esc(a.detection_source)} · ${esc(a.timestamp)}</div></td>
                 <td class="mono" style="font-size:11px">${esc(a.affected_resource)}</td>
-                <td>${tg(a.status, a.status === 'Resolved' ? 'ok' : a.status === 'New' ? 'bad' : 'wr')}</td>
+                <td>
+                  ${tg(a.status, a.status === 'Resolved' ? 'ok' : a.status === 'New' ? 'bad' : 'wr')}
+                  ${a.incident_id ? `<div style="margin-top:2px"><a class="lk mono" href="#incidents" data-link-incident="${esc(a.incident_id)}" style="font-size:10px;text-decoration:none">🔗 ${esc(a.incident_id)} <span class="chip" style="font-size:9px;padding:1px 4px">${esc(a.incident_status || 'Active')}</span></a></div>` : ''}
+                </td>
               </tr>
             `).join("") : `<tr><td colspan="5">${none("No alerts match active filters.")}</td></tr>`}
           </table>
@@ -1142,38 +1145,115 @@ function alerts() {
           <span class="pt">Alert Investigation &amp; Triage</span>
           ${selected ? tg(selected.status, selected.status === 'Resolved' ? 'ok' : 'wr') : ''}
         </div>
-        ${selected ? `
+        ${selected ? (() => {
+          const isMotoSim = (selected.environment || '').toLowerCase().includes('moto') || (selected.environment || '').toLowerCase().includes('simulat');
+          return `
           <div class="pb">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+            <!-- Environment Badge & Alert Title Header -->
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
               <div>
+                <div style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-bottom:6px;${isMotoSim ? 'background:rgba(110,98,245,0.12);color:var(--pr, #6e62f5);border:1px solid rgba(110,98,245,0.3)' : 'background:rgba(255,165,0,0.12);color:#ff9800;border:1px solid rgba(255,165,0,0.3)'}">
+                  <span>${isMotoSim ? '🧪 SIMULATED ENVIRONMENT (Moto Local Cloud)' : '☁️ PRODUCTION ENVIRONMENT (Real AWS Cloud)'}</span>
+                  <span style="opacity:0.7">· Account: ${esc(selected.account_id)}</span>
+                </div>
                 <h3 style="margin:0 0 4px;font-size:15px;font-weight:600">${esc(selected.title)}</h3>
-                <div class="mu mono" style="font-size:11px">Alert ID: ${esc(selected.id)} · Account: ${esc(selected.account_id)}</div>
+                <div class="mu mono" style="font-size:11px">Alert ID: ${esc(selected.id)} · Target Resource: ${esc(selected.affected_resource)}</div>
               </div>
               ${tg(selected.severity, selected.severity === 'Critical' ? 'crit' : selected.severity === 'High' ? 'high' : 'med')}
             </div>
 
-            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px;margin-bottom:12px">
-              <div class="lb" style="margin-top:0">Trigger Explanation</div>
-              <p style="font-size:12px;margin:0 0 4px">${esc(selected.trigger_reason || 'Condition violated baseline security threshold.')}</p>
-              <div class="mu" style="font-size:11px">Detection Source: <b>${esc(selected.detection_source)}</b> · Reference: <code class="mono">${esc(selected.rule_ref || 'N/A')}</code></div>
+            <!-- Lifecycle & Linked Incident Status -->
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;background:var(--bg2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;flex-wrap:wrap">
+              <div>
+                <span style="font-size:11px;font-weight:600;color:var(--mu);margin-right:6px">Alert Status:</span>
+                ${tg(selected.status, selected.status === 'Resolved' ? 'ok' : selected.status === 'New' ? 'bad' : 'wr')}
+              </div>
+              <div style="width:1px;height:18px;background:var(--ln)"></div>
+              ${selected.incident_id ? `
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:11px;font-weight:600;color:var(--mu)">Linked Incident:</span>
+                  <a class="chip lk" href="#incidents" data-link-incident="${esc(selected.incident_id)}" style="text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px">
+                    🔗 ${esc(selected.incident_id)}
+                  </a>
+                  <span class="chip" style="font-size:11px;${selected.incident_status === 'Closed' ? 'border-color:var(--ok);color:var(--ok)' : 'border-color:var(--wr);color:var(--wr)'}">
+                    Incident Status: <b>${esc(selected.incident_status || 'Active')}</b>
+                  </span>
+                </div>
+              ` : `
+                <div style="font-size:11px" class="mu">Incident: <i>Not yet escalated</i></div>
+              `}
             </div>
 
-            ${selected.ml_anomaly_score ? `
+            <!-- Trigger Explanation & Telemetry Classification -->
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px;margin-bottom:12px">
+              <div class="lb" style="margin-top:0">Trigger Explanation &amp; Classification</div>
+              <p style="font-size:12px;margin:0 0 6px">${esc(selected.trigger_reason || 'Condition violated baseline security threshold.')}</p>
+              <div class="mu" style="font-size:11px;display:flex;gap:12px;flex-wrap:wrap">
+                <span>Detection Source: <b>${esc(selected.detection_source)}</b></span>
+                <span>Category: <b>${esc(selected.category || 'Threat Detection')}</b></span>
+                <span>Rule Ref: <code class="mono">${esc(selected.rule_ref || 'N/A')}</code></span>
+                <span>Risk Score: <b>${selected.risk_score}/100</b></span>
+              </div>
+            </div>
+
+            <!-- Isolation Forest Anomaly Scoring (XAI Engine) -->
+            ${selected.ml_anomaly_score !== null && selected.ml_anomaly_score !== undefined ? `
               <div style="background:rgba(76,141,255,0.08);border:1px solid var(--ac);border-radius:6px;padding:10px;margin-bottom:12px">
-                <div class="lb" style="margin-top:0">ML Anomaly Detector Score</div>
-                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-                  <span>Isolation Forest Anomaly Score:</span>
-                  <b>${selected.ml_anomaly_score.toFixed(3)} (Threshold: 0.650)</b>
+                <div class="lb" style="margin-top:0;display:flex;justify-content:space-between;align-items:center">
+                  <span>Isolation Forest Anomaly Scoring (XAI Engine)</span>
+                  ${selected.ml_anomaly_score >= (selected.ml_explanation?.threshold ?? 0.65) ?
+                    '<span class="chip" style="background:rgba(255,107,107,0.15);color:var(--bad);border:1px solid var(--bad);font-weight:600">ANOMALOUS (Outlier)</span>' :
+                    '<span class="chip" style="background:rgba(81,207,102,0.15);color:var(--ok);border:1px solid var(--ok);font-weight:600">NORMAL</span>'
+                  }
                 </div>
-                ${selected.ml_explanation ? `
-                  <div class="mu" style="font-size:11px;margin-top:4px">Feature Contributions:</div>
-                  <pre style="margin-top:4px;font-size:11px">${esc(JSON.stringify(selected.ml_explanation, null, 2))}</pre>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px">
+                  <div><b>Calculated Anomaly Score:</b> <span class="mono bad" style="font-size:13px;font-weight:700">${selected.ml_anomaly_score.toFixed(3)}</span></div>
+                  <div><b>Detection Threshold:</b> <span class="mono">${((selected.ml_explanation && selected.ml_explanation.threshold !== undefined) ? Number(selected.ml_explanation.threshold).toFixed(3) : "0.650")}</span></div>
+                  ${selected.ml_explanation && selected.ml_explanation.anomaly_delta ? `<div><b>Anomaly Delta:</b> <span class="mono">${esc(selected.ml_explanation.anomaly_delta)}</span></div>` : ''}
+                  <div><b>Algorithm:</b> <span class="mono">Isolation Forest (100 Trees)</span></div>
+                </div>
+                ${selected.ml_explanation && selected.ml_explanation.features ? `
+                  <div class="mu" style="font-size:11px;margin-top:6px;font-weight:600">Feature Contributions to Outlier Classification:</div>
+                  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:6px;margin:6px 0">
+                    ${Object.entries(selected.ml_explanation.features).map(([fKey, fVal]) => `
+                      <div style="background:var(--bg2);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px">
+                        <span class="mu">${esc(fKey)}:</span> <b>${esc(String(fVal))}</b>
+                      </div>
+                    `).join("")}
+                  </div>
+                  <details style="margin-top:6px">
+                    <summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--ac)">Raw Feature Contributions (JSON)</summary>
+                    <pre style="margin-top:4px;font-size:11px">${esc(JSON.stringify(selected.ml_explanation, null, 2))}</pre>
+                  </details>
                 ` : ''}
               </div>
             ` : ''}
 
-            <div class="lb">Raw Evidence &amp; Telemetry</div>
-            <pre style="max-height:160px;font-size:11px">${esc(JSON.stringify(selected.evidence || selected.raw_event || {}, null, 2))}</pre>
+            <!-- Readable Evidence Breakdown -->
+            <div class="lb">Readable Evidence Breakdown</div>
+            <div style="background:var(--bg2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;margin-bottom:8px">
+              ${Object.entries(selected.evidence || {}).length ? Object.entries(selected.evidence).map(([k, v]) => {
+                const label = k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                let displayVal = v;
+                let valClass = "";
+                if (typeof v === "boolean") {
+                  displayVal = v ? "True (Flagged Risk)" : "False (Secure / Inactive)";
+                  valClass = v ? "bad" : "ok";
+                } else if (typeof v === "object" && v !== null) {
+                  displayVal = JSON.stringify(v);
+                }
+                return `
+                  <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--ln);font-size:12px">
+                    <span class="mu"><b>${esc(label)}:</b></span>
+                    <span class="mono ${valClass}">${esc(String(displayVal))}</span>
+                  </div>
+                `;
+              }).join("") : `<div class="mu" style="font-size:12px">No structured telemetry evidence captured.</div>`}
+            </div>
+            <details style="margin-top:6px;margin-bottom:12px">
+              <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--ac)">Raw Evidence &amp; Telemetry (JSON)</summary>
+              <pre style="max-height:160px;font-size:11px;margin-top:6px">${esc(JSON.stringify(selected.evidence || selected.raw_event || {}, null, 2))}</pre>
+            </details>
 
             <div class="lb">Audit Timeline (${selected.timeline ? selected.timeline.length : 0})</div>
             <div class="tl" style="max-height:140px;overflow-y:auto;margin-bottom:14px">
@@ -1186,18 +1266,24 @@ function alerts() {
               <button class="btn sm" id="btn-al-inv" data-id="${esc(selected.id)}">Investigate</button>
               <button class="btn sm primary" id="btn-al-res" data-id="${esc(selected.id)}">Resolve Alert</button>
               <button class="btn sm danger" id="btn-al-sup" data-id="${esc(selected.id)}">Suppress</button>
-              <button class="btn sm primary" id="btn-al-esc" data-id="${esc(selected.id)}" style="background:var(--bad);border-color:var(--bad)">Escalate to Incident</button>
+              ${selected.incident_id ? `
+                <a class="btn sm primary" href="#incidents" data-link-incident="${esc(selected.incident_id)}" style="text-decoration:none">View Escalated Incident (🔗 ${esc(selected.incident_id)})</a>
+              ` : `
+                <button class="btn sm primary" id="btn-al-esc" data-id="${esc(selected.id)}" style="background:var(--bad);border-color:var(--bad)">Escalate to Incident</button>
+              `}
             </div>
 
             ${selected.related_finding_id ? `
-              <div style="margin-top:14px;border-top:1px solid var(--ln);padding-top:10px;display:flex;gap:12px;font-size:12px">
+              <div style="margin-top:14px;border-top:1px solid var(--ln);padding-top:10px;display:flex;gap:12px;font-size:12px;flex-wrap:wrap">
                 <a class="lk" href="#findings" data-open="${esc(selected.related_finding_id)}">View Correlated Finding (${esc(selected.related_finding_id)})</a>
                 <a class="lk" href="#remediation">View Remediation Workflow</a>
                 <a class="lk" href="#graph">Inspect Target in Graph</a>
+                ${selected.incident_id ? `<a class="lk" href="#incidents" data-link-incident="${esc(selected.incident_id)}">Open Linked Incident (${esc(selected.incident_id)})</a>` : ''}
               </div>
             ` : ''}
           </div>
-        ` : `<div class="pb">${none("Select an alert from the table to inspect details.")}</div>`}
+          `;
+        })() : `<div class="pb">${none("Select an alert from the table to inspect details.")}</div>`}
       </section>
     </div>
   `;
@@ -2101,6 +2187,13 @@ function bind(){const r=route();
           }
         });
       };
+
+      document.querySelectorAll("[data-link-incident]").forEach(el => {
+        el.onclick = () => {
+          SELECTED_INCIDENT_ID = el.dataset.linkIncident;
+          INCIDENTS_BOOT = false;
+        };
+      });
     }
 
     if (r === "incidents") {

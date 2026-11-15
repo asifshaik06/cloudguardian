@@ -120,7 +120,12 @@ class SOCStore:
     def get_alert(self, alert_id: str) -> Optional[AlertRecord]:
         with self._lock:
             record = self._alerts.get(alert_id)
-            return record.model_copy(deep=True) if record else None
+            if not record:
+                return None
+            res = record.model_copy(deep=True)
+            if res.incident_id and res.incident_id in self._incidents:
+                res.incident_status = self._incidents[res.incident_id].status.value
+            return res
 
     def list_alerts(
         self,
@@ -169,12 +174,20 @@ class SOCStore:
         total = len(alerts)
         paginated = alerts[offset: offset + limit]
 
+        with self._lock:
+            alert_dicts = []
+            for a in paginated:
+                ad = a.model_dump()
+                if a.incident_id and a.incident_id in self._incidents:
+                    ad["incident_status"] = self._incidents[a.incident_id].status.value
+                alert_dicts.append(ad)
+
         return {
             "total": total,
             "count": len(paginated),
             "offset": offset,
             "limit": limit,
-            "alerts": [a.model_dump() for a in paginated],
+            "alerts": alert_dicts,
         }
 
     def update_alert_status(
@@ -284,6 +297,7 @@ class SOCStore:
             for a_id in record.linked_alert_ids:
                 if a_id in self._alerts:
                     self._alerts[a_id].incident_id = inc_id
+                    self._alerts[a_id].incident_status = record.status.value
                     self._alerts[a_id].status = AlertStatus.INVESTIGATING
                     self._alerts[a_id].timeline.append({
                         "timestamp": now_str,
@@ -342,6 +356,10 @@ class SOCStore:
                     "timestamp": now_str,
                     "event": f"Status updated from {prev} to {new_status.value} by {user}.",
                 })
+                # Update incident_status pointer on linked alerts without altering the alert's own status
+                for a_id in inc.linked_alert_ids:
+                    if a_id in self._alerts:
+                        self._alerts[a_id].incident_status = new_status.value
 
             if notes:
                 inc.investigation_notes.append({

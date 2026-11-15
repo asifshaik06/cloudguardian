@@ -84,6 +84,7 @@ class AlertRecord(BaseModel):
     principal_id: Optional[str] = None
     attack_path_id: Optional[str] = None
     incident_id: Optional[str] = None
+    incident_status: Optional[str] = None
     assigned_analyst: Optional[str] = None
     timeline: List[Dict[str, Any]] = Field(default_factory=list)
 
