@@ -190,6 +190,40 @@ def test_classify_path_theoretical_explicit_deny():
     )
 
     cls, reason, hops = PolicyEvaluator.classify_path(graph, ["user/intern-dev", "role/admin-role"])
-    assert cls == PathClassification.THEORETICAL
+    assert cls == PathClassification.BLOCKED
     assert "explicit deny" in reason.lower()
     assert hops[0]["status"] == "EXPLICIT_DENY"
+
+
+def test_classify_path_unverified_short_path():
+    """Verify single-node path returns UNVERIFIED."""
+    graph = IAMCapabilityGraph()
+    cls, reason, hops = PolicyEvaluator.classify_path(graph, ["user/intern-dev"])
+    assert cls == PathClassification.UNVERIFIED
+    assert "at least 2 nodes" in reason
+
+
+def test_classify_path_unverified_unsupported_construct():
+    """Verify path with unsupported IAM construct returns UNVERIFIED rather than CONFIRMED."""
+    graph = IAMCapabilityGraph()
+    graph.add_principal("user/intern-dev", name="intern-dev", principal_type=NodeType.USER)
+    graph.add_principal("role/admin-role", name="admin-role", principal_type=NodeType.ROLE, is_admin=True)
+
+    graph.add_relationship(
+        "user/intern-dev",
+        "role/admin-role",
+        EdgeType.CAN_ESCALATE,
+        actions=["iam:UnknownComplexAction"],
+        evidence={"unsupported_construct": True, "reason": "Unsupported session tag boundary."},
+    )
+
+    cls, reason, hops = PolicyEvaluator.classify_path(graph, ["user/intern-dev", "role/admin-role"])
+    assert cls == PathClassification.UNVERIFIED
+    assert "unverified authorization semantics" in reason.lower()
+    assert hops[0]["status"] == "UNSUPPORTED_CONSTRUCT"
+
+
+def test_condition_evaluation_unsupported_operator():
+    """Verify unknown condition operator does not match and returns False."""
+    cond = {"UnsupportedOperator": {"aws:SomeKey": "value"}}
+    assert not PolicyEvaluator.evaluate_conditions(cond, {"aws:SomeKey": "value"})

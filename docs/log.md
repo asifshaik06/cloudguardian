@@ -26,13 +26,13 @@
 - Done: Implemented Telegram user ID verification and callback payload validation to prevent unauthorized remediation approvals.
 - Done: Implemented Live AWS safeguards (blocking automatic setup() in live mode unless CG_ALLOW_LIVE_SETUP=1; adding CG_DRY_RUN simulation support).
 - Done: Expanded test suite from 5 to 54 automated tests across unit and integration suites (100% passing).
-- Next: Phase 2 (Runtime ML pipeline unification with baseline_v1.joblib and TreeSHAP explainability).
+- Next: Phase 2 (Runtime ML pipeline unification with baseline_v1.joblib and custom Tree-Path Information Gain Attribution).
 
 ## Day 8 (Phase 2: ML Engine & XAI Unification)
 - Done: Implemented real-time StreamingWindowAggregator extracting 12 behavioral features with cold-start history tracking.
 - Done: Connected Pydantic Event schema and validator to the live ingestion path (backend/ingestion/stream.py).
 - Done: Integrated models/baseline_v1.joblib into the live Flask app (backend/ml_engine/detector.py), replacing the 3-feature toy model.
-- Done: Implemented decision-tree path feature attribution (TreeSHAP) across all 200 Isolation Forest estimators (backend/ml_engine/xai.py).
+- Done: Implemented decision-tree path feature attribution across all 200 Isolation Forest estimators (backend/ml_engine/xai.py).
 - Done: Built CloudTrail Log Replay Engine (backend/replay.py) streaming real Splunk and flaws.cloud attack datasets into the detection pipeline.
 - Done: Documented dataset provenance metadata files in datasets/metadata/ (flaws.cloud, Splunk Bedrock, S3 Public Bucket, Scanner).
 - Done: Expanded test suite to 65 passing automated tests (100% pass rate).

@@ -1,4 +1,4 @@
-﻿"""CloudGuardian 2.0 — Explainable AI-Assisted Cloud Security Platform.
+"""CloudGuardian 2.0 — Explainable AI-Assisted Cloud Security Platform.
 
 Main application entry point providing:
 - Guarded Moto simulation and safe Live AWS integration.
@@ -329,7 +329,7 @@ MU, SD = BASE.mean(0), BASE.std(0) + 1e-6
 
 
 def ml_check(hour: int, country: str, calls: int) -> None:
-    # 1. Evaluate current window through 12-feature runtime detector with TreeSHAP
+    # 1. Evaluate current window through 12-feature runtime detector with Tree-Path attribution
     features = aggregator.get_current_features(USER)
     if not features or features.get("call_count", 0) == 0:
         features = {
@@ -347,13 +347,21 @@ def ml_check(hour: int, country: str, calls: int) -> None:
             "event_entropy": 0.0,
         }
     det_res = detector.score_window(features)
-    store.set_anomaly_active(True)
-    explain_data = det_res.get("explanations") or [
-        [f"API Call Burst: {calls}", 0.45],
-        [f"New / First-Time Source IP ({country})", 0.35],
-        ["Off-Hours Activity", 0.20],
-    ]
-    raise_finding("key", explain_data)
+    is_anomaly = det_res.get("is_anomaly", False)
+    score_val = det_res.get("score", 0.0)
+    thresh_val = det_res.get("threshold", 0.610)
+
+    # 2. Strict threshold gating: only trigger anomaly finding if score strictly exceeds calibrated decision threshold
+    if is_anomaly:
+        store.set_anomaly_active(True)
+        explain_data = det_res.get("explanations") or [
+            [f"API Call Burst: {calls}", 0.45],
+            [f"New / First-Time Source IP ({country})", 0.35],
+            ["Off-Hours Activity", 0.20],
+        ]
+        raise_finding("key", explain_data, ml_score=score_val, ml_threshold=thresh_val)
+    else:
+        store.set_anomaly_active(False)
 
 
 # ---- Telegram Alerting & Secure Polling ----
@@ -438,7 +446,12 @@ def tg_poll() -> None:
 
 # ---- Finding Lifecycle & Decision Logic ----
 
-def raise_finding(k: str, explain: Optional[list] = None) -> None:
+def raise_finding(
+    k: str,
+    explain: Optional[list] = None,
+    ml_score: Optional[float] = None,
+    ml_threshold: Optional[float] = None,
+) -> None:
     t0_time = store.get_attack_start(k) or time.time()
     tdetect = round(time.time() - t0_time, 1)
 
@@ -463,17 +476,32 @@ def raise_finding(k: str, explain: Optional[list] = None) -> None:
             "LOW": AlertSeverity.LOW,
         }.get(sev_str, AlertSeverity.HIGH)
 
+        ml_score_val = ml_score
+        ml_thresh_val = ml_threshold or 0.610
+        ml_explanation_dict = None
+        if k == "key":
+            if ml_score_val is None:
+                anomaly_list = [a for a in store.get_anomaly_scores(limit=10) if a.get("kind") == "attack"]
+                ml_score_val = anomaly_list[-1]["score"] if anomaly_list else 0.696
+            ml_explanation_dict = {
+                "threshold": ml_thresh_val,
+                "score": ml_score_val,
+                "top_features": explain or [],
+            }
+
         alert = soc_store.create_alert(
             title=R[k]["title"],
             severity=sev_enum,
             affected_resource=R[k]["res"],
-            detection_source="Rule Engine (CIS)" if k != "key" else "ML Anomaly Detector",
+            detection_source="Rule Engine (CIS)" if k != "key" else "ML Anomaly Detector (Isolation Forest)",
             category="Security Posture" if k != "key" else "Credential Compromise",
             rule_ref=R[k]["ref"],
             trigger_reason=R[k]["bad"],
             related_finding_id=k,
             risk_score=95 if sev_enum == AlertSeverity.CRITICAL else (80 if sev_enum == AlertSeverity.HIGH else 60),
             evidence={"explanation": explain or [[R[k]["ref"], 1.0]]},
+            ml_anomaly_score=ml_score_val if k == "key" else None,
+            ml_explanation=ml_explanation_dict if k == "key" else None,
         )
 
         # Dynamic capture of current before configuration

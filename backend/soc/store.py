@@ -70,9 +70,36 @@ class SOCStore:
         ml_explanation: Optional[Dict[str, Any]] = None,
         principal_id: Optional[str] = None,
         attack_path_id: Optional[str] = None,
-    ) -> AlertRecord:
-        """Create or deduplicate a security alert."""
+    ) -> Optional[AlertRecord]:
+        """Create or deduplicate a security alert with strict ML threshold gating."""
         with self._lock:
+            # 1. ML Threshold Enforcement:
+            # If alert originates from ML anomaly detection, score must strictly exceed threshold
+            is_ml = (
+                "ML" in detection_source
+                or "Isolation Forest" in detection_source
+                or rule_ref.startswith("ML")
+            )
+            if is_ml:
+                threshold = 0.610
+                if ml_explanation and isinstance(ml_explanation, dict) and "threshold" in ml_explanation:
+                    try:
+                        threshold = float(ml_explanation["threshold"])
+                    except (ValueError, TypeError):
+                        threshold = 0.610
+
+                if ml_anomaly_score is None:
+                    logger.warning("Rejected ML alert creation: missing or invalid anomaly score.")
+                    return None
+
+                if ml_anomaly_score <= threshold:
+                    logger.info(
+                        "Suppressed ML alert: score %.4f does not exceed decision threshold %.4f.",
+                        ml_anomaly_score,
+                        threshold,
+                    )
+                    return None
+
             # Deduplication check: if active alert exists for same resource & rule within 5 minutes, update timeline
             for existing in self._alerts.values():
                 if (

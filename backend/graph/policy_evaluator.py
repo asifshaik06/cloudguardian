@@ -125,10 +125,22 @@ class PolicyEvaluator:
             except Exception:
                 return False
 
-        # Default fallback: equality check
-        if actual_val is None:
-            return False
-        return str(actual_val) == str(expected_val)
+        # 5. ARN conditions
+        if "arn" in op_lower:
+            if actual_val is None:
+                return "ifexists" in op_lower
+            expected_list = expected_val if isinstance(expected_val, list) else [expected_val]
+            return any(cls.match_wildcard(str(exp), str(actual_val)) for exp in expected_list)
+
+        # 6. Null condition
+        if op_lower == "null":
+            expected_null = str(expected_val).strip().lower() in ("true", "1", "yes")
+            actual_null = (actual_val is None)
+            return expected_null == actual_null
+
+        # Unrecognized / unsupported condition operator: does not match
+        logger.debug("Unrecognized IAM condition operator '%s' encountered in policy evaluation.", operator)
+        return False
 
     @classmethod
     def evaluate_conditions(cls, conditions: Dict[str, Any], context: Optional[Dict[str, Any]]) -> bool:
@@ -303,7 +315,7 @@ class PolicyEvaluator:
             Tuple of (PathClassification, reasoning_summary, list_of_hop_evaluations)
         """
         if not path_nodes or len(path_nodes) < 2:
-            return PathClassification.THEORETICAL, "Path must contain at least 2 nodes.", []
+            return PathClassification.UNVERIFIED, "Path must contain at least 2 nodes.", []
 
         ctx = context or {}
         g = graph_engine.graph
@@ -330,7 +342,7 @@ class PolicyEvaluator:
             evidence = edge_data.get("evidence", {})
             effect = edge_data.get("effect", "Allow")
 
-            # Check for explicit Deny on edge
+            # Check for explicit Deny on edge (highest precedence)
             if effect == "Deny":
                 hop_evaluations.append({
                     "hop": i + 1,
@@ -341,6 +353,19 @@ class PolicyEvaluator:
                     "reason": f"Explicit Deny effect on capability edge {source_id} -> {target_id}.",
                 })
                 return PathClassification.BLOCKED, f"Hop {i+1} is blocked by an explicit Deny statement.", hop_evaluations
+
+            # Check for unsupported authorization constructs (prevents reachability from implying confirmed exploitability)
+            if evidence.get("unsupported_construct") or evidence.get("unsupported_semantics"):
+                reason_str = evidence.get("reason", f"Hop {i+1} involves unsupported IAM authorization semantics.")
+                hop_evaluations.append({
+                    "hop": i + 1,
+                    "source": source_id,
+                    "target": target_id,
+                    "relationship": rel,
+                    "status": "UNSUPPORTED_CONSTRUCT",
+                    "reason": reason_str,
+                })
+                return PathClassification.UNVERIFIED, f"Hop {i+1} ({source_id} -> {target_id}) has unverified authorization semantics: {reason_str}", hop_evaluations
 
             # Evaluate AssumesRole trust policy
             if rel == EdgeType.ASSUMES_ROLE.value:

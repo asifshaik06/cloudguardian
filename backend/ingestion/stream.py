@@ -91,7 +91,7 @@ class EventStreamPipeline:
             error=bool(ev.error_code),
         )
 
-        # 4. Multi-detector ML scoring with TreeSHAP explanations
+        # 4. Multi-detector ML scoring with Tree-Path XAI explanations
         det_result = self.detector.score_window(features)
         kind = "attack" if det_result["is_anomaly"] else "baseline"
 
