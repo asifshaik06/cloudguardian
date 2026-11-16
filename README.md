@@ -160,7 +160,7 @@ flowchart TD
 | **Numerical Computing** | NumPy / SciPy / Pandas | 2.5 / 1.18 / 3.1 | Feature aggregation, matrix math, statistical threshold calibration |
 | **Data Visualization** | Apache ECharts | 6.1.0 | SVG scatter charts and 2X supersampled Canvas timelines/graphs |
 | **Data Persistence** | SQLite (WAL mode) | 3.x | SOC store, incident records, and SHA-256 hash-chained audit ledger |
-| **Testing and Security**| Pytest / Gitleaks | 9.2.0 / 8.x | 233-test automated regression suite and pre-commit secret scanning |
+| **Testing and Security**| Pytest / Gitleaks | 9.2.0 / 8.x | 255-test automated regression suite and pre-commit secret scanning |
 
 ---
 
@@ -214,31 +214,35 @@ C:\cloudguardian
 |   |-- logo.svg                        # CloudGuardian brand SVG logo mark
 |   |-- vendor/                         # Bundled vendor dependencies
 |       |-- echarts.min.js              # Apache ECharts 6.1.0 library
-|-- tests/                              # Automated test suite (233 tests)
-    |-- integration/                    # Integration and workflow tests
-    |   |-- test_alerts_page_audit.py
-    |   |-- test_api_endpoints.py
-    |   |-- test_incident_escalation.py
-    |   |-- test_incident_filtering.py
-    |   |-- test_playground_remediation.py
-    |   |-- test_replay_pipeline.py
-    |   |-- test_scenario_api.py
-    |   |-- test_soc_api.py
-    |   |-- test_university_evaluator_audit.py
-    |-- unit/                           # Isolated component unit tests
-        |-- test_aws_safety.py
-        |-- test_blast_radius.py
-        |-- test_escalation.py
-        |-- test_iam_graph.py
-        |-- test_ml_score_reproducibility.py
-        |-- test_ml_unification.py
-        |-- test_policy_evaluator.py
-        |-- test_posture_and_remediation_lifecycle.py
-        |-- test_scenario_definitions.py
-        |-- test_scenario_remediation.py
-        |-- test_security.py
-        |-- test_soc_store.py
-        |-- test_state_thread_safety.py
+|-- tests/                              # Automated test suite (255 tests)
+|   |-- integration/                    # Integration and workflow tests
+|   |   |-- test_alerts_page_audit.py   # Alerts inspection, anomaly scores, and evidence verification
+|   |   |-- test_api_endpoints.py       # Core REST endpoint routing, error handling, and response payloads
+|   |   |-- test_graph_api.py           # IAM graph and attack-path API endpoint verification
+|   |   |-- test_incident_escalation.py # Alert-to-incident escalation workflows and evidence snapshots
+|   |   |-- test_incident_filtering.py  # Incident workspace filtering and active/all state transitions
+|   |   |-- test_playground_remediation.py # Simulation playground remediation and path verification
+|   |   |-- test_replay_pipeline.py     # CloudTrail replay ingestion and streaming pipeline validation
+|   |   |-- test_scenario_api.py        # Simulation lab scenario execution and lifecycle API tests
+|   |   |-- test_soc_api.py             # SOC alert management, note logging, and status transitions
+|   |   |-- test_university_evaluator_audit.py # End-to-end evaluation audit and readiness verification
+|   |-- unit/                           # Isolated component unit tests
+|   |   |-- test_aws_safety.py          # Endpoint isolation guards and live AWS lockout enforcement
+|   |   |-- test_blast_radius.py        # Dynamic blast-radius reachability and asset exposure scoring
+|   |   |-- test_escalation.py          # Cycle-safe DFS privilege escalation pathfinding validation
+|   |   |-- test_event_schema.py        # CloudTrail schema parsing, validation, and error detection
+|   |   |-- test_iam_graph.py           # NetworkX IAM capability graph construction and edge policies
+|   |   |-- test_ml_score_reproducibility.py # Anomaly scoring determinism and XAI attribution stability
+|   |   |-- test_ml_threshold_enforcement.py # Decision threshold (tau = 0.610) gating and finding decoupling
+|   |   |-- test_ml_unification.py      # Isolation Forest feature extraction and model inference
+|   |   |-- test_policy_evaluator.py    # Deterministic IAM policy evaluator (Allow/Deny, conditions)
+|   |   |-- test_posture_and_remediation_lifecycle.py # Security posture score recalculation and remediation lifecycle
+|   |   |-- test_scenario_definitions.py # Predefined attack scenario template catalog validation
+|   |   |-- test_scenario_remediation.py # Remediation workbench fix validation and cloud verification
+|   |   |-- test_scenario_session.py    # Isolated scenario execution session sandbox state tracking
+|   |   |-- test_security.py            # API authentication, bounded key file reading, session cookies
+|   |   |-- test_soc_store.py           # Thread-safe SQLite SOC persistence and SHA-256 hash chaining
+|   |   |-- test_state_thread_safety.py # ThreadSafeStateStore concurrency and audit trail integrity
 ```
 
 ---
@@ -338,22 +342,6 @@ For an identity observation window $W_t$ containing $N_t$ events:
 | `first_ip` | $`\mathbf{1}[\mathcal{IP}_t \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]`$ |
 | `off_hours` | $\mathbf{1}[w.\text{hour} \notin \mathcal{H}_{\text{hist}}]$ (warm-up default: 0.0) |
 | `event_entropy` | $H_t = -\sum_{i=1}^{M} p_i \log_2 p_i$ |
-
-### Mathematical Feature Formulations
-
-For an identity window $W_t$ containing $N_t$ event records:
-
-$$\text{call-velocity} = \frac{N_t}{\bar{N}_{\text{hist}} + 1}$$
-
-$$\text{error-ratio} = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{errorCode} \neq \emptyset]$$
-
-$$\text{enumeration-ratio} = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{eventName} \in \mathcal{A}_{\text{read}}]$$
-
-$$\text{iam-change-count} = \sum_{e \in W_t} \mathbf{1}[e.\text{service} = \text{"iam"} \land e.\text{eventName} \notin \mathcal{A}_{\text{read}}]$$
-
-$$\text{first-ip} = \mathbf{1}[\mathcal{IP}_{t} \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]$$
-
-$$\text{event-entropy} = -\sum_{i=1}^{M} p_i \log_2 p_i$$
 
 ---
 
