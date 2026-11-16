@@ -335,7 +335,7 @@ For an identity observation window $W_t$ containing $N_t$ events:
 | `sensitive_count` | $K_t = \sum_{e \in W_t} \mathbf{1}[e.\text{action} \in \mathcal{A}_{\text{sensitive}}]$ |
 | `iam_change_count` | $P_t = \sum_{e \in W_t} \mathbf{1}[e.\text{action} \in \mathcal{A}_{\text{iam-mod}}]$ |
 | `first_service_ratio` | $F_t = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{service} \notin \mathcal{S}_{\text{hist}}]$ |
-| `first_ip` | $\mathbf{1}[\mathcal{IP}_t \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]$ |
+| `first_ip` | $`\mathbf{1}[\mathcal{IP}_t \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]`$ |
 | `off_hours` | $\mathbf{1}[w.\text{hour} \notin \mathcal{H}_{\text{hist}}]$ (warm-up default: 0.0) |
 | `event_entropy` | $H_t = -\sum_{i=1}^{M} p_i \log_2 p_i$ |
 
