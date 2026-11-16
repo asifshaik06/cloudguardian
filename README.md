@@ -167,83 +167,88 @@ flowchart TD
 ## 7. Project Directory Structure
 
 ```
-C:\cloudguardian
-|-- app.py                              # Flask application entry point, routing, state orchestration
-|-- requirements.txt                    # Core Python dependencies
-|-- README.md                           # Master technical documentation
-|-- .gitignore                          # Exclusions for credentials, virtualenvs, databases
-|-- backend/                            # Application backend modules
-|   |-- aws_guard.py                    # Endpoint isolation guard and safe live AWS lockout
-|   |-- dashboard_api.py                # Dashboard state aggregation endpoints
-|   |-- posture.py                      # Authoritative 0-100% security posture scoring engine
-|   |-- replay.py                       # CloudTrail telemetry replay processor
-|   |-- security.py                     # API authentication, session validation, secret redaction
-|   |-- state.py                        # Thread-safe in-memory state store and queues
-|   |-- telemetry.py                    # Telemetry background loops and /api/metrics service
-|   |-- graph/                          # IAM graph analysis subsystem
-|   |   |-- api.py                      # Graph REST endpoints (/api/graph/...)
-|   |   |-- blast_radius.py             # Blast-radius reachability calculations
-|   |   |-- escalation.py               # Cycle-safe DFS privilege escalation pathfinder
-|   |   |-- iam_graph.py                # NetworkX multigraph builder and node models
-|   |   |-- policy_evaluator.py         # IAM policy evaluator (Allow/Deny, conditions, wildcards)
-|   |-- ingestion/                      # Telemetry ingestion subsystem
-|   |   |-- event_schema.py             # CloudTrail event validation schemas
-|   |   |-- stream.py                   # Event streaming and ingestion pipeline
-|   |   |-- validator.py                # Syntactic and semantic event validator
-|   |-- ml_engine/                      # Machine learning subsystem
-|   |   |-- detector.py                 # Multi-model anomaly detector inference engine
-|   |   |-- pipeline.py                 # 12-dimensional feature transformation and scaling
-|   |   |-- window_aggregator.py        # 5-minute sliding temporal identity window
-|   |   |-- xai.py                      # Custom Tree-Path Information Gain Attribution
-|   |-- scenarios/                      # Attack simulation lab subsystem
-|   |   |-- api.py                      # Scenario lab REST endpoints (/api/scenarios/...)
-|   |   |-- definitions.py              # Predefined attack scenario templates
-|   |   |-- models.py                   # Pydantic schemas for scenarios and runs
-|   |   |-- remediation.py              # Policy workbench fix application and verification
-|   |   |-- session.py                  # Isolated execution sandbox session manager
-|   |-- soc/                            # Security Operations Center subsystem
-|       |-- api.py                      # SOC REST endpoints (/api/alerts, /api/incidents, etc.)
-|       |-- models.py                   # Data models for alerts, incidents, and remediations
-|       |-- store.py                    # SOC persistent store and SHA-256 hash-chained ledger
-|-- models/                             # Trained machine learning model artifacts
-|   |-- baseline_v1.joblib              # Serialized 200-tree Isolation Forest, LOF, OCSVM
-|-- static/                             # Single-page application frontend
-|   |-- index.html                      # HTML shell and Midnight Aurora theme definitions
-|   |-- charts.js                       # ECharts mounting, SVG vector scatter, and Canvas renderers
-|   |-- views.js                        # Reactive page views, modal controllers, inspector drawers
-|   |-- logo.svg                        # CloudGuardian brand SVG logo mark
-|   |-- vendor/                         # Bundled vendor dependencies
-|       |-- echarts.min.js              # Apache ECharts 6.1.0 library
-|-- tests/                              # Automated test suite (255 tests)
-|   |-- integration/                    # Integration and workflow tests
-|   |   |-- test_alerts_page_audit.py   # Alerts inspection, anomaly scores, and evidence verification
-|   |   |-- test_api_endpoints.py       # Core REST endpoint routing, error handling, and response payloads
-|   |   |-- test_graph_api.py           # IAM graph and attack-path API endpoint verification
-|   |   |-- test_incident_escalation.py # Alert-to-incident escalation workflows and evidence snapshots
-|   |   |-- test_incident_filtering.py  # Incident workspace filtering and active/all state transitions
-|   |   |-- test_playground_remediation.py # Simulation playground remediation and path verification
-|   |   |-- test_replay_pipeline.py     # CloudTrail replay ingestion and streaming pipeline validation
-|   |   |-- test_scenario_api.py        # Simulation lab scenario execution and lifecycle API tests
-|   |   |-- test_soc_api.py             # SOC alert management, note logging, and status transitions
-|   |   |-- test_university_evaluator_audit.py # End-to-end evaluation audit and readiness verification
-|   |-- unit/                           # Isolated component unit tests
-|   |   |-- test_aws_safety.py          # Endpoint isolation guards and live AWS lockout enforcement
-|   |   |-- test_blast_radius.py        # Dynamic blast-radius reachability and asset exposure scoring
-|   |   |-- test_escalation.py          # Cycle-safe DFS privilege escalation pathfinding validation
-|   |   |-- test_event_schema.py        # CloudTrail schema parsing, validation, and error detection
-|   |   |-- test_iam_graph.py           # NetworkX IAM capability graph construction and edge policies
-|   |   |-- test_ml_score_reproducibility.py # Anomaly scoring determinism and XAI attribution stability
-|   |   |-- test_ml_threshold_enforcement.py # Decision threshold (tau = 0.610) gating and finding decoupling
-|   |   |-- test_ml_unification.py      # Isolation Forest feature extraction and model inference
-|   |   |-- test_policy_evaluator.py    # Deterministic IAM policy evaluator (Allow/Deny, conditions)
-|   |   |-- test_posture_and_remediation_lifecycle.py # Security posture score recalculation and remediation lifecycle
-|   |   |-- test_scenario_definitions.py # Predefined attack scenario template catalog validation
-|   |   |-- test_scenario_remediation.py # Remediation workbench fix validation and cloud verification
-|   |   |-- test_scenario_session.py    # Isolated scenario execution session sandbox state tracking
-|   |   |-- test_security.py            # API authentication, bounded key file reading, session cookies
-|   |   |-- test_soc_store.py           # Thread-safe SQLite SOC persistence and SHA-256 hash chaining
-|   |   |-- test_state_thread_safety.py # ThreadSafeStateStore concurrency and audit trail integrity
+cloudguardian/
+|-- app.py                      # Flask entry point and lifecycle orchestration
+|-- requirements.txt            # Core Python dependencies
+|-- AGENTS.md                   # Operational guidelines and safety invariants
+|-- .env.example                # Environment configuration template
+|-- .pre-commit-config.yaml     # Pre-commit secret scanning hooks
+|-- backend/                    # Core backend service modules
+|   |-- aws_guard.py            # Local Moto endpoint isolation and lockout
+|   |-- dashboard_api.py        # Aggregated telemetry and posture endpoints
+|   |-- posture.py              # Security posture score calculation engine
+|   |-- replay.py               # CloudTrail telemetry replay processor
+|   |-- security.py             # Auth verification and bounded key reader
+|   |-- state.py                # Thread-safe in-memory state store
+|   |-- telemetry.py            # Background loops and metrics service
+|   |-- graph/                  # IAM capability graph and attack pathfinder
+|   |   |-- api.py
+|   |   |-- blast_radius.py
+|   |   |-- escalation.py
+|   |   |-- iam_graph.py
+|   |   |-- policy_evaluator.py
+|   |-- ingestion/              # CloudTrail event processing
+|   |   |-- event_schema.py
+|   |   |-- stream.py
+|   |   |-- validator.py
+|   |-- ml_engine/              # Behavioral anomaly detection and XAI
+|   |   |-- detector.py
+|   |   |-- pipeline.py
+|   |   |-- window_aggregator.py
+|   |   |-- xai.py
+|   |-- scenarios/              # Attack simulation and policy workbench
+|   |   |-- api.py
+|   |   |-- definitions.py
+|   |   |-- models.py
+|   |   |-- remediation.py
+|   |   |-- session.py
+|   |-- soc/                    # SOC operations and hash-chained ledger
+|       |-- api.py
+|       |-- models.py
+|       |-- store.py
+|-- docs/                       # Architecture records and benchmark logs
+|   |-- decisions.md
+|   |-- log.md
+|   |-- multi_seed_results.md
+|-- models/                     # Trained ML model artifacts
+|   |-- baseline_v1.joblib
+|-- reports/                    # Quality assurance audit reports
+|   |-- independent_qa_audit.md
+|-- scripts/                    # Training, benchmarking, and secret scans
+|   |-- gitleaks_precommit.py
+|   |-- multi_seed.py
+|   |-- train_eval.py
+|-- static/                     # Single-page application frontend
+|   |-- index.html
+|   |-- charts.js
+|   |-- views.js
+|   |-- logo.svg
+|   |-- vendor/
+|       |-- echarts.min.js
+|-- tests/                      # Automated test suite (255 tests)
+    |-- integration/            # Workflow and end-to-end API tests (10 files)
+    |-- unit/                   # Component isolation unit tests (16 files)
 ```
+
+### Test Suite Organization
+
+The 255-test automated regression suite is organized into two test scopes:
+
+- **Unit Tests (`tests/unit/` — 16 modules, 192 tests):** Validates component logic in isolation, including AWS endpoint lockout guards (`test_aws_safety`), blast radius exposure scoring (`test_blast_radius`), cycle-safe privilege escalation pathfinding (`test_escalation`), CloudTrail event schema parsing (`test_event_schema`), IAM capability multigraph construction (`test_iam_graph`), anomaly scoring determinism (`test_ml_score_reproducibility`), decision threshold enforcement at $\tau = 0.610$ (`test_ml_threshold_enforcement`), model inference pipelines (`test_ml_unification`), deterministic IAM policy evaluation (`test_policy_evaluator`), security posture recovery lifecycles (`test_posture_and_remediation_lifecycle`), scenario catalog templates (`test_scenario_definitions`), remediation verification (`test_scenario_remediation`), session sandboxing (`test_scenario_session`), API authentication security (`test_security`), SQLite hash-chained persistence (`test_soc_store`), and thread-safe state concurrency (`test_state_thread_safety`).
+- **Integration Tests (`tests/integration/` — 10 modules, 63 tests):** Validates multi-service interactions across HTTP routes and mock AWS infrastructure, including alerts inspection workflows (`test_alerts_page_audit`), core Flask REST endpoints (`test_api_endpoints`), IAM graph and attack-path APIs (`test_graph_api`), alert-to-incident escalation workflows (`test_incident_escalation`), incident filtering state transitions (`test_incident_filtering`), playground remediation lifecycles (`test_playground_remediation`), CloudTrail replay ingestion pipelines (`test_replay_pipeline`), attack simulation lab execution APIs (`test_scenario_api`), SOC operations endpoints (`test_soc_api`), and comprehensive university evaluation readiness audits (`test_university_evaluator_audit`).
+
+### Module Responsibility Reference
+
+| Directory | Responsibility |
+| :--- | :--- |
+| `backend/graph/` | Builds the NetworkX IAM capability multigraph, computes dynamic blast radius exposure metrics, executes cycle-safe DFS privilege escalation pathfinding, and evaluates IAM policies with explicit `Deny` precedence. |
+| `backend/ingestion/` | Ingests CloudTrail management events, validates syntactic and semantic schemas, normalizes UTC timestamps and principal identifiers, and streams parsed event batches into rolling observation windows. |
+| `backend/ml_engine/` | Extracts 12 behavioral features across 5-minute sliding identity windows, executes Isolation Forest anomaly scoring against calibrated threshold $\tau = 0.610$, and computes Tree-Path Information Gain Attribution for explainable alerts. |
+| `backend/scenarios/` | Manages predefined attack simulation scenarios (privilege escalation, S3 exfiltration, credential abuse), tracks isolated sandbox execution sessions, and validates human-in-the-loop policy remediation fixes. |
+| `backend/soc/` | Manages the Security Operations Center store, coordinates alert triage and incident escalation workflows, records responder investigation notes, and appends state mutations to a SHA-256 hash-chained cryptographic ledger. |
+| `static/` | Implements the single-page application frontend featuring the Midnight Aurora theme, reactive tab controllers, modal inspectors, and 2X supersampled Apache ECharts timelines and graph visualizations. |
+| `models/` | Houses the serialized 200-estimator Isolation Forest machine learning model artifact (`baseline_v1.joblib`) calibrated for 1.0% false alarm rate baseline operation. |
+| `tests/` | Houses the complete 255-test automated regression suite covering unit component logic, API integration routes, AWS safety isolation, and closed-loop remediation workflows. |
 
 ---
 
