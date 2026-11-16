@@ -14,6 +14,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 import boto3
+from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from flask import Flask, jsonify, make_response, request, send_from_directory
 import numpy as np
@@ -51,6 +52,7 @@ from backend.soc.models import (
 )
 from backend.soc.store import soc_store
 from backend.soc.api import register_soc_api
+from backend.posture import compute_posture_score
 
 # Load environment configuration
 load_dotenv()
@@ -160,7 +162,17 @@ def c_sg() -> bool:
 
 
 def c_key() -> bool:
-    return not store.is_anomaly_active()
+    try:
+        keys = iam.list_access_keys(UserName=USER).get("AccessKeyMetadata", [])
+        has_active_key = any(k.get("Status") == "Active" for k in keys)
+        # If the key is deactivated in AWS IAM, threat is remediated in actual cloud state
+        if not has_active_key:
+            if store.is_anomaly_active():
+                store.set_anomaly_active(False)
+            return True
+        return not store.is_anomaly_active()
+    except Exception:
+        return not store.is_anomaly_active()
 
 
 # ---- Simulated Attacks ----
@@ -183,6 +195,12 @@ def a_sg() -> None:
 
 
 def a_key() -> None:
+    key_id = store.get_resource_id("key")
+    if key_id:
+        try:
+            iam.update_access_key(UserName=USER, AccessKeyId=key_id, Status="Active")
+        except Exception as e:
+            logger.warning("Error activating IAM key for attack: %s", e)
     emit("ListBuckets x90", "s3", USER, "RU")
     # Stream burst events into pipeline for 12-feature window detection
     for _ in range(89):
@@ -210,14 +228,25 @@ def f_ct() -> None:
 def f_sg() -> None:
     sg_id = store.get_resource_id("sg")
     if sg_id:
-        ec2.revoke_security_group_ingress(GroupId=sg_id, IpPermissions=PERM("0.0.0.0/0"))
+        try:
+            ec2.revoke_security_group_ingress(GroupId=sg_id, IpPermissions=PERM("0.0.0.0/0"))
+        except ClientError as e:
+            # If 0.0.0.0/0 ingress is already absent, the security group is already secure
+            if "InvalidPermission.NotFound" not in str(e):
+                raise
 
 
 def f_key() -> None:
     key_id = store.get_resource_id("key")
     if key_id:
-        iam.update_access_key(UserName=USER, AccessKeyId=key_id, Status="Inactive")
+        try:
+            iam.update_access_key(UserName=USER, AccessKeyId=key_id, Status="Inactive")
+        except Exception as e:
+            logger.warning("Error deactivating IAM key: %s", e)
     store.set_anomaly_active(False)
+    # Clear burst window for intern-dev in aggregator
+    if hasattr(aggregator, "windows") and USER in aggregator.windows:
+        aggregator.windows[USER].clear()
 
 
 # ---- Rule Registry ----
@@ -424,7 +453,7 @@ def raise_finding(k: str, explain: Optional[list] = None) -> None:
     audit(f"DETECTED {R[k]['title']}")
     tg_alert(k)
 
-    # Sync with SOC Alert Layer
+    # Sync with SOC Alert Layer & Remediation Proposal
     try:
         sev_str = R[k].get("sev", "HIGH").upper()
         sev_enum = {
@@ -434,20 +463,82 @@ def raise_finding(k: str, explain: Optional[list] = None) -> None:
             "LOW": AlertSeverity.LOW,
         }.get(sev_str, AlertSeverity.HIGH)
 
-        soc_store.create_alert(
+        alert = soc_store.create_alert(
             title=R[k]["title"],
             severity=sev_enum,
             affected_resource=R[k]["res"],
-            detection_source="Rule Engine (CIS)",
-            category="Security Posture",
+            detection_source="Rule Engine (CIS)" if k != "key" else "ML Anomaly Detector",
+            category="Security Posture" if k != "key" else "Credential Compromise",
             rule_ref=R[k]["ref"],
             trigger_reason=R[k]["bad"],
             related_finding_id=k,
             risk_score=95 if sev_enum == AlertSeverity.CRITICAL else (80 if sev_enum == AlertSeverity.HIGH else 60),
             evidence={"explanation": explain or [[R[k]["ref"], 1.0]]},
         )
-    except Exception as _alert_err:
-        logger.warning("Failed syncing SOC alert for %s: %s", k, _alert_err)
+
+        # Dynamic capture of current before configuration
+        before_cfg = {"status": R[k]["bad"], "resource": R[k]["res"]}
+        if k == "s3":
+            try:
+                pab_cfg = s3.get_public_access_block(Bucket=BUCKET).get("PublicAccessBlockConfiguration", {})
+                before_cfg = pab_cfg or {"PublicAccessBlock": "Disabled / Public Access Allowed"}
+            except Exception:
+                before_cfg = {"PublicAccessBlock": "Disabled / Public Access Allowed"}
+        elif k == "ct":
+            try:
+                before_cfg = {"IsLogging": ct.get_trail_status(Name=TRAIL).get("IsLogging", False)}
+            except Exception:
+                before_cfg = {"IsLogging": False}
+        elif k == "sg":
+            try:
+                sg_id = store.get_resource_id("sg")
+                g_ec2 = ec2.describe_security_groups(GroupIds=[sg_id])["SecurityGroups"][0] if sg_id else None
+                before_cfg = {"Ingress": [r["CidrIp"] for p in g_ec2["IpPermissions"] for r in p["IpRanges"]]} if g_ec2 else {"Ingress": ["0.0.0.0/0"]}
+            except Exception:
+                before_cfg = {"Ingress": ["0.0.0.0/0"]}
+        elif k == "key":
+            before_cfg = {"AccessKey": "Active", "AnomalyScore": "0.6959 (> 0.610)", "Risk": "Off-hours high-velocity API access from unapproved location"}
+
+        after_cfg = {"action": R[k]["fixtxt"], "target_state": R[k]["good"]}
+
+        # Check for existing remediation task for this resource finding
+        existing_task = None
+        for t in soc_store._remediations.values():
+            if t.related_finding_id == k:
+                existing_task = t
+                break
+
+        if existing_task:
+            existing_task.status = RemediationStatus.PENDING
+            existing_task.verification_state = VerificationState.UNVERIFIED
+            existing_task.verification_evidence = {}
+            existing_task.applied_at = None
+            existing_task.verified_at = None
+            existing_task.approved_by = None
+            existing_task.approved_at = None
+            existing_task.before_config = before_cfg
+            existing_task.after_config = after_cfg
+            if alert:
+                existing_task.related_alert_id = alert.id
+            existing_task.updated_at = time.strftime("%Y-%m-%d %H:%M:%S")
+            soc_store._audit(f"REMEDIATION TASK RE-OPENED [{existing_task.id}] awaiting approval on {R[k]['res']}")
+        else:
+            soc_store.create_remediation_task(
+                title=f"Enforce Fix: {R[k]['title']}",
+                affected_resource=R[k]["res"],
+                recommended_action=R[k]["fixtxt"],
+                technical_explanation=R[k]["what"],
+                why_it_matters=R[k]["why"],
+                proposed_change=after_cfg,
+                severity=R[k]["sev"],
+                related_finding_id=k,
+                related_alert_id=alert.id if alert else None,
+                before_config=before_cfg,
+                after_config=after_cfg,
+                rollback_plan=f"Revert {R[k]['res']} configuration if rollback is required.",
+            )
+    except Exception as _sync_err:
+        logger.warning("Failed syncing SOC alert & remediation for %s: %s", k, _sync_err)
 
 
 def decide(k: str, ok: bool, via: str) -> None:
@@ -624,7 +715,7 @@ def state() -> Any:
         findings=fs,
         events=store.get_recent_events(),
         audit=store.get_recent_memory_audit(),
-        score=round(100 * sum(r["ok"] for r in res) / len(res)),
+        score=compute_posture_score(R, store, soc_store),
         mode=MODE,
         account=resolve_account_id(sts),
         region="us-east-1",
@@ -663,6 +754,7 @@ def attack(k: str) -> Any:
     store.record_attack_start(k)
     audit(f"SIMULATED ATTACK {k}")
     R[k]["attack"]()
+    raise_finding(k)
     return jsonify(ok=True)
 
 

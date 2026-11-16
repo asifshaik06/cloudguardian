@@ -8,6 +8,7 @@ Provides endpoints for:
 - Guided Demonstration Mode (/api/demo)
 """
 import logging
+import time
 from typing import Any, Dict, Optional
 from flask import Flask, jsonify, request
 
@@ -16,6 +17,7 @@ from backend.soc.models import (
     AlertStatus,
     IncidentSeverity,
     IncidentStatus,
+    RemediationStatus,
     VerificationState,
 )
 from backend.soc.store import SOCStore, soc_store
@@ -401,6 +403,36 @@ def register_soc_api(
         payload = request.get_json(silent=True) or {}
         user = payload.get("user", "Authorized Operator")
 
+        # Scenario run remediation support
+        if task.run_id:
+            try:
+                from backend.scenarios.remediation import apply_remediation, verify_remediation_state
+                from backend.scenarios.session import scenario_session_manager
+                action = task.proposed_change or {"type": "generic_remediation"}
+                apply_remediation(scenario_session_manager, task.run_id, action, state_store=s_store._state_store)
+                vr = verify_remediation_state(scenario_session_manager, task.run_id)
+                is_pass = bool(vr.get("verified", False))
+                v_state = VerificationState.PASS if is_pass else VerificationState.FAIL
+
+                with s_store._lock:
+                    live_t = s_store._remediations.get(rem_id)
+                    if live_t:
+                        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+                        live_t.status = RemediationStatus.VERIFIED if is_pass else RemediationStatus.FAILED
+                        live_t.verification_state = v_state
+                        live_t.verification_evidence = vr
+                        live_t.applied_at = now_str
+                        live_t.verified_at = now_str
+                        live_t.updated_at = now_str
+                        s_store._audit(f"REMEDIATION APPLIED & VERIFIED [{rem_id}] on scenario run {task.run_id}: {v_state.value}")
+                        return jsonify({
+                            "message": f"Remediation '{rem_id}' applied. Verification result: {v_state.value}.",
+                            "remediation": live_t.model_dump(),
+                        })
+            except Exception as exc:
+                logger.error("Error applying scenario remediation on %s: %s", rem_id, exc)
+                return jsonify({"error": f"Failed applying scenario remediation: {exc}"}), 500
+
         # Determine executor and verifier from correlated resource
         fid = task.related_finding_id
         executor_fn = None
@@ -456,7 +488,24 @@ def register_soc_api(
             return jsonify({"error": f"Remediation task '{rem_id}' not found."}), 404
 
         fid = task.related_finding_id
-        if fid and fid in R:
+        if task.run_id:
+            try:
+                from backend.scenarios.remediation import verify_remediation_state
+                from backend.scenarios.session import scenario_session_manager
+                vr = verify_remediation_state(scenario_session_manager, task.run_id)
+                is_pass = bool(vr.get("verified", False))
+                v_state = VerificationState.PASS if is_pass else VerificationState.FAIL
+                v_evidence = vr
+                with s_store._lock:
+                    live_t = s_store._remediations.get(rem_id)
+                    if live_t:
+                        live_t.verification_state = v_state
+                        live_t.verification_evidence = vr
+                        live_t.verified_at = time.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception as exc:
+                v_state = VerificationState.FAIL
+                v_evidence = {"error": str(exc)}
+        elif fid and fid in R:
             is_ok = bool(R[fid]["check"]())
             v_state = VerificationState.PASS if is_ok else VerificationState.FAIL
             v_evidence = {

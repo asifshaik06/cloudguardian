@@ -87,6 +87,39 @@ def register_scenarios_api(
             return jsonify({"error": f"Scenario '{scenario_id}' not found."}), 404
 
         run = mgr.create_run(scenario_def)
+
+        # Register persistent remediation task in SOC layer
+        try:
+            from backend.soc.store import soc_store
+            exp_rem = scenario_def.expected_remediation or {"type": "generic_remediation"}
+            target_res = exp_rem.get("target") or exp_rem.get("intermediate_hop") or scenario_def.id
+            diff_str = scenario_def.difficulty.value if hasattr(scenario_def.difficulty, "value") else str(scenario_def.difficulty)
+            sev_map = {"beginner": "Low", "intermediate": "High", "advanced": "Critical", "expert": "Critical"}
+            sev_val = sev_map.get(diff_str.lower(), "High")
+
+            soc_store.create_remediation_task(
+                title=f"Lab Scenario Remediation: {scenario_def.name}",
+                affected_resource=target_res,
+                recommended_action=f"Apply {exp_rem.get('type', 'generic_remediation')} to sever attack path.",
+                technical_explanation=f"Scenario '{scenario_def.id}' identified {len(run.paths)} potential IAM escalation paths with blast radius score {run.blast_radius.get('score', 0.0)}.",
+                why_it_matters=scenario_def.learning_objective,
+                proposed_change=exp_rem,
+                severity=sev_val,
+                related_finding_id=f"lab-{scenario_def.id}",
+                scenario_id=scenario_def.id,
+                run_id=run.run_id,
+                before_config={
+                    "scenario_id": scenario_def.id,
+                    "run_id": run.run_id,
+                    "attack_paths": len(run.paths),
+                    "blast_radius_score": run.blast_radius.get("score", 0.0),
+                    "admin_reachable": run.blast_radius.get("admin_reachable", False),
+                },
+                rollback_plan=f"Reset scenario run {run.run_id} to initial baseline graph.",
+            )
+        except Exception as _sync_err:
+            logger.warning("Failed creating SOC remediation task for scenario %s: %s", scenario_id, _sync_err)
+
         return jsonify({
             "message": f"Scenario '{scenario_def.name}' launched successfully in isolated state.",
             "run_id": run.run_id,
@@ -149,6 +182,22 @@ def register_scenarios_api(
 
         try:
             result = apply_remediation(mgr, run_id, action, state_store=state_store)
+            try:
+                import time
+                from backend.soc.store import soc_store
+                from backend.soc.models import RemediationStatus, VerificationState
+                for t in soc_store._remediations.values():
+                    if t.run_id == run_id:
+                        is_v = bool(result.get("verified", False))
+                        t.status = RemediationStatus.VERIFIED if is_v else RemediationStatus.FAILED
+                        t.verification_state = VerificationState.PASS if is_v else VerificationState.FAIL
+                        t.verification_evidence = result
+                        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+                        t.applied_at = now_str
+                        t.verified_at = now_str
+                        t.updated_at = now_str
+            except Exception as _sync_err:
+                logger.warning("Failed syncing SOC remediation on remediate_run %s: %s", run_id, _sync_err)
             return jsonify(result)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 404

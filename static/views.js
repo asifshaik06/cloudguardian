@@ -29,26 +29,168 @@ const authFetch = async (url, opts = {}) => {
   return fetch(url, opts);
 };
 window.authFetch = authFetch;
+function highlightJSON(data) {
+  if (data === null || data === undefined) return '<span class="json-null">null</span>';
+  const str = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  const escaped = esc(str);
+  return escaped.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+    let cls = 'json-n';
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        cls = 'json-k';
+      } else {
+        cls = 'json-s';
+      }
+    } else if (/true|false/.test(match)) {
+      cls = 'json-b';
+    } else if (/null/.test(match)) {
+      cls = 'json-null';
+    }
+    return `<span class="${cls}">${match}</span>`;
+  });
+}
+window.highlightJSON = highlightJSON;
 let M={posture:[],anomaly:[],threshold:null,buckets:[],events_total:0,rem:{items:[],fixed:0,verified:0,rolled_back:0}},EVR=[],ES=new Set(),EBOOT=false,Q="",FSEV="",FST="",EK="",DR=null;
 const ctx=()=>({S,ML,M}),mid=x=>(x.ref.match(/T\d{4}(\.\d{3})?/)||["n/a"])[0],$$=id=>document.getElementById(id);
 const stat=s=>({pending:tg("Awaiting approval","wr"),fixed:tg("Remediated","ok"),rejected:tg("Rejected","gr")}[s]||tg(s,"gr"));
 const noData=k=>k=="detectors"?!Object.values(ML.results||{}).some(r=>r.controlled):k=="calib"?!Object.values(ML.results||{}).some(r=>r.old_real_unlabelled):false,
  slot=(key,h)=>noData(key)?none(key=="calib"?"No flaws.cloud results yet. Run scripts\\train_eval.py with the flaws.cloud logs.":"No results yet. Run scripts\\train_eval.py."):`<div class="cslot" data-key="${key}" style="height:${h}px"></div>`,
  card=(t,sub,key,h)=>`<section class="panel"><div class="ph"><span class="pt">${t}</span><span class="mu">${sub}</span></div>${noData(key)?slot(key,h):`<div class="pb">${slot(key,h)}</div>`}</section>`;
-function pipe(){const f=S.findings,fx=f.filter(x=>x.status=="fixed"),p=f.filter(x=>x.status=="pending").length;
- return [["Events",M.events_total],["Detections",f.length],["Awaiting approval",p,p>0],["Remediated",fx.length],["Verified",fx.filter(x=>x.verified).length]].map(s=>`<div class="stg${s[2]?" on":""}"><span>${s[0]}</span><b>${s[1]}</b></div>`).join("")}
+function pipe(){
+  const f=S.findings,fx=f.filter(x=>x.status=="fixed"),p=f.filter(x=>x.status=="pending").length;
+  const stages=[
+    ["Events",M.events_total||S.events.length,false,"#events","View all ingested telemetry events"],
+    ["Detections",f.length,false,"#findings","View all security findings"],
+    ["Awaiting approval",p,p>0,"#remediation","pending","Review remediation tasks awaiting approval"],
+    ["Remediated",fx.length,false,"#remediation","","View remediated security findings"],
+    ["Verified",fx.filter(x=>x.verified).length,false,"#remediation","fixed","View independently verified fixes"]
+  ];
+  return stages.map(s=>`
+    <div class="stg interactive${s[2]?" on":""}" data-pipe-route="${s[3]}" ${s[4]&&s[4].length<10?`data-pipe-filter="${s[4]}"`:""} title="${s[s.length-1]}" tabindex="0" role="button">
+      <span>${s[0]}</span>
+      <b>${s[1]}</b>
+    </div>
+  `).join("");
+}
 function overview(){
- if(!BOOT)return`<div class="g3">${[1,2,3,4,5,6].map(()=>'<div class="panel sk" style="height:250px"></div>').join("")}</div>`;
- const f=S.findings,fx=f.filter(x=>x.status=="fixed"),td=f.filter(x=>x.tdetect!=null),avg=td.length?td.reduce((a,x)=>a+x.tdetect,0)/td.length:0,tr=M.rem.items.filter(i=>i.ttr!=null),ttr=tr.length?tr.reduce((a,i)=>a+i.ttr,0)/tr.length:0,live=S.mode=="Live AWS",vr=fx.length?Math.round(100*fx.filter(x=>x.verified).length/fx.length):null,
- kpi=(l,k,x,d,suf,h)=>`<div class="panel kp"><div class="lb">${l}</div><div class="kv" data-count="${x}" data-k="${k}" data-dec="${d||0}" data-suf="${suf||""}">${(+x).toFixed(d||0)}${suf||""}</div>${h?`<div class="mu">${h}</div>`:""}</div>`,
- acts=live?"":S.resources.map(r=>`<button class="btn sm" data-p="/api/attack/${r.id}" title="${esc(r.attack)}">${esc(r.name)}</button>`).join("");
- return`<div class="pipe" id="pipe">${pipe()}</div>
- <div class="kpis"><div class="panel kp rg"><div>${ring(S.score)}</div><div><div class="lb">Posture score</div><div class="kv" data-count="${S.score}" data-k="score" data-suf="%">${S.score}%</div></div></div>${kpi("Avg time to detect","ttd",avg,1,"s")}${kpi("Avg time to remediate","ttr",ttr,1,"s","includes approval wait")}${vr==null?`<div class="panel kp"><div class="lb">Verified fix rate</div><div class="kv mu">n/a</div><div class="mu">no fixes yet</div></div>`:kpi("Verified fix rate","vr",vr,0,"%")}${kpi("Rollbacks","rb",M.rem.rolled_back)}</div>
- <div class="g3">${card("Security posture","score over time","posture",240)}${card("Anomaly score","scored events and threshold","anomaly",240)}${card("Event activity","events per minute","activity",240)}${card("Detector comparison","controlled synthetic benchmark","detectors",240)}${f.length?card("Threat severity","findings by status","severity",240)+card("Remediation","seconds per finding","remediation",240):`<section class="panel span2"><div class="ph"><span class="pt">Findings</span><span class="mu">severity and remediation</span></div><div class="es"><div><b>No findings yet.</b><div class="mu">The severity breakdown and remediation timings appear after the first detection.</div></div>${acts?`<div class="mu">Simulate an attack to create one:</div><div class="ac">${acts}</div>`:""}</div></section>`}</div>
- <div class="g2 mt"><section class="panel"><div class="ph"><span class="pt">Recent findings</span><a class="lk" href="#findings">View all</a></div><div class="wrap"><table class="tbl">${f.length?f.slice(0,5).map(x=>`<tr class="clk" data-open="${x.id}"><td>${tg(x.sev,"bad")}</td><td>${esc(x.title)}</td><td>${stat(x.status)}</td></tr>`).join(""):`<tr><td>${none("No findings yet.")}</td></tr>`}</table></div></section>
- <section class="panel"><div class="ph"><span class="pt">Connection and resource health</span>${tg(live?"AWS live mode":"Simulation mode",live?"ok":"in")}</div>
- <div class="rw"><div class="gr1"><div>${live?"Live AWS account":"Local AWS emulator (moto)"}</div><div class="mu">Account ${esc(S.account)}, region ${esc(S.region)}, ${S.polls} checks at about ${S.latency} ms</div></div></div>
- ${S.resources.map(r=>`<div class="rw"><span class="dot ${r.ok?"ok":"bad"}"></span><div class="gr1"><div>${esc(r.name)}</div><div class="mu">${esc(r.ok?r.good:r.badtxt)}</div></div>${live?"":`<button class="btn sm" data-p="/api/attack/${r.id}" title="${esc(r.attack)}">Simulate attack</button>`}</div>`).join("")}</section></div>`}
+  if(!BOOT)return`<div class="g3">${[1,2,3,4,5,6].map(()=>'<div class="panel sk" style="height:250px"></div>').join("")}</div>`;
+  const f=S.findings,fx=f.filter(x=>x.status=="fixed"),td=f.filter(x=>x.tdetect!=null),avg=td.length?td.reduce((a,x)=>a+x.tdetect,0)/td.length:0,tr=M.rem.items.filter(i=>i.ttr!=null),ttr=tr.length?tr.reduce((a,i)=>a+i.ttr,0)/tr.length:0,live=S.mode=="Live AWS",vr=fx.length?Math.round(100*fx.filter(x=>x.verified).length/fx.length):null;
+  const alertsCount=(ALERTS_STATS&&ALERTS_STATS.unresolved_count!=null)?ALERTS_STATS.unresolved_count:(ALERTS_DATA.alerts||[]).filter(a=>a.status!=='Resolved'&&a.status!=='Suppressed').length;
+  const incidentsCount=(INCIDENTS_DATA&&INCIDENTS_DATA.active_count!=null)?INCIDENTS_DATA.active_count:(INCIDENTS_DATA.incidents||[]).filter(i=>i.status!=='Closed').length;
+  const pendingRem=(REM_DATA&&REM_DATA.stats&&REM_DATA.stats.pending_approval!=null)?REM_DATA.stats.pending_approval:f.filter(x=>x.status=="pending").length;
+  const verifiedRem=(REM_DATA&&REM_DATA.stats&&REM_DATA.stats.independently_verified!=null)?REM_DATA.stats.independently_verified:fx.filter(x=>x.verified).length;
+  const totalEvents=M.events_total||S.events.length;
+  const kpi=(l,k,x,d,suf,h)=>`<div class="panel kp"><div class="lb">${l}</div><div class="kv" data-count="${x}" data-k="${k}" data-dec="${d||0}" data-suf="${suf||""}">${(+x).toFixed(d||0)}${suf||""}</div>${h?`<div class="mu">${h}</div>`:""}</div>`;
+  const acts=live?"":S.resources.map(r=>`<button class="btn sm" data-p="/api/attack/${r.id}" title="${esc(r.attack)}">${esc(r.name)}</button>`).join("");
+
+  return`
+    <div class="pipe" id="pipe">${pipe()}</div>
+
+    <!-- Primary Operational KPI Cards (Clickable with Active Filters) -->
+    <div class="kpis-6">
+      <div class="panel kp rg" style="--kpi-accent:var(--ok)">
+        <div>${ring(S.score)}</div>
+        <div>
+          <div class="lb">Posture Score</div>
+          <div class="kv" data-count="${S.score}" data-k="score" data-suf="%">${S.score}%</div>
+          <div class="mu" style="font-size:11px;margin-top:2px">${S.score>=80?"Optimal security":S.score>=50?"Elevated risk":"Critical posture"}</div>
+        </div>
+      </div>
+      <div class="panel kp interactive" style="--kpi-accent:var(--coral)" data-kpi-route="alerts" data-kpi-filter="New" tabindex="0" role="button" title="View active unresolved security alerts">
+        <div class="lb">Active Alerts</div>
+        <div class="kv bad" data-count="${alertsCount}" data-k="al_cnt">${alertsCount}</div>
+        <div class="kp-hint">Investigate queue &rarr;</div>
+      </div>
+      <div class="panel kp interactive" style="--kpi-accent:var(--violet)" data-kpi-route="incidents" data-kpi-filter="active" tabindex="0" role="button" title="View active security incidents workspace">
+        <div class="lb">Open Incidents</div>
+        <div class="kv" style="color:var(--violet)" data-count="${incidentsCount}" data-k="inc_cnt">${incidentsCount}</div>
+        <div class="kp-hint">Active cases &rarr;</div>
+      </div>
+      <div class="panel kp interactive" style="--kpi-accent:var(--amber)" data-kpi-route="remediation-pending" data-kpi-filter="pending" tabindex="0" role="button" title="Review proposed remediation tasks awaiting approval">
+        <div class="lb">Awaiting Approval</div>
+        <div class="kv wr" data-count="${pendingRem}" data-k="appr_cnt">${pendingRem}</div>
+        <div class="kp-hint">Review proposals &rarr;</div>
+      </div>
+      <div class="panel kp interactive" style="--kpi-accent:var(--cyan)" data-kpi-route="findings" tabindex="0" role="button" title="Explore all CSPM & threat detections">
+        <div class="lb">Detections</div>
+        <div class="kv" style="color:var(--cyan)" data-count="${f.length}" data-k="det_cnt">${f.length}</div>
+        <div class="kp-hint">Explore findings &rarr;</div>
+      </div>
+      <div class="panel kp interactive" style="--kpi-accent:var(--emerald)" data-kpi-route="remediation-verified" data-kpi-filter="fixed" tabindex="0" role="button" title="View independently verified remediation fixes">
+        <div class="lb">Verified Fixes</div>
+        <div class="kv ok" data-count="${verifiedRem}" data-k="ver_cnt">${verifiedRem}</div>
+        <div class="kp-hint">Inspect verified &rarr;</div>
+      </div>
+    </div>
+
+    <!-- Secondary Telemetry & Response Metrics -->
+    <div class="kpis">
+      ${kpi("Avg time to detect","ttd",avg,1,"s")}
+      ${kpi("Avg time to remediate","ttr",ttr,1,"s","includes approval wait")}
+      ${vr==null?`<div class="panel kp"><div class="lb">Verified fix rate</div><div class="kv mu">n/a</div><div class="mu">no fixes yet</div></div>`:kpi("Verified fix rate","vr",vr,0,"%")}
+      ${kpi("Rollbacks","rb",M.rem.rolled_back)}
+      <div class="panel kp interactive" style="--kpi-accent:var(--cyan)" data-kpi-route="events" tabindex="0" role="button" title="Inspect streaming CloudTrail event telemetry">
+        <div class="lb">Security Events</div>
+        <div class="kv" style="color:var(--cyan)" data-count="${totalEvents}" data-k="ev_cnt">${totalEvents}</div>
+        <div class="kp-hint">Event stream &rarr;</div>
+      </div>
+    </div>
+
+    <!-- Dynamic Visualizations Grid -->
+    <div class="g3">
+      ${card("Security posture","score over time","posture",240)}
+      ${card("Anomaly score","scored events and threshold","anomaly",240)}
+      ${card("Event activity","events per minute","activity",240)}
+      ${card("Detector comparison","controlled synthetic benchmark","detectors",240)}
+      ${f.length?card("Threat severity","findings by status","severity",240)+card("Remediation","seconds per finding","remediation",240):`
+        <section class="panel span2">
+          <div class="ph"><span class="pt">Findings</span><span class="mu">severity and remediation</span></div>
+          <div class="es">
+            <div><b>No findings yet.</b><div class="mu">The severity breakdown and remediation timings appear after the first detection.</div></div>
+            ${acts?`<div class="mu">Simulate an attack to create one:</div><div class="ac">${acts}</div>`:""}
+          </div>
+        </section>
+      `}
+    </div>
+
+    <!-- Bottom Queue & Resource Infrastructure Panels -->
+    <div class="g2 mt">
+      <section class="panel">
+        <div class="ph">
+          <span class="pt">Recent findings</span>
+          <a class="lk" href="#findings">View all &rarr;</a>
+        </div>
+        <div class="wrap">
+          <table class="tbl">
+            ${f.length?f.slice(0,5).map(x=>`<tr class="clk" data-open="${x.id}"><td>${tg(x.sev,"bad")}</td><td>${esc(x.title)}</td><td>${stat(x.status)}</td></tr>`).join(""):`<tr><td>${none("No findings yet.")}</td></tr>`}
+          </table>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="ph">
+          <span class="pt">Connection and resource health</span>
+          ${tg(live?"AWS live mode":"Simulation mode",live?"ok":"in")}
+        </div>
+        <div class="rw">
+          <div class="gr1">
+            <div>${live?"Live AWS account":"Local AWS emulator (moto)"}</div>
+            <div class="mu">Account ${esc(S.account)}, region ${esc(S.region)}, ${S.polls} checks at about ${S.latency} ms</div>
+          </div>
+        </div>
+        ${S.resources.map(r=>`
+          <div class="rw">
+            <span class="dot ${r.ok?"ok":"bad"}"></span>
+            <div class="gr1">
+              <div>${esc(r.name)}</div>
+              <div class="mu">${esc(r.ok?r.good:r.badtxt)}</div>
+            </div>
+            ${live?"":`<button class="btn sm" data-p="/api/attack/${r.id}" title="${esc(r.attack)}">Simulate attack</button>`}
+          </div>
+        `).join("")}
+      </section>
+    </div>
+  `;
+}
 function findings(){return`<div class="tools"><select id="fsev" aria-label="Severity"><option value="">All severities</option>${["Critical","High","Medium","Low"].map(x=>`<option>${x}</option>`).join("")}</select><select id="fst" aria-label="Status"><option value="">All statuses</option><option value="pending">Awaiting approval</option><option value="fixed">Remediated</option><option value="rejected">Rejected</option></select><span class="mu" id="fcount"></span></div><section class="panel"><div class="wrap"><table class="tbl" id="ftbl"></table></div></section>`}
 function paintFindings(){const t=$$("ftbl");if(!t)return;const q=Q.toLowerCase(),L=S.findings.filter(x=>(!FSEV||x.sev==FSEV)&&(!FST||x.status==FST)&&(!q||(x.title+x.ref+x.id).toLowerCase().includes(q)));
  $$("fcount").textContent=`${L.length} of ${S.findings.length} findings`;
@@ -1058,33 +1200,33 @@ function alerts() {
 
     <div class="kpis">
       <div class="panel kp">
-        <div class="lb">Total Alerts</div>
-        <div class="kv">${st.total || 0}</div>
-        <div class="mu">All recorded detections</div>
-      </div>
-      <div class="panel kp">
-        <div class="lb">Unresolved</div>
+        <div class="lb">Active Alerts</div>
         <div class="kv ${(st.unresolved_count||0)>0?'bad':'ok'}">${st.unresolved_count || 0}</div>
-        <div class="mu">Active investigation queue</div>
+        <div class="mu">Requires investigation</div>
       </div>
       <div class="panel kp">
-        <div class="lb">Critical Severity</div>
-        <div class="kv bad">${(st.by_severity && st.by_severity.Critical) || 0}</div>
-        <div class="mu">Immediate threat response</div>
-      </div>
-      <div class="panel kp">
-        <div class="lb">High Severity</div>
-        <div class="kv wr">${(st.by_severity && st.by_severity.High) || 0}</div>
-        <div class="mu">Elevated risk posture</div>
+        <div class="lb">Critical &amp; High</div>
+        <div class="kv bad">${((st.by_severity && st.by_severity.Critical) || 0) + ((st.by_severity && st.by_severity.High) || 0)}</div>
+        <div class="mu">Elevated risk tier</div>
       </div>
       <div class="panel kp">
         <div class="lb">Investigating</div>
-        <div class="kv">${(st.by_status && st.by_status.Investigating) || 0}</div>
+        <div class="kv wr">${(st.by_status && st.by_status.Investigating) || 0}</div>
         <div class="mu">Assigned to analysts</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Escalated Incidents</div>
+        <div class="kv">${st.escalated_count || items.filter(a => a.incident_id).length}</div>
+        <div class="mu">Active SOC cases</div>
+      </div>
+      <div class="panel kp">
+        <div class="lb">Resolved</div>
+        <div class="kv ok">${(st.by_status && st.by_status.Resolved) || 0}</div>
+        <div class="mu">Remediated &amp; verified</div>
       </div>
     </div>
 
-    <div class="tools">
+    <div class="tools" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
       <select id="sel-al-sev" aria-label="Severity filter">
         <option value="" ${ALERTS_SEV===""?"selected":""}>All Severities</option>
         <option value="Critical" ${ALERTS_SEV==="Critical"?"selected":""}>Critical</option>
@@ -1108,7 +1250,7 @@ function alerts() {
         <option value="Simulation Lab" ${ALERTS_SRC==="Simulation Lab"?"selected":""}>Simulation Lab</option>
       </select>
       <input type="search" id="inp-al-q" placeholder="Filter alerts by title or resource..." value="${esc(ALERTS_Q)}" style="min-width:240px">
-      <span class="mu" style="margin-left:auto">${items.length} of ${st.total || 0} alerts</span>
+      <span class="mu" style="margin-left:auto;font-size:12px">${items.length} of ${st.total || 0} alerts</span>
     </div>
 
     <div class="cols2">
@@ -1119,22 +1261,33 @@ function alerts() {
           <span class="mu">Click row to investigate</span>
         </div>
         <div class="wrap">
-          <table class="tbl">
-            <tr>
-              <th>ID</th><th>Severity</th><th>Title</th><th>Resource</th><th>Status</th>
-            </tr>
-            ${items.length ? items.map(a => `
-              <tr class="clk ${selected && selected.id === a.id ? 'fresh' : ''}" data-select-alert="${esc(a.id)}">
-                <td class="mono"><b>${esc(a.id)}</b></td>
-                <td>${tg(a.severity, a.severity === 'Critical' ? 'crit' : a.severity === 'High' ? 'high' : 'med')}</td>
-                <td><b>${esc(a.title)}</b><div class="mu" style="font-size:11px">${esc(a.detection_source)} · ${esc(a.timestamp)}</div></td>
-                <td class="mono" style="font-size:11px">${esc(a.affected_resource)}</td>
-                <td>
-                  ${tg(a.status, a.status === 'Resolved' ? 'ok' : a.status === 'New' ? 'bad' : 'wr')}
-                  ${a.incident_id ? `<div style="margin-top:2px"><a class="lk mono" href="#incidents" data-link-incident="${esc(a.incident_id)}" style="font-size:10px;text-decoration:none">🔗 ${esc(a.incident_id)} <span class="chip" style="font-size:9px;padding:1px 4px">${esc(a.incident_status || 'Active')}</span></a></div>` : ''}
-                </td>
+          <table class="tbl alerts-tbl" style="table-layout:fixed;width:100%">
+            <thead>
+              <tr>
+                <th style="width:96px;min-width:96px;white-space:nowrap">Alert ID</th>
+                <th style="width:85px;min-width:85px;text-align:center">Severity</th>
+                <th style="min-width:180px">Title &amp; Context</th>
+                <th style="width:130px;min-width:130px">Resource</th>
+                <th style="width:125px;min-width:125px">Status</th>
               </tr>
-            `).join("") : `<tr><td colspan="5">${none("No alerts match active filters.")}</td></tr>`}
+            </thead>
+            <tbody>
+              ${items.length ? items.map(a => `
+                <tr class="clk ${selected && selected.id === a.id ? 'selected fresh' : ''}" data-select-alert="${esc(a.id)}">
+                  <td class="mono" style="width:96px;min-width:96px;white-space:nowrap;font-weight:700"><b>${esc(a.id)}</b></td>
+                  <td style="text-align:center">${tg(a.severity, a.severity === 'Critical' ? 'crit' : a.severity === 'High' ? 'high' : a.severity === 'Medium' ? 'med' : '')}</td>
+                  <td style="overflow:hidden;text-overflow:ellipsis">
+                    <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(a.title)}">${esc(a.title)}</div>
+                    <div class="mu mono" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.detection_source)} · ${esc(a.timestamp)}</div>
+                  </td>
+                  <td class="mono" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(a.affected_resource)}">${esc(a.affected_resource)}</td>
+                  <td>
+                    ${tg(a.status, a.status === 'Resolved' ? 'ok' : a.status === 'Investigating' ? 'in' : a.status === 'New' ? 'bad' : 'wr')}
+                    ${a.incident_id ? `<div style="margin-top:3px"><a class="lk mono" href="#incidents" data-link-incident="${esc(a.incident_id)}" style="font-size:10px;text-decoration:none;display:inline-flex;align-items:center;gap:3px"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>${esc(a.incident_id)} <span class="chip" style="font-size:9px;padding:1px 4px">${esc(a.incident_status || 'Active')}</span></a></div>` : ''}
+                  </td>
+                </tr>
+              `).join("") : `<tr><td colspan="5">${none("No alerts match active filters.")}</td></tr>`}
+            </tbody>
           </table>
         </div>
       </section>
@@ -1143,17 +1296,17 @@ function alerts() {
       <section class="panel">
         <div class="ph">
           <span class="pt">Alert Investigation &amp; Triage</span>
-          ${selected ? tg(selected.status, selected.status === 'Resolved' ? 'ok' : 'wr') : ''}
+          ${selected ? tg(selected.status, selected.status === 'Resolved' ? 'ok' : selected.status === 'Investigating' ? 'in' : 'wr') : ''}
         </div>
         ${selected ? (() => {
           const isMotoSim = (selected.environment || '').toLowerCase().includes('moto') || (selected.environment || '').toLowerCase().includes('simulat');
           return `
           <div class="pb">
             <!-- Environment Badge & Alert Title Header -->
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px">
               <div>
-                <div style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-bottom:6px;${isMotoSim ? 'background:rgba(110,98,245,0.12);color:var(--pr, #6e62f5);border:1px solid rgba(110,98,245,0.3)' : 'background:rgba(255,165,0,0.12);color:#ff9800;border:1px solid rgba(255,165,0,0.3)'}">
-                  <span>${isMotoSim ? '🧪 SIMULATED ENVIRONMENT (Moto Local Cloud)' : '☁️ PRODUCTION ENVIRONMENT (Real AWS Cloud)'}</span>
+                <div style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-bottom:6px;${isMotoSim ? 'background:var(--fl);color:var(--ac);border:1px solid rgba(105,167,255,0.3)' : 'background:rgba(229,166,66,0.12);color:var(--wr);border:1px solid rgba(229,166,66,0.3)'}">
+                  <span>${isMotoSim ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><path d="M10 2v7.31L4.14 19.3A2 2 0 0 0 6 22h12a2 2 0 0 0 1.86-2.7L14 9.31V2"/><path d="M8.5 2h7"/></svg>SIMULATED ENVIRONMENT (Moto Local Cloud)' : '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>PRODUCTION ENVIRONMENT (Real AWS Cloud)'}</span>
                   <span style="opacity:0.7">· Account: ${esc(selected.account_id)}</span>
                 </div>
                 <h3 style="margin:0 0 4px;font-size:15px;font-weight:600">${esc(selected.title)}</h3>
@@ -1163,17 +1316,17 @@ function alerts() {
             </div>
 
             <!-- Lifecycle & Linked Incident Status -->
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;background:var(--bg2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;flex-wrap:wrap">
               <div>
                 <span style="font-size:11px;font-weight:600;color:var(--mu);margin-right:6px">Alert Status:</span>
-                ${tg(selected.status, selected.status === 'Resolved' ? 'ok' : selected.status === 'New' ? 'bad' : 'wr')}
+                ${tg(selected.status, selected.status === 'Resolved' ? 'ok' : selected.status === 'Investigating' ? 'in' : selected.status === 'New' ? 'bad' : 'wr')}
               </div>
               <div style="width:1px;height:18px;background:var(--ln)"></div>
               ${selected.incident_id ? `
                 <div style="display:flex;align-items:center;gap:8px">
                   <span style="font-size:11px;font-weight:600;color:var(--mu)">Linked Incident:</span>
                   <a class="chip lk" href="#incidents" data-link-incident="${esc(selected.incident_id)}" style="text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px">
-                    🔗 ${esc(selected.incident_id)}
+                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>${esc(selected.incident_id)}
                   </a>
                   <span class="chip" style="font-size:11px;${selected.incident_status === 'Closed' ? 'border-color:var(--ok);color:var(--ok)' : 'border-color:var(--wr);color:var(--wr)'}">
                     Incident Status: <b>${esc(selected.incident_status || 'Active')}</b>
@@ -1198,40 +1351,52 @@ function alerts() {
 
             <!-- Isolation Forest Anomaly Scoring (XAI Engine) -->
             ${selected.ml_anomaly_score !== null && selected.ml_anomaly_score !== undefined ? `
-              <div style="background:rgba(76,141,255,0.08);border:1px solid var(--ac);border-radius:6px;padding:10px;margin-bottom:12px">
+              <div style="background:var(--fl);border:1px solid var(--ac);border-radius:6px;padding:10px;margin-bottom:12px">
                 <div class="lb" style="margin-top:0;display:flex;justify-content:space-between;align-items:center">
                   <span>Isolation Forest Anomaly Scoring (XAI Engine)</span>
                   ${selected.ml_anomaly_score >= (selected.ml_explanation?.threshold ?? 0.65) ?
-                    '<span class="chip" style="background:rgba(255,107,107,0.15);color:var(--bad);border:1px solid var(--bad);font-weight:600">ANOMALOUS (Outlier)</span>' :
-                    '<span class="chip" style="background:rgba(81,207,102,0.15);color:var(--ok);border:1px solid var(--ok);font-weight:600">NORMAL</span>'
+                    '<span class="chip" style="background:rgba(240,82,82,0.18);color:var(--bad);border:1px solid var(--bad);font-weight:600">ANOMALOUS (Outlier)</span>' :
+                    '<span class="chip" style="background:rgba(67,185,139,0.18);color:var(--ok);border:1px solid var(--ok);font-weight:600">NORMAL</span>'
                   }
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px">
                   <div><b>Calculated Anomaly Score:</b> <span class="mono bad" style="font-size:13px;font-weight:700">${selected.ml_anomaly_score.toFixed(3)}</span></div>
-                  <div><b>Detection Threshold:</b> <span class="mono">${((selected.ml_explanation && selected.ml_explanation.threshold !== undefined) ? Number(selected.ml_explanation.threshold).toFixed(3) : "0.650")}</span></div>
+                  <div><b>Detection Threshold:</b> <span class="mono">${((selected.ml_explanation && selected.ml_explanation.threshold !== undefined) ? Number(selected.ml_explanation.threshold).toFixed(3) : "0.610")}</span></div>
                   ${selected.ml_explanation && selected.ml_explanation.anomaly_delta ? `<div><b>Anomaly Delta:</b> <span class="mono">${esc(selected.ml_explanation.anomaly_delta)}</span></div>` : ''}
-                  <div><b>Algorithm:</b> <span class="mono">Isolation Forest (100 Trees)</span></div>
+                  <div><b>Algorithm:</b> <span class="mono">Isolation Forest (200 Trees, Contamination=0.03)</span></div>
                 </div>
                 ${selected.ml_explanation && selected.ml_explanation.features ? `
-                  <div class="mu" style="font-size:11px;margin-top:6px;font-weight:600">Feature Contributions to Outlier Classification:</div>
+                  <div class="mu" style="font-size:11px;margin-top:6px;font-weight:600">Raw Telemetry Observations (Observed Window):</div>
                   <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:6px;margin:6px 0">
                     ${Object.entries(selected.ml_explanation.features).map(([fKey, fVal]) => `
-                      <div style="background:var(--bg2);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px">
+                      <div style="background:var(--sf2);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px">
                         <span class="mu">${esc(fKey)}:</span> <b>${esc(String(fVal))}</b>
                       </div>
                     `).join("")}
                   </div>
-                  <details style="margin-top:6px">
-                    <summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--ac)">Raw Feature Contributions (JSON)</summary>
-                    <pre style="margin-top:4px;font-size:11px">${esc(JSON.stringify(selected.ml_explanation, null, 2))}</pre>
-                  </details>
                 ` : ''}
+                ${selected.ml_explanation && selected.ml_explanation.top_features && selected.ml_explanation.top_features.length ? `
+                  <div class="mu" style="font-size:11px;margin-top:8px;font-weight:600">Tree-Path Information Gain Feature Attributions (200 Trees):</div>
+                  <div style="display:flex;flex-direction:column;gap:4px;margin:6px 0">
+                    ${selected.ml_explanation.top_features.map(tf => `
+                      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--sf2);padding:4px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px">
+                        <span>${esc(tf.description || tf.name)}</span>
+                        <span class="mono" style="font-weight:700;color:var(--ac)">${(Number(tf.weight) * 100).toFixed(1)}%</span>
+                      </div>
+                    `).join("")}
+                  </div>
+                  <div class="mu" style="font-size:10px;margin-top:2px;font-style:italic">Note: Attributions represent tree-partition path contribution across the 200-estimator Isolation Forest ensemble, not causal explanations or Shapley values.</div>
+                ` : ''}
+                <details style="margin-top:6px">
+                  <summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--ac)">Raw Model Telemetry &amp; Explanation (JSON)</summary>
+                  <pre class="json-viewer" style="margin-top:4px;font-size:11px">${highlightJSON(selected.ml_explanation)}</pre>
+                </details>
               </div>
             ` : ''}
 
             <!-- Readable Evidence Breakdown -->
             <div class="lb">Readable Evidence Breakdown</div>
-            <div style="background:var(--bg2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;margin-bottom:8px">
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;margin-bottom:8px">
               ${Object.entries(selected.evidence || {}).length ? Object.entries(selected.evidence).map(([k, v]) => {
                 const label = k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
                 let displayVal = v;
@@ -1252,7 +1417,7 @@ function alerts() {
             </div>
             <details style="margin-top:6px;margin-bottom:12px">
               <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--ac)">Raw Evidence &amp; Telemetry (JSON)</summary>
-              <pre style="max-height:160px;font-size:11px;margin-top:6px">${esc(JSON.stringify(selected.evidence || selected.raw_event || {}, null, 2))}</pre>
+              <pre class="json-viewer" style="max-height:160px;font-size:11px;margin-top:6px">${highlightJSON(selected.evidence || selected.raw_event || {})}</pre>
             </details>
 
             <div class="lb">Audit Timeline (${selected.timeline ? selected.timeline.length : 0})</div>
@@ -1267,7 +1432,7 @@ function alerts() {
               <button class="btn sm primary" id="btn-al-res" data-id="${esc(selected.id)}">Resolve Alert</button>
               <button class="btn sm danger" id="btn-al-sup" data-id="${esc(selected.id)}">Suppress</button>
               ${selected.incident_id ? `
-                <a class="btn sm primary" href="#incidents" data-link-incident="${esc(selected.incident_id)}" style="text-decoration:none">View Escalated Incident (🔗 ${esc(selected.incident_id)})</a>
+                <a class="btn sm primary" href="#incidents" data-link-incident="${esc(selected.incident_id)}" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>View Escalated Incident (${esc(selected.incident_id)})</a>
               ` : `
                 <button class="btn sm primary" id="btn-al-esc" data-id="${esc(selected.id)}" style="background:var(--bad);border-color:var(--bad)">Escalate to Incident</button>
               `}
@@ -1501,7 +1666,7 @@ function remediation() {
 
   const st = REM_DATA.stats || {};
   const items = REM_DATA.remediations || [];
-  const selected = items.find(r => r.id === SELECTED_REM_ID) || items[0] || null;
+  const selected = items.find(r => r.id === SELECTED_REM_ID) || (REM_ST === "Pending" ? items.find(r => r.status === "Pending") : null) || items[0] || null;
 
   return `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:12px">
@@ -1513,22 +1678,22 @@ function remediation() {
     </div>
 
     <div class="kpis">
-      <div class="panel kp">
+      <div class="panel kp interactive" data-rem-filter="" tabindex="0" role="button" title="View all remediation tasks">
         <div class="lb">Total Tasks</div>
         <div class="kv">${st.total || 0}</div>
         <div class="mu">Remediation actions</div>
       </div>
-      <div class="panel kp">
+      <div class="panel kp interactive" style="--kpi-accent:var(--amber)" data-rem-filter="Pending" tabindex="0" role="button" title="Filter to pending approval tasks">
         <div class="lb">Pending Approval</div>
         <div class="kv ${(st.pending_approval||0)>0?'wr':'ok'}">${st.pending_approval || 0}</div>
         <div class="mu">Requires human review</div>
       </div>
-      <div class="panel kp">
+      <div class="panel kp interactive" style="--kpi-accent:var(--cyan)" data-rem-filter="Approved" tabindex="0" role="button" title="Filter to approved tasks">
         <div class="lb">Approved</div>
         <div class="kv">${st.approved || 0}</div>
         <div class="mu">Ready for deployment</div>
       </div>
-      <div class="panel kp">
+      <div class="panel kp interactive" style="--kpi-accent:var(--emerald)" data-rem-filter="Verified" tabindex="0" role="button" title="Filter to independently verified tasks">
         <div class="lb">Independently Verified</div>
         <div class="kv ok">${st.independently_verified || 0}</div>
         <div class="mu">Cloud state confirmed PASS</div>
@@ -1545,7 +1710,21 @@ function remediation() {
       <section class="panel">
         <div class="ph">
           <span class="pt">Remediation Tasks Queue (${items.length})</span>
-          <span class="mu">Click row to inspect diff</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="rem-filter-st" class="sm" aria-label="Filter tasks by status" style="height:26px;font-size:12px;padding:0 6px">
+              <option value="" ${!REM_ST?'selected':''}>All statuses</option>
+              <option value="Pending" ${REM_ST==='Pending'?'selected':''}>Pending Approval</option>
+              <option value="Approved" ${REM_ST==='Approved'?'selected':''}>Approved</option>
+              <option value="Verified" ${REM_ST==='Verified'?'selected':''}>Verified</option>
+              <option value="Rolled Back" ${REM_ST==='Rolled Back'?'selected':''}>Rolled Back</option>
+            </select>
+            <select id="rem-filter-sev" class="sm" aria-label="Filter tasks by severity" style="height:26px;font-size:12px;padding:0 6px">
+              <option value="" ${!REM_SEV?'selected':''}>All severities</option>
+              <option value="Critical" ${REM_SEV==='Critical'?'selected':''}>Critical</option>
+              <option value="High" ${REM_SEV==='High'?'selected':''}>High</option>
+              <option value="Medium" ${REM_SEV==='Medium'?'selected':''}>Medium</option>
+            </select>
+          </div>
         </div>
         <div class="wrap">
           <table class="tbl">
@@ -1584,6 +1763,16 @@ function remediation() {
               </div>
             </div>
 
+            <!-- Context & Correlation Metadata -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px;background:var(--sf2);border:1px solid var(--ln);border-radius:6px;margin-bottom:12px;font-size:11px">
+              <div><span class="mu">Finding Reference:</span> <b class="mono" style="color:var(--tx)">${esc(selected.related_finding_id || 'N/A')}</b></div>
+              <div><span class="mu">Correlated Alert:</span> <b class="mono" style="color:var(--tx)">${esc(selected.related_alert_id || 'N/A')}</b></div>
+              <div><span class="mu">Attack Scenario:</span> <b style="color:var(--tx)">${esc(selected.scenario_id || (selected.related_finding_id ? 'Core AWS: ' + selected.related_finding_id : 'Predefined Cloud Finding'))}</b></div>
+              <div><span class="mu">Scenario Run ID:</span> <b class="mono" style="color:var(--tx)">${esc(selected.run_id || 'Active Session')}</b></div>
+              <div><span class="mu">Approval Status:</span> <b style="color:${selected.status === 'Approved' ? 'var(--cyan)' : selected.status === 'Verified' ? 'var(--emerald)' : 'var(--amber)'}">${selected.status === 'Approved' ? `Approved by ${esc(selected.approved_by || 'Operator')} (${esc(selected.approved_at || 'Recorded')})` : selected.status === 'Verified' ? 'Approved &amp; Verified' : 'Awaiting Operator Approval'}</b></div>
+              <div><span class="mu">Verification Status:</span> <b style="color:${selected.verification_state === 'PASS' ? 'var(--emerald)' : selected.verification_state === 'FAIL' ? 'var(--bad)' : 'var(--mu)'}">${esc(selected.verification_state || 'UNVERIFIED')}</b></div>
+            </div>
+
             <div class="lb">Technical Explanation</div>
             <p style="font-size:12px;margin-bottom:6px">${esc(selected.technical_explanation || 'Remediation eliminates security misconfiguration and closes attack paths.')}</p>
 
@@ -1591,15 +1780,15 @@ function remediation() {
             <p style="font-size:12px;margin-bottom:12px">${esc(selected.why_it_matters || 'Prevents unauthorized privilege escalation and maintains compliance.')}</p>
 
             <!-- Before / After Diff Viewer -->
-            <div class="lb">Configuration Before &amp; Proposed Change</div>
+            <div class="lb">Configuration Before &amp; Expected After</div>
             <div class="diff-view" style="margin-bottom:12px">
               <div>
                 <div class="mu" style="font-size:11px;margin-bottom:4px">Before (Current Cloud State)</div>
                 <pre style="font-size:11px;max-height:120px">${esc(JSON.stringify(selected.before_config || {"status": "Vulnerable configuration"}, null, 2))}</pre>
               </div>
               <div>
-                <div class="mu" style="font-size:11px;margin-bottom:4px">Proposed Secure State</div>
-                <pre class="chg" style="font-size:11px;max-height:120px">${esc(JSON.stringify(selected.proposed_change || {"action": selected.recommended_action}, null, 2))}</pre>
+                <div class="mu" style="font-size:11px;margin-bottom:4px">Expected After Configuration</div>
+                <pre class="chg" style="font-size:11px;max-height:120px">${esc(JSON.stringify(selected.after_config || selected.proposed_change || {"action": selected.recommended_action}, null, 2))}</pre>
               </div>
             </div>
 
@@ -2176,10 +2365,15 @@ function bind(){const r=route();
           defaultValue: defaultTitle,
           confirmText: "Escalate Incident",
           onConfirm: async (title) => {
-            await authFetch(`/api/alerts/${alertId}/escalate`, {
+            const res = await authFetch(`/api/alerts/${alertId}/escalate`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ title })
             });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              showToast(err.error || "Failed to escalate alert to incident.", "bad");
+              return;
+            }
             showToast("Alert successfully escalated to incident!", "ok");
             loadAlerts();
             INCIDENTS_BOOT = false;
@@ -2302,6 +2496,26 @@ function bind(){const r=route();
       const bRef = $$("btn-refresh-rem");
       if (bRef) bRef.onclick = () => loadRemediations();
 
+      const fSt = $$("rem-filter-st");
+      if (fSt) fSt.onchange = () => {
+        REM_ST = fSt.value;
+        SELECTED_REM_ID = null;
+        loadRemediations();
+      };
+      const fSev = $$("rem-filter-sev");
+      if (fSev) fSev.onchange = () => {
+        REM_SEV = fSev.value;
+        SELECTED_REM_ID = null;
+        loadRemediations();
+      };
+      document.querySelectorAll("[data-rem-filter]").forEach(el => {
+        el.onclick = () => {
+          REM_ST = el.dataset.remFilter;
+          SELECTED_REM_ID = null;
+          loadRemediations();
+        };
+      });
+
       document.querySelectorAll("[data-select-rem]").forEach(tr => {
         tr.onclick = () => {
           SELECTED_REM_ID = tr.dataset.selectRem;
@@ -2316,6 +2530,7 @@ function bind(){const r=route();
           body: JSON.stringify({ user: "Security Operator" })
         });
         loadRemediations();
+        poll();
       };
 
       const bApply = $$("btn-rem-apply");
@@ -2332,6 +2547,7 @@ function bind(){const r=route();
       if (bRever) bRever.onclick = async () => {
         await authFetch(`/api/remediations/${bRever.dataset.id}/verify`, { method: "POST" });
         loadRemediations();
+        poll();
       };
 
       const bRoll = $$("btn-rem-rollback");
@@ -2394,8 +2610,70 @@ function bind(){const r=route();
 
   CG.mount(ctx())}
 let tm;$$("gq").addEventListener("input",e=>{clearTimeout(tm);tm=setTimeout(()=>{Q=e.target.value.trim();if(!["findings","events","audit"].includes(route()))location.hash="#findings";else refresh()},180)});
-document.addEventListener("click",e=>{const o=e.target.closest("[data-open]");if(o)openDrawer(o.dataset.open);if(e.target.id=="dclose")closeDrawer();if(e.target.closest("[data-p]")&&DR)setTimeout(()=>DR&&openDrawer(DR),900)});
-document.addEventListener("keydown",e=>{if(e.key=="Escape"){if(window.closeModal)closeModal();closeDrawer()}if(e.key=="/"&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$$("gq")?.focus()}});
+document.addEventListener("click",e=>{
+  const pipe = e.target.closest("[data-pipe-route]");
+  if (pipe) {
+    const r = pipe.dataset.pipeRoute;
+    const flt = pipe.dataset.pipeFilter;
+    if (r === "#remediation") {
+      if (flt === "pending") { REM_ST = "Pending"; FST = "pending"; SELECTED_REM_ID = null; }
+      else if (flt === "fixed") { REM_ST = "Verified"; FST = "fixed"; SELECTED_REM_ID = null; }
+      else { REM_ST = ""; FST = ""; SELECTED_REM_ID = null; }
+      REM_BOOT = false;
+    } else if (r === "#findings") {
+      FST = ""; FSEV = "";
+    } else if (r === "#events") {
+      EK = "";
+    }
+    location.hash = r;
+    return;
+  }
+  const kpi = e.target.closest("[data-kpi-route]");
+  if (kpi) {
+    const kr = kpi.dataset.kpiRoute;
+    const kf = kpi.dataset.kpiFilter;
+    if (kr === "alerts") {
+      ALERTS_ST = kf || "New";
+      ALERTS_BOOT = false;
+      location.hash = "#alerts";
+    } else if (kr === "incidents") {
+      INC_VIEW = kf || "active";
+      INCIDENTS_BOOT = false;
+      location.hash = "#incidents";
+    } else if (kr === "remediation-pending") {
+      REM_ST = "Pending";
+      FST = "pending";
+      SELECTED_REM_ID = null;
+      REM_BOOT = false;
+      location.hash = "#remediation";
+    } else if (kr === "remediation-verified") {
+      REM_ST = "Verified";
+      FST = "fixed";
+      SELECTED_REM_ID = null;
+      REM_BOOT = false;
+      location.hash = "#remediation";
+    } else if (kr === "findings") {
+      FST = "";
+      FSEV = "";
+      location.hash = "#findings";
+    } else if (kr === "events") {
+      EK = "";
+      location.hash = "#events";
+    }
+    return;
+  }
+  const o=e.target.closest("[data-open]");if(o)openDrawer(o.dataset.open);if(e.target.id=="dclose")closeDrawer();if(e.target.closest("[data-p]")&&DR)setTimeout(()=>DR&&openDrawer(DR),900);
+});
+document.addEventListener("keydown",e=>{
+  if(e.key=="Escape"){if(window.closeModal)closeModal();closeDrawer()}
+  if(e.key=="/"&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$$("gq")?.focus()}
+  if(e.key=="Enter"){
+    const active=document.activeElement;
+    if(active&&(active.hasAttribute("data-kpi-route")||active.hasAttribute("data-pipe-route"))){
+      active.click();
+    }
+  }
+});
 new MutationObserver(()=>CG.update(ctx())).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 $$("menu").onclick=()=>document.body.classList.toggle("navopen");$$("scrim").onclick=()=>document.body.classList.remove("navopen");window.addEventListener("hashchange",()=>document.body.classList.remove("navopen"));
 setTimeout(loadMetrics,0);setInterval(loadMetrics,3000);setInterval(()=>{if(route()=="events")loadEvents()},2000);

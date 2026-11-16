@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from flask import Flask, jsonify, request
 
+from backend.posture import compute_posture_score
+from backend.soc.store import soc_store
 from backend.state import StateStore
 
 logger = logging.getLogger("cloudguardian.telemetry")
@@ -113,14 +115,8 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
         time.sleep(2)
         while True:
             try:
-                ok_count = 0
-                for r in R.values():
-                    try:
-                        if bool(r["check"]()):
-                            ok_count += 1
-                    except Exception:
-                        pass
-                posture_score = round(100 * ok_count / max(len(R), 1))
+                s_store = g.get("soc_store") or soc_store
+                posture_score = compute_posture_score(R, store, s_store)
                 pending_count = sum(
                     1 for f in store.get_all_findings() if f.get("status") == "pending"
                 )

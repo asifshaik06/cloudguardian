@@ -139,6 +139,10 @@ class RemediationTask(BaseModel):
     after_config: Optional[Any] = None
     before_attack_paths_count: int = 0
     after_attack_paths_count: int = 0
+    scenario_id: Optional[str] = None
+    run_id: Optional[str] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: time.strftime("%Y-%m-%d %H:%M:%S"))
     updated_at: str = Field(default_factory=lambda: time.strftime("%Y-%m-%d %H:%M:%S"))
     applied_at: Optional[str] = None
