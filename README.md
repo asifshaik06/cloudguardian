@@ -4,7 +4,7 @@
 
 CloudGuardian 2.0 is an enterprise-grade cloud security operations and posture management platform designed for Amazon Web Services (AWS) architectures. It combines deterministic Center for Internet Security (CIS) compliance checking with unsupervised machine learning anomaly detection, calculates multi-hop identity privilege escalation graphs, explains detections through decision-tree feature attribution, and enforces human-in-the-loop remediations that are independently verified against live infrastructure.
 
-The platform operates in an isolated environment using a local AWS emulator (`moto`), eliminating external cloud infrastructure costs while providing deterministic reproducibility for security engineers, operations teams, and academic evaluators.
+The platform operates in an isolated environment using a local AWS emulator (`moto`), eliminating external cloud infrastructure costs while providing deterministic reproducibility for security engineers, cloud architects, and security operations teams.
 
 ---
 
@@ -303,36 +303,36 @@ Observations with $s(x) > 0.610$ automatically generate high-confidence security
 
 CloudGuardian extracts 12 numerical behavioral features aggregated over a sliding 5-minute identity window ($W = 300\text{s}$):
 
-| Index | Feature Identifier | Data Type | Description |
-| :-: | :--- | :--- | :--- |
-| 1 | `call_count` | Integer | Total number of API invocations in the current observation window. |
-| 2 | `call_velocity` | Float | Rate of API calls relative to the identity's historical baseline mean. |
-| 3 | `error_ratio` | Float [0, 1] | Proportion of API calls returning an error code (e.g., `AccessDenied`). |
-| 4 | `unique_services` | Integer | Number of distinct AWS service namespaces accessed (`s3`, `iam`, `sts`, etc.). |
-| 5 | `unique_events` | Integer | Number of distinct API action names invoked. |
-| 6 | `enumeration_ratio` | Float [0, 1] | Proportion of reconnaissance actions (`List*`, `Describe*`, `Get*`). |
-| 7 | `sensitive_count` | Integer | Number of high-impact security actions invoked (`GetObject`, `AuthorizeSecurityGroupIngress`). |
-| 8 | `iam_change_count` | Integer | Number of mutating IAM actions invoked (`Attach*Policy`, `CreateAccessKey`). |
-| 9 | `first_service_ratio`| Float [0, 1]| Fraction of services accessed that were never previously accessed by this identity. |
-| 10 | `first_ip` | Binary {0, 1}| Flag indicating if the request originated from an unfamiliar IP address. |
-| 11 | `off_hours` | Binary {0, 1}| Flag indicating activity outside the identity's historical active hours. |
-| 12 | `event_entropy` | Float $\ge 0$ | Shannon entropy of the invoked action distribution. |
+| Index | Feature Identifier | Data Type | Mathematical Formulation | Description |
+| :-: | :--- | :--- | :--- | :--- |
+| 1 | `call_count` | Integer | \(N_t = \sum_{e \in W} 1\) | Total number of API invocations in the current observation window. |
+| 2 | `call_velocity` | Float | \(V_t = N_t / (\bar{N}_{\text{hist}} + 1)\) | Rate of API calls relative to historical baseline mean (\(\bar{N}_{\text{hist}} + 1\) smoothing; defaults to 1.0 until \(\ge 3\) historical windows). |
+| 3 | `error_ratio` | Float [0, 1] | \(E_t = \frac{1}{N_t} \sum [e.\text{status} = \text{Error}]\) | Proportion of API calls returning an error code (e.g., `AccessDenied`). |
+| 4 | `unique_services` | Integer | \(S_t = \vert \text{unique}(\{e.\text{service}\}) \vert\) | Number of distinct AWS service namespaces accessed (`s3`, `iam`, `sts`, etc.). |
+| 5 | `unique_events` | Integer | \(A_t = \vert \text{unique}(\{e.\text{action}\}) \vert\) | Number of distinct API action names invoked. |
+| 6 | `enumeration_ratio` | Float [0, 1] | \(R_t = \frac{1}{N_t} \sum [e.\text{action} \in \mathcal{A}_{\text{enum}}]\) | Proportion of reconnaissance actions (`List*`, `Describe*`, `Get*`). |
+| 7 | `sensitive_count` | Integer | \(K_t = \sum [e.\text{action} \in \mathcal{A}_{\text{sensitive}}]\) | Number of high-impact security actions invoked (`GetObject`, `AuthorizeSecurityGroupIngress`). |
+| 8 | `iam_change_count` | Integer | \(P_t = \sum [e.\text{action} \in \mathcal{A}_{\text{iam-mod}}]\) | Number of mutating IAM actions invoked (`Attach*Policy`, `CreateAccessKey`). |
+| 9 | `first_service_ratio` | Float [0, 1] | \(F_t = \frac{1}{N_t} \sum [e.\text{service} \notin \mathcal{S}_{\text{hist}}]\) | Fraction of services accessed that were never previously accessed by this identity. |
+| 10 | `first_ip` | Binary {0, 1} | \(\mathbf{1}[\mathcal{IP}_{t} \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]\) | Flag indicating if at least one previously unseen source IP occurred in the observation window. |
+| 11 | `off_hours` | Binary {0, 1} | \(\mathbf{1}[w.\text{hour} \notin \mathcal{H}_{\text{hist}}]\) | Flag indicating activity during an hour of the day never previously observed for this identity (defaults to 0.0 until \(\ge 3\) historical windows). |
+| 12 | `event_entropy` | Float \(\ge 0\) | \(H_t = -\sum_{i} p_i \log_2 p_i\) | Shannon entropy of the invoked action distribution. |
 
 ### Mathematical Feature Formulations
 
 For an identity window $W_t$ containing $N_t$ event records:
 
-$$\text{call\_velocity} = \frac{N_t}{\max(1, \bar{N}_{\text{hist}} + 1)}$$
+$$\text{call-velocity} = \frac{N_t}{\bar{N}_{\text{hist}} + 1}$$
 
-$$\text{error\_ratio} = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{errorCode} \neq \emptyset]$$
+$$\text{error-ratio} = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{errorCode} \neq \emptyset]$$
 
-$$\text{enumeration\_ratio} = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{eventName} \in \mathcal{A}_{\text{read}}]$$
+$$\text{enumeration-ratio} = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{eventName} \in \mathcal{A}_{\text{read}}]$$
 
-$$\text{iam\_change\_count} = \sum_{e \in W_t} \mathbf{1}[e.\text{service} = \text{"iam"} \land e.\text{eventName} \notin \mathcal{A}_{\text{read}}]$$
+$$\text{iam-change-count} = \sum_{e \in W_t} \mathbf{1}[e.\text{service} = \text{"iam"} \land e.\text{eventName} \notin \mathcal{A}_{\text{read}}]$$
 
-$$\text{first\_ip} = \mathbf{1}[\mathcal{IP}_{t} \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]$$
+$$\text{first-ip} = \mathbf{1}[\mathcal{IP}_{t} \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]$$
 
-$$\text{event\_entropy} = -\sum_{i=1}^{M} p_i \log_2 p_i$$
+$$\text{event-entropy} = -\sum_{i=1}^{M} p_i \log_2 p_i$$
 
 ---
 
@@ -379,7 +379,7 @@ The graph engine executes a cycle-safe depth-first search (`dfs_escalation_paths
 
 When an identity or resource is compromised, CloudGuardian quantifies its operational blast radius:
 
-$$\text{Blast Radius} = \frac{|\text{Reachable Critical Targets}(v)|}{|V_{\text{critical\_assets}}|} \times 100\%$$
+$$\text{Blast Radius} = \frac{|\text{Reachable Critical Targets}(v)|}{|V_{\text{critical-assets}}|} \times 100\%$$
 
 The blast-radius engine evaluates:
 - **Direct Exposure:** S3 buckets, EC2 instances, and databases directly accessible via identity policies.
@@ -589,13 +589,13 @@ http://localhost:8000
 
 ## 23. Running Automated Tests
 
-CloudGuardian 2.0 maintains an automated regression suite with **233 tests** covering unit, integration, and security layers.
+CloudGuardian 2.0 maintains an automated regression suite with **255 tests** covering unit, integration, and security layers.
 
 ```powershell
 # Activate virtual environment
 .\.venv\Scripts\Activate.ps1
 
-# Run the complete test suite (233 tests)
+# Run the complete test suite (255 tests)
 python -m pytest tests/ -q
 
 # Run specific unit test modules
