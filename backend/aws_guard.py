@@ -9,10 +9,53 @@ Provides:
 import logging
 import os
 from typing import Any, Callable, Dict, Optional, Tuple
+from urllib.parse import urlparse
 import boto3
 from botocore.exceptions import ClientError, EndpointConnectionError
 
 logger = logging.getLogger("cloudguardian.aws_guard")
+
+# Authorized local emulator hostnames in simulator mode
+ALLOWED_SIMULATOR_HOSTS = {
+    "127.0.0.1",
+    "localhost",
+    "::1",
+    "0.0.0.0",
+}
+
+
+def validate_endpoint_url(endpoint_url: str) -> str:
+    """Validate that endpoint URL points to an authorized local emulator in simulator mode.
+
+    Raises ValueError if the endpoint points to a public or remote AWS service
+    without CG_LIVE_AWS=1.
+    """
+    if not endpoint_url:
+        return "http://127.0.0.1:5000"
+
+    parsed = urlparse(endpoint_url)
+    if not parsed.scheme or parsed.scheme not in ("http", "https"):
+        raise ValueError(
+            f"[SECURITY GUARD] Invalid endpoint URL scheme '{parsed.scheme}': must be http or https."
+        )
+
+    hostname = (parsed.hostname or "").lower()
+
+    # Explicitly block any connection to real AWS domains in simulator mode
+    if "amazonaws.com" in hostname or hostname.endswith(".aws"):
+        raise ValueError(
+            f"[SECURITY GUARD] Unsafe AWS endpoint detected in simulator mode: '{endpoint_url}'. "
+            "Simulator traffic cannot be routed to public AWS infrastructure without CG_LIVE_AWS=1."
+        )
+
+    # In simulator mode, hostname must be a recognized loopback or local emulator
+    if hostname not in ALLOWED_SIMULATOR_HOSTS and not hostname.startswith("mock") and not hostname.startswith("moto"):
+        raise ValueError(
+            f"[SECURITY GUARD] Non-local endpoint '{endpoint_url}' rejected in simulator mode. "
+            "Must resolve to loopback (127.0.0.1, localhost) or local emulator container."
+        )
+
+    return endpoint_url
 
 
 def is_live_aws() -> bool:
@@ -37,13 +80,16 @@ def get_aws_client(service_name: str, region_name: str = "us-east-1") -> Any:
         return boto3.client(service_name, region_name=region_name)
 
     # Simulator / Moto mode: point to local endpoint with test credentials
-    endpoint = os.getenv("AWS_ENDPOINT_URL", "http://127.0.0.1:5000")
+    raw_endpoint = os.getenv("AWS_ENDPOINT_URL", "http://127.0.0.1:5000")
+    validated_endpoint = validate_endpoint_url(raw_endpoint)
+
     return boto3.client(
         service_name,
         region_name=region_name,
-        endpoint_url=endpoint,
+        endpoint_url=validated_endpoint,
         aws_access_key_id="test",
         aws_secret_access_key="test",
+        aws_session_token=None,
     )
 
 

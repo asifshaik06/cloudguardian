@@ -576,7 +576,7 @@ def register_soc_api(
             ),
             "solution_overview": (
                 "CloudGuardian 2.0 provides an evidence-driven security operations platform combining: "
-                "(1) Real-time telemetry monitoring, (2) CIS rule checks, (3) 12-feature ML anomaly detection with TreeSHAP XAI, "
+                "(1) Real-time telemetry monitoring, (2) CIS rule checks, (3) 12-feature ML anomaly detection with Tree-Path XAI Feature Attribution, "
                 "(4) NetworkX IAM capability graph traversal with deterministic policy evaluation, "
                 "(5) Dynamic blast-radius calculation, (6) 12-scenario isolated simulation lab, "
                 "(7) Human-approved remediation with independent post-fix verification (PASS/PARTIAL/FAIL), and "
@@ -594,7 +594,7 @@ def register_soc_api(
                 {"step": 1, "name": "Telemetry & Event Ingestion", "tech": "Boto3, Moto Emulator, CloudTrail Replay", "description": "Captures raw cloud control plane API calls and resource states."},
                 {"step": 2, "name": "Streaming Window Aggregation", "tech": "Python collections, StreamingWindowAggregator", "description": "Aggregates events into identity-based 12-feature numerical vectors."},
                 {"step": 3, "name": "ML Anomaly Detection", "tech": "Isolation Forest, LocalOutlierFactor, OneClassSVM", "description": "Unsupervised detection of credential abuse and velocity anomalies."},
-                {"step": 4, "name": "Explainable AI (XAI)", "tech": "TreeSHAP, Local Feature Importance", "description": "Calculates exact feature contributions and explains anomalies in plain English."},
+                {"step": 4, "name": "Explainable AI (XAI)", "tech": "Tree-Path Information Gain Attribution, Local Feature Importance", "description": "Calculates exact feature contributions and explains anomalies in plain English."},
                 {"step": 5, "name": "IAM Graph Intelligence", "tech": "NetworkX DiGraph, PolicyEvaluator", "description": "Models permissions, trust documents, and discovers multi-hop privilege escalation paths."},
                 {"step": 6, "name": "Transitive Blast Radius", "tech": "Graph Descendant Traversal, Scoring Algorithm", "description": "Computes impact scope, exposed sensitive assets, and administrative reachability."},
                 {"step": 7, "name": "SOC Alerts & Incidents", "tech": "SOCStore, Lifecycle Management", "description": "Correlates telemetry, deduplicates alerts, and coordinates incident response."},
@@ -606,7 +606,7 @@ def register_soc_api(
                 {"step": 1, "name": "Telemetry & Event Ingestion", "tech": "Boto3, Moto Emulator, CloudTrail Replay", "description": "Captures raw cloud control plane API calls and resource states."},
                 {"step": 2, "name": "Streaming Window Aggregation", "tech": "Python collections, StreamingWindowAggregator", "description": "Aggregates events into identity-based 12-feature numerical vectors."},
                 {"step": 3, "name": "ML Anomaly Detection", "tech": "Isolation Forest, LocalOutlierFactor, OneClassSVM", "description": "Unsupervised detection of credential abuse and velocity anomalies."},
-                {"step": 4, "name": "Explainable AI (XAI)", "tech": "TreeSHAP, Local Feature Importance", "description": "Calculates exact feature contributions and explains anomalies in plain English."},
+                {"step": 4, "name": "Explainable AI (XAI)", "tech": "Tree-Path Information Gain Attribution, Local Feature Importance", "description": "Calculates exact feature contributions and explains anomalies in plain English."},
                 {"step": 5, "name": "IAM Graph Intelligence", "tech": "NetworkX DiGraph, PolicyEvaluator", "description": "Models permissions, trust documents, and discovers multi-hop privilege escalation paths."},
                 {"step": 6, "name": "Transitive Blast Radius", "tech": "Graph Descendant Traversal, Scoring Algorithm", "description": "Computes impact scope, exposed sensitive assets, and administrative reachability."},
                 {"step": 7, "name": "SOC Alerts & Incidents", "tech": "SOCStore, Lifecycle Management", "description": "Correlates telemetry, deduplicates alerts, and coordinates incident response."},

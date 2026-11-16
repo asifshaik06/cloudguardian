@@ -106,7 +106,7 @@ class RuntimeDetector:
         threshold_if = self.thresholds.get("isolation_forest", 0.610)
         is_anomaly = score_if > threshold_if
 
-        # 5. Compute TreeSHAP / tree feature explanations
+        # 5. Compute Tree-Path information gain feature explanations
         explanations: List[List[Any]] = []
         if is_anomaly or score_z > self.thresholds.get("zscore", 4.4):
             explanations = explain_isolation_forest_sample(

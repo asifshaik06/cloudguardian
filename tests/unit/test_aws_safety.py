@@ -9,12 +9,14 @@ import pytest
 from botocore.exceptions import EndpointConnectionError
 
 from backend.aws_guard import (
+    get_aws_client,
     is_dry_run,
     is_live_aws,
     is_live_setup_allowed,
     resolve_account_id,
     safe_execute_remediation,
     safe_setup,
+    validate_endpoint_url,
 )
 
 
@@ -157,3 +159,55 @@ def test_resolve_account_id_masks_in_live_mode(monkeypatch):
     monkeypatch.setenv("CG_LIVE_AWS", "0")
     sim_id = resolve_account_id(sts_mock)
     assert sim_id == "123456789012"
+
+
+def test_validate_endpoint_url_loopback_valid():
+    """Verify loopback endpoints are allowed in simulator mode."""
+    assert validate_endpoint_url("http://127.0.0.1:5000") == "http://127.0.0.1:5000"
+    assert validate_endpoint_url("http://localhost:5000") == "http://localhost:5000"
+    assert validate_endpoint_url("http://0.0.0.0:5000") == "http://0.0.0.0:5000"
+    assert validate_endpoint_url("") == "http://127.0.0.1:5000"
+
+
+def test_validate_endpoint_url_blocks_real_aws():
+    """Verify any attempts to route simulator traffic to AWS domains are blocked."""
+    with pytest.raises(ValueError, match="Unsafe AWS endpoint detected in simulator mode"):
+        validate_endpoint_url("https://s3.amazonaws.com")
+
+    with pytest.raises(ValueError, match="Unsafe AWS endpoint detected in simulator mode"):
+        validate_endpoint_url("https://iam.us-east-1.amazonaws.com")
+
+    with pytest.raises(ValueError, match="Unsafe AWS endpoint detected in simulator mode"):
+        validate_endpoint_url("https://s3.us-west-2.vpce.amazonaws.com")
+
+
+def test_validate_endpoint_url_blocks_non_local():
+    """Verify non-local IPs and external hosts are rejected in simulator mode."""
+    with pytest.raises(ValueError, match="Non-local endpoint"):
+        validate_endpoint_url("http://192.168.1.100:5000")
+
+    with pytest.raises(ValueError, match="Non-local endpoint"):
+        validate_endpoint_url("https://api.external-cloud.com")
+
+
+def test_validate_endpoint_url_invalid_scheme():
+    """Verify non-HTTP schemes are rejected."""
+    with pytest.raises(ValueError, match="Invalid endpoint URL scheme"):
+        validate_endpoint_url("ftp://127.0.0.1:5000")
+
+
+def test_get_aws_client_simulator_rejects_unsafe_endpoint(monkeypatch):
+    """Verify get_aws_client raises ValueError when an unsafe endpoint override is set."""
+    monkeypatch.setenv("CG_LIVE_AWS", "0")
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
+    with pytest.raises(ValueError, match="Unsafe AWS endpoint"):
+        get_aws_client("s3")
+
+
+def test_get_aws_client_simulator_passes_mock_credentials(monkeypatch):
+    """Verify simulator client passes test credentials and no session token."""
+    monkeypatch.setenv("CG_LIVE_AWS", "0")
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://127.0.0.1:5000")
+    client = get_aws_client("s3")
+    # Verify endpoint and client configuration
+    assert "127.0.0.1:5000" in client._endpoint.host

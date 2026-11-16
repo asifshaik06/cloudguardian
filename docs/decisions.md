@@ -41,15 +41,15 @@ Each entry: decision, reason, alternatives considered.
 - Alternatives: Basic Auth (browser popup), static unauthenticated endpoints (security risk).
 
 ## 9. Fail-safe Live AWS setup guard and Telegram user validation
-- Reason: Accidental live AWS modifications could incur costs, damage real infrastructure, or expire the student Free Tier account prematurely. Unauthorized Telegram users in shared chats could approve or reject remediations.
+- Reason: Accidental live AWS modifications could incur unintended cloud infrastructure charges, damage real infrastructure, or modify operational accounts. Unauthorized Telegram users in shared chats could approve or reject remediations.
 - Fix: `safe_setup()` strictly blocks automatic resource provisioning in Live AWS mode unless `CG_ALLOW_LIVE_SETUP=1` is explicitly configured. Telegram callback queries check `from.id` against `TG_CHAT_ID` and `TG_ALLOWED_USERS` before executing `decide()`.
 
 ## 10. Streaming 12-feature window aggregator with cold-start history
 - Reason: Unify offline research feature engineering with runtime inference. A rolling 5-minute window matches CloudTrail batch arrival rhythms, while tracking principal history prevents false positives for newly created credentials during their first 3 windows.
 - Fix: `StreamingWindowAggregator` computes real-time vectors for call_count, call_velocity, error_ratio, sensitive_count, iam_change_count, first_service_ratio, first_ip, off_hours, and event_entropy.
 
-## 11. Tree-path feature attribution (TreeSHAP) without binary C-dependencies
-- Reason: Project evaluation requires explainable AI (XAI) that grounds feature importance mathematically rather than using ad-hoc z-score shares. External packages like `shap` often require C-compilers or fail under restricted student environments.
+## 11. Tree-path feature attribution without binary C-dependencies
+- Reason: Project evaluation requires explainable AI (XAI) that grounds feature importance mathematically rather than using ad-hoc z-score shares. External third-party attribution libraries often require heavy binary dependencies or C-compilers.
 - Fix: Custom pure-Python/NumPy tree-path traversal over scikit-learn's 200 `ExtraTreeRegressor` estimators in the Isolation Forest to measure sample density drops per split.
 
 ## 12. Historical CloudTrail log replay engine

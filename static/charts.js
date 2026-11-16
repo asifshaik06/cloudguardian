@@ -50,7 +50,7 @@ const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",
 const B={
   posture(D){
     const{o,ax,tx}=base(),p=D.M.posture;
-    if(!p||!p.length)return empty("Collecting samples…");
+    if(!p||!p.length)return empty("Collecting samples...");
     const cyan=cv("--cyan")||"#55BFCB";
     return{
       ...o,
@@ -410,7 +410,7 @@ B.calib=function(D){
 
 B.iam_graph=function(D){
   const g=(D&&D.GRAPH)||window.GRAPH||{nodes:[],links:[],categories:[]};
-  if(!g.nodes||!g.nodes.length)return empty("Loading IAM capability graph…");
+  if(!g.nodes||!g.nodes.length)return empty("Loading IAM capability graph...");
   const mu=cv("--mu")||"#9BAABD",ln=cv("--ln")||"#303B49",tx=cv("--tx")||"#DCE5EF",sf=cv("--sf")||"#171D27",sf2=cv("--sf2")||"#202936",sub=cv("--sub")||"#78879A";
   const bad=cv("--bad")||"#D66C79",amber=cv("--amber")||"#D5A64B",emerald=cv("--emerald")||"#48A98B";
 
@@ -467,7 +467,7 @@ B.iam_graph=function(D){
           const d=p.data;
           const adm=d.is_admin?`<div style="color:${bad};font-weight:600;margin-top:2px">[ADMIN] AdministratorAccess</div>`:'';
           const sens=d.is_sensitive?`<div style="color:${amber};font-weight:600;margin-top:2px">[SENSITIVE] High-Value Target Asset</div>`:'';
-          const path=d.in_attack_path?`<div style="color:${bad};font-weight:600;margin-top:2px">● Active Escalation Node</div>`:'';
+          const path=d.in_attack_path?`<div style="color:${bad};font-weight:600;margin-top:2px">[ESCALATION] Active Escalation Node</div>`:'';
           const normal=(!d.is_admin&&!d.is_sensitive&&!d.in_attack_path)?`<div style="color:${emerald};font-size:11px;margin-top:2px">[STANDARD] Authorized Identity</div>`:'';
           return`<div style="font-weight:600;font-size:12.5px;color:${tx}">${esc(d.name)}</div>`+
             `<div style="font-size:11px;color:${mu}">Type: <b style="color:${tx}">${esc(d.value)}</b></div>`+
@@ -478,8 +478,8 @@ B.iam_graph=function(D){
         if(p.dataType=="edge"){
           const l=p.data;
           const step=l.step_number?`<span style="color:${bad};font-weight:600">Step ${l.step_number}: </span>`:'';
-          const acts=l.actions&&l.actions.length?`<div style="font-size:11px;color:${mu}">Actions: <span style="color:${emerald}">${esc(l.actions.slice(0,5).join(", "))}${l.actions.length>5?'…':''}</span></div>`:"";
-          const path=l.in_attack_path?`<div style="color:${bad};font-weight:600;font-size:11px">● Active Escalation Edge</div>`:'';
+          const acts=l.actions&&l.actions.length?`<div style="font-size:11px;color:${mu}">Actions: <span style="color:${emerald}">${esc(l.actions.slice(0,5).join(", "))}${l.actions.length>5?'...':''}</span></div>`:"";
+          const path=l.in_attack_path?`<div style="color:${bad};font-weight:600;font-size:11px">[ESCALATION] Active Escalation Edge</div>`:'';
           return`<div style="font-weight:600;font-size:12.5px;color:${tx}">${step}${esc(l.relationship)}</div>`+
             `<div style="font-size:11px;color:${mu}">Path: <b style="color:${tx}">${esc(l.source)}</b> &rarr; <b style="color:${tx}">${esc(l.target)}</b></div>`+
             acts+path+
@@ -545,7 +545,7 @@ B.iam_graph=function(D){
 
 B.scenario_graph=function(D){
   const g=(D&&D.SCENARIO_GRAPH)||window.SCENARIO_GRAPH||{nodes:[],links:[],categories:[]};
-  if(!g.nodes||!g.nodes.length)return empty("Launch or build a scenario to explore its isolated capability graph…");
+  if(!g.nodes||!g.nodes.length)return empty("Launch or build a scenario to explore its isolated capability graph...");
   const mu=cv("--mu")||"#9BAABD",ln=cv("--ln")||"#303B49",tx=cv("--tx")||"#DCE5EF",sf=cv("--sf")||"#171D27",sf2=cv("--sf2")||"#202936",sub=cv("--sub")||"#78879A";
   const bad=cv("--bad")||"#D66C79",amber=cv("--amber")||"#D5A64B",emerald=cv("--emerald")||"#48A98B";
 
@@ -568,7 +568,7 @@ B.scenario_graph=function(D){
           const d=p.data;
           const adm=d.is_admin?`<div style="color:${bad};font-weight:600;margin-top:2px">[ADMIN] AdministratorAccess</div>`:'';
           const sens=d.is_sensitive?`<div style="color:${amber};font-weight:600;margin-top:2px">[SENSITIVE] High-Value Target Asset</div>`:'';
-          const path=d.in_attack_path?`<div style="color:${bad};font-weight:600;margin-top:2px">● Active Escalation Node</div>`:'';
+          const path=d.in_attack_path?`<div style="color:${bad};font-weight:600;margin-top:2px">[ESCALATION] Active Escalation Node</div>`:'';
           const normal=(!d.is_admin&&!d.is_sensitive&&!d.in_attack_path)?`<div style="color:${emerald};font-size:11px;margin-top:2px">[STANDARD] Authorized Identity</div>`:'';
           return`<div style="font-weight:600;font-size:12.5px;color:${tx}">${esc(d.name)}</div>`+
             `<div style="font-size:11px;color:${mu}">Type: <b style="color:${tx}">${esc(d.value)}</b></div>`+
@@ -579,8 +579,8 @@ B.scenario_graph=function(D){
         if(p.dataType=="edge"){
           const l=p.data;
           const step=l.step_number?`<span style="color:${bad};font-weight:600">Step ${l.step_number}: </span>`:'';
-          const acts=l.actions&&l.actions.length?`<div style="font-size:11px;color:${mu}">Actions: <span style="color:${emerald}">${esc(l.actions.slice(0,5).join(", "))}${l.actions.length>5?'…':''}</span></div>`:"";
-          const path=l.in_attack_path?`<div style="color:${bad};font-weight:600;font-size:11px">● Active Escalation Edge</div>`:'';
+          const acts=l.actions&&l.actions.length?`<div style="font-size:11px;color:${mu}">Actions: <span style="color:${emerald}">${esc(l.actions.slice(0,5).join(", "))}${l.actions.length>5?'...':''}</span></div>`:"";
+          const path=l.in_attack_path?`<div style="color:${bad};font-weight:600;font-size:11px">[ESCALATION] Active Escalation Edge</div>`:'';
           return`<div style="font-weight:600;font-size:12.5px;color:${tx}">${step}${esc(l.relationship)}</div>`+
             `<div style="font-size:11px;color:${mu}">Path: <b style="color:${tx}">${esc(l.source)}</b> &rarr; <b style="color:${tx}">${esc(l.target)}</b></div>`+
             acts+path+

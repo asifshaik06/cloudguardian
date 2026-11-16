@@ -426,8 +426,8 @@ function graph(){
    </select>
 
    <div style="display:flex;gap:4px;margin-left:auto">
-     <button class="btn sm" id="btn-zoom-in" title="Zoom In">＋</button>
-     <button class="btn sm" id="btn-zoom-out" title="Zoom Out">－</button>
+     <button class="btn sm" id="btn-zoom-in" title="Zoom In">+</button>
+     <button class="btn sm" id="btn-zoom-out" title="Zoom Out">-</button>
      <button class="btn sm" id="btn-fit-screen" title="Fit to Screen">Fit</button>
      <button class="btn sm" id="btn-reset-layout" title="Reset Filters &amp; View">Reset</button>
    </div>

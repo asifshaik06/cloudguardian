@@ -8,11 +8,14 @@ from flask import Flask, request
 
 from backend.security import (
     AUTH_HEADER,
+    MAX_KEY_FILE_BYTES,
     SESSION_COOKIE_NAME,
+    _init_active_api_key,
     extract_token_from_request,
     get_active_api_key,
     is_authenticated,
     is_telegram_user_authorized,
+    load_api_key_from_file,
     redact_sensitive_data,
     set_active_api_key,
     validate_telegram_callback_data,
@@ -152,3 +155,48 @@ def test_redact_masks_telegram_token():
 def test_redact_disabled():
     text = "Account 123456789012 and key AKIAIOSFODNN7EXAMPLE"
     assert redact_sensitive_data(text, mask_enabled=False) == text
+
+
+def test_load_api_key_missing_file(tmp_path):
+    """Verify loading from non-existent key file returns None."""
+    missing = tmp_path / "non_existent.key"
+    assert load_api_key_from_file(str(missing)) is None
+
+
+def test_load_api_key_empty_file(tmp_path):
+    """Verify empty key file (0 bytes) returns None."""
+    empty_file = tmp_path / "empty.key"
+    empty_file.write_text("", encoding="utf-8")
+    assert load_api_key_from_file(str(empty_file)) is None
+
+
+def test_load_api_key_oversized_file(tmp_path):
+    """Verify key file exceeding MAX_KEY_FILE_BYTES boundary is rejected."""
+    oversized = tmp_path / "oversized.key"
+    oversized.write_text("A" * (MAX_KEY_FILE_BYTES + 50), encoding="utf-8")
+    assert load_api_key_from_file(str(oversized)) is None
+
+
+def test_load_api_key_malformed_chars(tmp_path):
+    """Verify key file containing invalid characters is rejected."""
+    malformed = tmp_path / "malformed.key"
+    malformed.write_text("invalid key with spaces & symbols!@#$", encoding="utf-8")
+    assert load_api_key_from_file(str(malformed)) is None
+
+
+def test_load_api_key_valid_file(tmp_path):
+    """Verify valid key file is loaded correctly."""
+    valid_file = tmp_path / "valid.key"
+    expected_key = "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0"
+    valid_file.write_text(f"  {expected_key}\n", encoding="utf-8")
+    assert load_api_key_from_file(str(valid_file)) == expected_key
+
+
+def test_init_active_api_key_fallback_on_corrupt(tmp_path, monkeypatch):
+    """Verify _init_active_api_key generates and saves a new key when file is corrupted."""
+    monkeypatch.delenv("CG_API_KEY", raising=False)
+    corrupted_file = tmp_path / "corrupt.key"
+    corrupted_file.write_text("bad\nkey", encoding="utf-8")
+    new_key = _init_active_api_key(key_file=str(corrupted_file))
+    assert len(new_key) == 48  # secrets.token_hex(24) produces 48 hex chars
+    assert load_api_key_from_file(str(corrupted_file)) == new_key

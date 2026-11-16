@@ -12,22 +12,53 @@ import secrets
 from typing import Any, Callable, Dict, Optional, Set, Tuple
 from flask import Request, jsonify, request
 
+# Maximum allowable API key file size in bytes to prevent unbounded read
+MAX_KEY_FILE_BYTES = 1024
+RE_VALID_KEY_FORMAT = re.compile(r"^[A-Za-z0-9_\-]{16,256}$")
+
 # Global or environment-configured API key
 _CONFIGURED_API_KEY: Optional[str] = os.getenv("CG_API_KEY")
 
-def _init_active_api_key() -> str:
+
+def load_api_key_from_file(key_file: str) -> Optional[str]:
+    """Safely load and validate an API key from disk with bounded I/O.
+
+    Enforces:
+    - Maximum file size boundary (<= 1024 bytes) to prevent unbounded memory allocation.
+    - Strict alphanumeric token format validation (16-256 characters).
+    - Returns None if the file is missing, empty, oversized, or malformed.
+    """
+    if not os.path.exists(key_file):
+        return None
+
+    try:
+        file_size = os.path.getsize(key_file)
+        if file_size == 0 or file_size > MAX_KEY_FILE_BYTES:
+            return None
+
+        with open(key_file, "r", encoding="utf-8") as f:
+            content = f.read(MAX_KEY_FILE_BYTES)
+
+        key = content.strip()
+        if key and RE_VALID_KEY_FORMAT.match(key):
+            return key
+        return None
+    except Exception:
+        return None
+
+
+def _init_active_api_key(key_file: Optional[str] = None) -> str:
     """Initialize active API key from environment, persistent project file, or new token."""
-    if _CONFIGURED_API_KEY:
-        return _CONFIGURED_API_KEY
-    key_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".cg_key")
-    if os.path.exists(key_file):
-        try:
-            with open(key_file, "r", encoding="utf-8") as f:
-                key = f.read().strip()
-                if key:
-                    return key
-        except Exception:
-            pass
+    if _CONFIGURED_API_KEY and RE_VALID_KEY_FORMAT.match(_CONFIGURED_API_KEY.strip()):
+        return _CONFIGURED_API_KEY.strip()
+
+    if key_file is None:
+        key_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".cg_key")
+
+    existing_key = load_api_key_from_file(key_file)
+    if existing_key:
+        return existing_key
+
     new_key = secrets.token_hex(24)
     try:
         with open(key_file, "w", encoding="utf-8") as f:
@@ -35,6 +66,7 @@ def _init_active_api_key() -> str:
     except Exception:
         pass
     return new_key
+
 
 # Active API key stable across local runtime restarts
 _ACTIVE_API_KEY: str = _init_active_api_key()

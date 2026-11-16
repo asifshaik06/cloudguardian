@@ -148,7 +148,7 @@ The following components were audited and verified to be fully operational:
 2. **In-App Modal Dialogs:** Custom accessible dialogs (`promptModal`, `confirmModal`, `alertModal`, `showToast`) completely replaced all browser-native dialogs (`alert()`, `confirm()`, `prompt()`). Zero native dialog popups remain.
 3. **12 Predefined Attack Scenarios:** All 12 scenarios (`privesc-excessive-iam`, `privesc-risky-trust`, `privesc-passrole-ec2`, `privesc-policy-version`, `resource-s3-public`, `resource-s3-wildcard`, `resource-kms-unrestricted`, `resource-ec2-ingress-ssh`, `lateral-compromised-dev`, `lateral-role-chaining`, `lateral-create-access-key`, `defense-evasion-cloudtrail`) successfully launch and execute in isolated Moto state.
 4. **Interactive IAM Capability Graph:** ECharts force-directed graph with color-coded nodes (Users, Roles, Policies, Buckets, EC2, KMS), smooth curved edges, visible arrowheads, edge hover tooltips, zoom controls (+/-/Fit/Reset), and interactive attack-path tracing with red highlighting and numbered step badges.
-5. **Detection & Explainable AI (XAI):** Isolation Forest, One-Class SVM, and Random Forest models with live SHAP waterfall plots and LIME feature importance tables.
+5. **Detection & Explainable AI (XAI):** Isolation Forest, One-Class SVM, and Local Outlier Factor models with custom Tree-Path Information Gain Attribution.
 6. **Tamper-Evident Audit Trail:** SQLite append-only audit store with SHA-256 cryptographic hash-chaining and independent integrity verification.
 7. **Multi-Viewport Responsiveness:** Smooth layout adaptation across all 12 target viewports (1920x1080 down to 360x800) with off-canvas sidebar drawer on viewports `<= 1024px`.
 
