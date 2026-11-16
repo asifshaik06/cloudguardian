@@ -301,22 +301,43 @@ Observations with $s(x) > 0.610$ automatically generate high-confidence security
 
 ## 10. Twelve-Dimensional Feature Engineering
 
-CloudGuardian extracts 12 numerical behavioral features aggregated over a sliding 5-minute identity window ($W = 300\text{s}$):
+CloudGuardian extracts 12 numerical behavioral features aggregated over a sliding 5-minute identity window ($W_t = 300\text{s}$). The feature set combines call volume metrics, error ratios, permission and service access patterns, and novel entity indicators into a continuous observation vector.
 
-| Index | Feature Identifier | Data Type | Mathematical Formulation | Description |
-| :-: | :--- | :--- | :--- | :--- |
-| 1 | `call_count` | Integer | \(N_t = \sum_{e \in W} 1\) | Total number of API invocations in the current observation window. |
-| 2 | `call_velocity` | Float | \(V_t = N_t / (\bar{N}_{\text{hist}} + 1)\) | Rate of API calls relative to historical baseline mean (\(\bar{N}_{\text{hist}} + 1\) smoothing; defaults to 1.0 until \(\ge 3\) historical windows). |
-| 3 | `error_ratio` | Float [0, 1] | \(E_t = \frac{1}{N_t} \sum [e.\text{status} = \text{Error}]\) | Proportion of API calls returning an error code (e.g., `AccessDenied`). |
-| 4 | `unique_services` | Integer | \(S_t = \vert \text{unique}(\{e.\text{service}\}) \vert\) | Number of distinct AWS service namespaces accessed (`s3`, `iam`, `sts`, etc.). |
-| 5 | `unique_events` | Integer | \(A_t = \vert \text{unique}(\{e.\text{action}\}) \vert\) | Number of distinct API action names invoked. |
-| 6 | `enumeration_ratio` | Float [0, 1] | \(R_t = \frac{1}{N_t} \sum [e.\text{action} \in \mathcal{A}_{\text{enum}}]\) | Proportion of reconnaissance actions (`List*`, `Describe*`, `Get*`). |
-| 7 | `sensitive_count` | Integer | \(K_t = \sum [e.\text{action} \in \mathcal{A}_{\text{sensitive}}]\) | Number of high-impact security actions invoked (`GetObject`, `AuthorizeSecurityGroupIngress`). |
-| 8 | `iam_change_count` | Integer | \(P_t = \sum [e.\text{action} \in \mathcal{A}_{\text{iam-mod}}]\) | Number of mutating IAM actions invoked (`Attach*Policy`, `CreateAccessKey`). |
-| 9 | `first_service_ratio` | Float [0, 1] | \(F_t = \frac{1}{N_t} \sum [e.\text{service} \notin \mathcal{S}_{\text{hist}}]\) | Fraction of services accessed that were never previously accessed by this identity. |
-| 10 | `first_ip` | Binary {0, 1} | \(\mathbf{1}[\mathcal{IP}_{t} \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]\) | Flag indicating if at least one previously unseen source IP occurred in the observation window. |
-| 11 | `off_hours` | Binary {0, 1} | \(\mathbf{1}[w.\text{hour} \notin \mathcal{H}_{\text{hist}}]\) | Flag indicating activity during an hour of the day never previously observed for this identity (defaults to 0.0 until \(\ge 3\) historical windows). |
-| 12 | `event_entropy` | Float \(\ge 0\) | \(H_t = -\sum_{i} p_i \log_2 p_i\) | Shannon entropy of the invoked action distribution. |
+### Feature Reference
+
+| Index | Feature | Type | Description |
+| :-: | :--- | :--- | :--- |
+| 1 | `call_count` | Integer | Total number of API invocations in the current observation window. |
+| 2 | `call_velocity` | Float | Rate of API calls relative to historical baseline mean (\(\bar{N}_{\text{hist}} + 1\) smoothing; defaults to 1.0 until \(\ge 3\) historical windows). |
+| 3 | `error_ratio` | Float [0, 1] | Proportion of API calls returning an error code (e.g., `AccessDenied`), indicating unauthorized probing. |
+| 4 | `unique_services` | Integer | Number of distinct AWS service namespaces accessed (`s3`, `iam`, `sts`, etc.). |
+| 5 | `unique_events` | Integer | Number of distinct API action names invoked during the observation window. |
+| 6 | `enumeration_ratio` | Float [0, 1] | Proportion of reconnaissance actions (`List*`, `Describe*`, `Get*`). |
+| 7 | `sensitive_count` | Integer | Number of high-impact security actions invoked (`GetObject`, `AuthorizeSecurityGroupIngress`). |
+| 8 | `iam_change_count` | Integer | Number of mutating IAM actions invoked (`Attach*Policy`, `CreateAccessKey`), excluding read calls. |
+| 9 | `first_service_ratio` | Float [0, 1] | Fraction of services accessed that were never previously accessed by this identity. |
+| 10 | `first_ip` | Binary {0, 1} | Flag indicating if at least one previously unseen source IP occurred in the observation window. |
+| 11 | `off_hours` | Binary {0, 1} | Flag indicating activity during an hour of the day never previously observed for this identity (defaults to 0.0 until \(\ge 3\) historical windows). |
+| 12 | `event_entropy` | Float \(\ge 0\) | Shannon entropy of the invoked action distribution, quantifying activity dispersion. |
+
+### Mathematical Feature Definitions
+
+For an identity observation window \(W_t\) containing \(N_t\) events:
+
+| Feature | Mathematical Definition |
+| :--- | :--- |
+| `call_count` | \(N_t = \sum_{e \in W_t} 1\) |
+| `call_velocity` | \(V_t = N_t / (\bar{N}_{\text{hist}} + 1)\quad\text{[defaults to } 1.0 \text{ when } \vert h_{\text{counts}} \vert < 3\text{]}\) |
+| `error_ratio` | \(E_t = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{errorCode} \neq \emptyset]\) |
+| `unique_services` | \(S_t = \vert \{e.\text{service} \mid e \in W_t\} \vert\) |
+| `unique_events` | \(A_t = \vert \{e.\text{action} \mid e \in W_t\} \vert\) |
+| `enumeration_ratio` | \(R_t = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{action} \in \mathcal{A}_{\text{enum}}]\) |
+| `sensitive_count` | \(K_t = \sum_{e \in W_t} \mathbf{1}[e.\text{action} \in \mathcal{A}_{\text{sensitive}}]\) |
+| `iam_change_count` | \(P_t = \sum_{e \in W_t} \mathbf{1}[e.\text{action} \in \mathcal{A}_{\text{iam-mod}}]\) |
+| `first_service_ratio` | \(F_t = \frac{1}{N_t} \sum_{e \in W_t} \mathbf{1}[e.\text{service} \notin \mathcal{S}_{\text{hist}}]\) |
+| `first_ip` | \(\mathbf{1}[\mathcal{IP}_{t} \setminus \mathcal{IP}_{\text{hist}} \neq \emptyset]\) |
+| `off_hours` | \(\mathbf{1}[w.\text{hour} \notin \mathcal{H}_{\text{hist}}]\quad\text{[defaults to } 0.0 \text{ when } \vert h_{\text{counts}} \vert < 3\text{]}\) |
+| `event_entropy` | \(H_t = -\sum_{i=1}^{M} p_i \log_2 p_i\) |
 
 ### Mathematical Feature Formulations
 
@@ -391,27 +412,24 @@ The blast-radius engine evaluates:
 
 Security events progress through a structured, auditable lifecycle:
 
-```
-[Raw Event Ingestion]
-        │
-        ▼
-[Hybrid Detection] ──> CIS Rule Match or ML Anomaly (Score > 0.610)
-        │
-        ▼
-[Alert Created] ──> Status: NEW (Assigned Severity: Critical, High, Med, Low)
-        │
-        ├─────────────────────────────┬─────────────────────────────┐
-        ▼                             ▼                             ▼
-  [Investigating]                [Suppressed]                   [Resolved]
-        │
-        ▼ (Escalate to Incident)
-[Incident Created] ──> Status: ACTIVE (Preserves evidence snapshot, MITRE mappings)
-        │
-        ▼ (Investigation Notes Added)
-[Incident Contained]
-        │
-        ▼ (Remediation Verified)
-[Incident Closed] ──> Retained in historical audit record
+```mermaid
+flowchart TD
+    subgraph AL["Alert Lifecycle"]
+        direction TB
+        RAW["Raw Event Ingestion"] --> HYB{"Hybrid Detection Engine"}
+        HYB -->|"CIS Rule Match"| NEW["Alert Created<br/>Status: NEW"]
+        HYB -->|"ML Anomaly Score > 0.610"| NEW
+        NEW --> INV["Investigating<br/>Active SOC Triage"]
+        NEW --> SUP["Suppressed<br/>Muted or Filtered"]
+        NEW --> RES["Resolved<br/>Addressed Directly"]
+    end
+
+    subgraph IL["Incident Lifecycle"]
+        direction TB
+        INV -->|"Escalate to Incident<br/>Preserves Evidence Snapshot & MITRE Tags"| ACT["Incident Created<br/>Status: ACTIVE"]
+        ACT -->|"Investigation Notes Added"| CNT["Incident Contained"]
+        CNT -->|"Remediation Verified [PASS]"| CLS["Incident Closed<br/>Appended to Cryptographic Ledger"]
+    end
 ```
 
 ---
