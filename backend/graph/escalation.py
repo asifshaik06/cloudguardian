@@ -5,7 +5,7 @@ role-assumption chains, and direct paths to administrative control or sensitive 
 Implements detection for classic AWS privilege escalation primitives (MITRE ATT&CK T1548.005, T1098, T1078.004).
 """
 import logging
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Union
 import networkx as nx
 
 from backend.graph.iam_graph import IAMCapabilityGraph, NodeType, EdgeType
@@ -52,6 +52,9 @@ class AttackPath:
         edges: List[Dict[str, Any]],
         is_admin_escalation: bool = False,
         reaches_sensitive_data: bool = False,
+        classification: Optional[Any] = None,
+        classification_reason: Optional[str] = None,
+        hop_evaluations: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         self.source_id = source_id
         self.target_id = target_id
@@ -60,6 +63,9 @@ class AttackPath:
         self.is_admin_escalation = is_admin_escalation
         self.reaches_sensitive_data = reaches_sensitive_data
         self.hop_count = max(0, len(nodes) - 1)
+        self.classification = classification or "CONFIRMED"
+        self.classification_reason = classification_reason or "All path transitions verified."
+        self.hop_evaluations = hop_evaluations or []
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert attack path to dictionary for API serialization and dashboard display."""
@@ -68,6 +74,8 @@ class AttackPath:
         base_points = 90 if self.is_admin_escalation else (75 if self.reaches_sensitive_data else 50)
         hop_penalty = min(20, self.hop_count * 4)
         risk_score = max(10, base_points - hop_penalty)
+
+        cls_val = self.classification.value if hasattr(self.classification, "value") else str(self.classification)
 
         steps = []
         for i, edge in enumerate(self.edges):
@@ -97,6 +105,9 @@ class AttackPath:
             "nodes": self.nodes,
             "is_admin_escalation": self.is_admin_escalation,
             "reaches_sensitive_data": self.reaches_sensitive_data,
+            "classification": cls_val,
+            "classification_reason": self.classification_reason,
+            "hop_evaluations": self.hop_evaluations,
             "risk_score": risk_score,
             "severity": "Critical" if (self.is_admin_escalation or self.reaches_sensitive_data) else "High",
             "steps": steps,
@@ -179,6 +190,9 @@ def find_escalation_paths(
                 if is_adm or is_sens:
                     targets.add(n)
 
+    from backend.graph.policy_evaluator import PolicyEvaluator
+    from backend.scenarios.models import PathClassification
+
     discovered_paths: List[AttackPath] = []
 
     for tgt in targets:
@@ -202,6 +216,9 @@ def find_escalation_paths(
                     g.nodes[node].get("is_sensitive", False) for node in p
                 )
 
+                # Deterministic Policy & Condition Evaluation
+                p_cls, p_reason, p_hops = PolicyEvaluator.classify_path(graph_engine, p)
+
                 attack_path = AttackPath(
                     source_id=source_id,
                     target_id=tgt,
@@ -209,15 +226,26 @@ def find_escalation_paths(
                     edges=edge_metadata,
                     is_admin_escalation=is_adm,
                     reaches_sensitive_data=is_sens,
+                    classification=p_cls,
+                    classification_reason=p_reason,
+                    hop_evaluations=p_hops,
                 )
                 discovered_paths.append(attack_path)
 
         except (nx.NetworkXNoPath, nx.NodeNotFound):
             continue
 
-    # Sort paths: admin escalations first, then sensitive data, then shortest hops
+    # Sort paths: confirmed first, then potential, then blocked; admin escalations first, then sensitive data, then shortest hops
+    cls_priority = {
+        "CONFIRMED": 0,
+        "POTENTIAL": 1,
+        "UNVERIFIED": 2,
+        "BLOCKED": 3,
+        "THEORETICAL": 3,
+    }
     discovered_paths.sort(
         key=lambda ap: (
+            cls_priority.get(str(ap.classification).upper().replace("PATHCLASSIFICATION.", ""), 4),
             0 if ap.is_admin_escalation else 1,
             0 if ap.reaches_sensitive_data else 1,
             ap.hop_count,

@@ -73,6 +73,17 @@ CRITICAL_ESCALATION_ACTIONS: Set[str] = {
 }
 
 
+RELATIONSHIP_COLORS: Dict[str, str] = {
+    EdgeType.ASSUMES_ROLE.value: "#ffa94d",      # Warm orange
+    EdgeType.PASS_ROLE.value: "#da77f2",         # Purple
+    EdgeType.CAN_ACCESS.value: "#69db7c",        # Green
+    EdgeType.CAN_ESCALATE.value: "#ff922b",      # Deep amber
+    EdgeType.HAS_POLICY.value: "#ffd43b",        # Yellow
+    EdgeType.MEMBER_OF.value: "#74c0fc",         # Blue
+    EdgeType.ATTACHED_TO.value: "#868e96",       # Gray
+}
+
+
 class IAMCapabilityGraph:
     """Directed graph representing AWS IAM access permissions, trust relationships, and resource access."""
 
@@ -651,9 +662,12 @@ class IAMCapabilityGraph:
         """
         path_set = set(highlight_path) if highlight_path else set()
         path_edges: Set[Tuple[str, str]] = set()
+        path_step_map: Dict[Tuple[str, str], int] = {}
         if highlight_path and len(highlight_path) > 1:
             for i in range(len(highlight_path) - 1):
-                path_edges.add((highlight_path[i], highlight_path[i + 1]))
+                pair = (highlight_path[i], highlight_path[i + 1])
+                path_edges.add(pair)
+                path_step_map[pair] = i + 1
 
         categories = [
             {"name": "IAM User"},
@@ -673,18 +687,31 @@ class IAMCapabilityGraph:
             is_sens = data.get("is_sensitive", False)
             in_path = n_id in path_set
 
-            # Compute visual size
-            size = 26
+            # Compute visual size with clear hierarchy
             if is_adm:
-                size = 38
+                size = 36
             elif is_sens:
                 size = 32
             elif cat_enum == NodeType.USER:
-                size = 30
+                size = 28
+            elif cat_enum == NodeType.ROLE:
+                size = 26
+            elif cat_enum == NodeType.POLICY:
+                size = 22
+            else:
+                size = 26
 
             base_color = CATEGORY_COLORS.get(cat_enum, "#adb5bd")
-            border_color = "#ff6b6b" if in_path else ("#ff8787" if is_adm else "#ced4da")
-            border_width = 3 if in_path else (2 if is_adm else 1)
+
+            # Determine opacity and highlight border
+            if highlight_path:
+                node_opacity = 1.0 if in_path else 0.35
+                border_color = "#ff4d4f" if in_path else "#495057"
+                border_width = 3.5 if in_path else 1.0
+            else:
+                node_opacity = 1.0
+                border_color = "#ff6b6b" if is_adm else ("#ffd43b" if is_sens else "#495057")
+                border_width = 2.5 if is_adm else (2.0 if is_sens else 1.0)
 
             node_obj = {
                 "id": n_id,
@@ -695,14 +722,22 @@ class IAMCapabilityGraph:
                 "is_admin": is_adm,
                 "is_sensitive": is_sens,
                 "in_attack_path": in_path,
+                "arn": data.get("arn", n_id),
                 "evidence": data.get("evidence", {}),
                 "itemStyle": {
                     "color": "#ff4d4f" if (in_path and is_adm) else base_color,
                     "borderColor": border_color,
                     "borderWidth": border_width,
+                    "opacity": node_opacity,
                 },
                 "tooltip": {
-                    "formatter": f"<b>{data.get('name', n_id)}</b><br/>Type: {data.get('type')}<br/>Admin: {is_adm}<br/>Sensitive: {is_sens}"
+                    "formatter": (
+                        f"<b>{data.get('name', n_id)}</b><br/>"
+                        f"Type: {data.get('type')}<br/>"
+                        f"ARN: {data.get('arn', n_id)}<br/>"
+                        f"{'[ADMIN] Administrator<br/>' if is_adm else ''}"
+                        f"{'[SENSITIVE] Sensitive Asset<br/>' if is_sens else ''}"
+                    )
                 },
             }
             nodes.append(node_obj)
@@ -712,10 +747,35 @@ class IAMCapabilityGraph:
             rel = data.get("relationship", "RelatesTo")
             actions = data.get("actions", [])
             in_path = (u, v) in path_edges
+            step_num = path_step_map.get((u, v))
+            base_edge_color = RELATIONSHIP_COLORS.get(rel, "#868e96")
 
-            line_color = "#ff4d4f" if in_path else "#868e96"
-            line_width = 3.5 if in_path else 1.5
-            line_type = "solid" if in_path else ("dashed" if rel == EdgeType.CAN_ESCALATE.value else "solid")
+            # Alternating curveness to prevent direct collision of multi-edges
+            pair_hash = abs(hash(u + v)) % 3
+            curv = 0.16 + (pair_hash * 0.08)
+
+            if in_path:
+                line_color = "#ff4d4f"
+                line_width = 4.0
+                line_type = "solid"
+                edge_opacity = 1.0
+                show_label = True
+                label_text = f"Step {step_num}: {rel}"
+            elif highlight_path:
+                line_color = "#495057"
+                line_width = 1.0
+                line_type = "solid"
+                edge_opacity = 0.18
+                show_label = False
+                label_text = rel
+            else:
+                line_color = base_edge_color
+                line_width = 1.8
+                line_type = "dashed" if rel in (EdgeType.CAN_ESCALATE.value, EdgeType.PASS_ROLE.value) else "solid"
+                edge_opacity = 0.75
+                # Default: DO NOT display edge labels permanently across entire graph!
+                show_label = False
+                label_text = rel
 
             link_obj = {
                 "source": u,
@@ -723,17 +783,21 @@ class IAMCapabilityGraph:
                 "relationship": rel,
                 "actions": actions,
                 "in_attack_path": in_path,
+                "step_number": step_num,
                 "evidence": data.get("evidence", {}),
                 "lineStyle": {
                     "color": line_color,
                     "width": line_width,
                     "type": line_type,
-                    "curveness": 0.12,
+                    "opacity": edge_opacity,
+                    "curveness": curv,
                 },
                 "label": {
-                    "show": in_path or len(actions) > 0,
-                    "formatter": rel,
-                    "fontSize": 10,
+                    "show": show_label,
+                    "formatter": label_text,
+                    "fontSize": 11,
+                    "color": "#ff4d4f" if in_path else "#ced4da",
+                    "fontWeight": "bold" if in_path else "normal",
                 },
             }
             links.append(link_obj)
