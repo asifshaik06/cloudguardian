@@ -301,7 +301,7 @@ function overview(){
         </div>
         <div class="wrap">
           <table class="tbl">
-            ${f.length?f.slice(0,5).map(x=>`<tr class="clk" data-open="${x.id}"><td>${tg(x.sev,"bad")}</td><td>${esc(x.title)}</td><td>${stat(x.status)}</td></tr>`).join(""):`<tr><td>${none("No findings yet.")}</td></tr>`}
+            ${f.length?f.slice(0,5).map(x=>`<tr class="clk" data-open="${x.id}"><td>${tg(x.sev,"bad")}</td><td><button type="button" class="tbl-btn" data-open="${x.id}" aria-label="Inspect finding: ${esc(x.title)}">${esc(x.title)}</button></td><td>${stat(x.status)}</td></tr>`).join(""):`<tr><td>${none("No findings yet.")}</td></tr>`}
           </table>
         </div>
       </section>
@@ -330,13 +330,13 @@ function overview(){
     </div>
   `;
 }
-function findings(){return`<div class="tools" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="fq" type="search" placeholder="Search findings (title, rule, ID)..." value="${esc(Q)}" style="padding:6px 10px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px;min-width:180px" /><select id="fsev" aria-label="Severity"><option value="">All severities</option>${["Critical","High","Medium","Low"].map(x=>`<option value="${x}" ${FSEV===x?"selected":""}>${x}</option>`).join("")}</select><select id="fst" aria-label="Status"><option value="">All statuses</option><option value="pending" ${FST==="pending"?"selected":""}>Awaiting approval</option><option value="fixed" ${FST==="fixed"?"selected":""}>Remediated</option><option value="rejected" ${FST==="rejected"?"selected":""}>Rejected</option></select><span class="mu" id="fcount"></span></div><section class="panel"><div class="wrap"><table class="tbl" id="ftbl"></table></div></section>`}
+function findings(){return`<div class="tools" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="fq" class="inp" type="search" placeholder="Search findings (title, rule, ID)..." value="${esc(Q)}" aria-label="Search findings by title, rule, or ID" style="min-width:180px" /><select id="fsev" aria-label="Severity"><option value="">All severities</option>${["Critical","High","Medium","Low"].map(x=>`<option value="${x}" ${FSEV===x?"selected":""}>${x}</option>`).join("")}</select><select id="fst" aria-label="Status"><option value="">All statuses</option><option value="pending" ${FST==="pending"?"selected":""}>Awaiting approval</option><option value="fixed" ${FST==="fixed"?"selected":""}>Remediated</option><option value="rejected" ${FST==="rejected"?"selected":""}>Rejected</option></select><span class="mu" id="fcount"></span></div><section class="panel"><div class="wrap"><table class="tbl" id="ftbl"></table></div></section>`}
 function paintFindings(){const t=$$("ftbl");if(!t)return;const q=Q.toLowerCase(),L=S.findings.filter(x=>(!FSEV||x.sev==FSEV)&&(!FST||x.status==FST)&&(!q||(x.title+x.ref+x.id).toLowerCase().includes(q)));
  $$("fcount").textContent=`${L.length} of ${S.findings.length} findings`;
- t.innerHTML=L.length?`<tr><th>Severity</th><th>Finding</th><th>Technique</th><th>Source</th><th>Status</th><th>Detected in</th></tr>`+L.map(x=>`<tr class="clk" data-open="${x.id}"><td>${tg(x.sev,"bad")}</td><td>${esc(x.title)}</td><td class="mono">${mid(x)}</td><td>${x.id=="key"?"ML anomaly":"Rule"}</td><td>${stat(x.status)}</td><td>${x.tdetect}s</td></tr>`).join(""):`<tr><td colspan="6">${none(S.findings.length?"No findings match these filters.":"No findings yet. Use Simulate attack on the Overview page.")}</td></tr>`}
+ t.innerHTML=L.length?`<tr><th>Severity</th><th>Finding</th><th>Technique</th><th>Source</th><th>Status</th><th>Detected in</th></tr>`+L.map(x=>`<tr class="clk" data-open="${x.id}"><td>${tg(x.sev,"bad")}</td><td><button type="button" class="tbl-btn" data-open="${x.id}" aria-label="Inspect finding: ${esc(x.title)}">${esc(x.title)}</button></td><td class="mono">${mid(x)}</td><td>${x.id=="key"?"ML anomaly":"Rule"}</td><td>${stat(x.status)}</td><td>${x.tdetect}s</td></tr>`).join(""):`<tr><td colspan="6">${none(S.findings.length?"No findings match these filters.":"No findings yet. Use Simulate attack on the Overview page.")}</td></tr>`}
 function events(){
   return`<div class="tools" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-    <input id="eq" type="search" placeholder="Search event, principal, IP..." value="${esc(Q)}" style="padding:6px 10px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px;min-width:200px" />
+    <input id="eq" class="inp" type="search" placeholder="Search event, principal, IP..." value="${esc(Q)}" aria-label="Search events by event name, principal, or IP" style="min-width:200px" />
     <select id="ek" aria-label="Kind filter" style="padding:6px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px">
       <option value="" ${EK===""?"selected":""}>All Event Kinds</option>
       <option value="attack" ${EK==="attack"?"selected":""}>Attack Actions</option>
@@ -390,7 +390,7 @@ function paintEvents(){
   t.innerHTML=paged.length?`<tr><th>Time</th><th>Event</th><th>Service</th><th>Principal</th><th>Origin</th><th>Kind</th><th>Mode</th></tr>`+paged.map(e=>`
     <tr class="clk ${EBOOT&&!ES.has(e.id)?"fresh":""}" data-event-id="${e.id}" title="Click to inspect event details and CloudTrail JSON">
       <td class="mono">${esc(e.t)}</td>
-      <td class="mono"><b>${esc(e.name)}</b></td>
+      <td class="mono"><button type="button" class="tbl-btn mono" data-event-id="${e.id}" aria-label="Inspect event: ${esc(e.name)}"><b>${esc(e.name)}</b></button></td>
       <td><span class="chip" style="font-size:10px">${esc(e.src)}</span></td>
       <td class="mono">${esc(e.user)}</td>
       <td>${esc(e.country)}</td>
@@ -681,7 +681,7 @@ function graph(){
  </div>
 
  <div class="tools" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-   <input id="graph-search" type="search" placeholder="Search node name or ARN..." value="${esc(window.GRAPH_SEARCH_QUERY||"")}" style="padding:6px 10px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px;min-width:180px" />
+   <input id="graph-search" class="inp" type="search" placeholder="Search node name or ARN..." value="${esc(window.GRAPH_SEARCH_QUERY||"")}" aria-label="Search IAM attack graph by node name or ARN" style="min-width:180px" />
    
    <select id="filter-node-type" aria-label="Filter by Node Type" style="padding:6px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px">
      <option value="all" ${window.GRAPH_FILTER_NODE_TYPE=="all"?"selected":""}>All Node Types</option>
@@ -1085,12 +1085,14 @@ function renderWorkbenchInspector() {
           <div style="font-size:11px;color:var(--mu)">Verified at: ${esc(vr.timestamp)} · Action: ${esc(vr.action_taken)}</div>
 
           <div class="lb">Pre vs Post Metrics Comparison</div>
-          <table class="tbl" style="font-size:11px;margin-top:4px">
-            <tr><th>Metric</th><th>Pre-Fix</th><th>Post-Fix</th><th>Delta</th></tr>
-            <tr><td>Attack Paths</td><td>${vr.metrics.pre_remediation.paths}</td><td>${vr.metrics.post_remediation.paths}</td><td>-${vr.metrics.delta.paths_eliminated}</td></tr>
-            <tr><td>Blast Risk Score</td><td>${vr.metrics.pre_remediation.blast_radius_score}</td><td>${vr.metrics.post_remediation.blast_radius_score}</td><td>-${vr.metrics.delta.score_reduction}</td></tr>
-            <tr><td>Confirmed Paths</td><td>${vr.metrics.pre_remediation.confirmed_paths}</td><td>${vr.metrics.post_remediation.confirmed_paths}</td><td>-</td></tr>
-          </table>
+          <div class="wrap">
+            <table class="tbl" style="font-size:11px;margin-top:4px">
+              <tr><th>Metric</th><th>Pre-Fix</th><th>Post-Fix</th><th>Delta</th></tr>
+              <tr><td>Attack Paths</td><td>${vr.metrics.pre_remediation.paths}</td><td>${vr.metrics.post_remediation.paths}</td><td>-${vr.metrics.delta.paths_eliminated}</td></tr>
+              <tr><td>Blast Risk Score</td><td>${vr.metrics.pre_remediation.blast_radius_score}</td><td>${vr.metrics.post_remediation.blast_radius_score}</td><td>-${vr.metrics.delta.score_reduction}</td></tr>
+              <tr><td>Confirmed Paths</td><td>${vr.metrics.pre_remediation.confirmed_paths}</td><td>${vr.metrics.post_remediation.confirmed_paths}</td><td>-</td></tr>
+            </table>
+          </div>
 
           ${vr.remaining_paths && vr.remaining_paths.length ? `
             <div style="margin-top:8px;padding:6px;background:rgba(217,160,47,0.1);border:1px solid var(--wr);border-radius:4px;font-size:11px">
@@ -1553,7 +1555,7 @@ function alerts() {
                   <td class="mono" style="width:96px;min-width:96px;white-space:nowrap;font-weight:700"><b>${esc(a.id)}</b></td>
                   <td style="text-align:center">${tg(a.severity, a.severity === 'Critical' ? 'crit' : a.severity === 'High' ? 'high' : a.severity === 'Medium' ? 'med' : '')}</td>
                   <td style="overflow:hidden;text-overflow:ellipsis">
-                    <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(a.title)}">${esc(a.title)}</div>
+                    <button type="button" class="tbl-btn" data-select-alert="${esc(a.id)}" aria-label="Inspect alert ${esc(a.id)}: ${esc(a.title)}"><span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(a.title)}">${esc(a.title)}</span></button>
                     <div class="mu mono" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.detection_source)} · ${esc(a.timestamp)}</div>
                   </td>
                   <td class="mono" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(a.affected_resource)}">${esc(a.affected_resource)}</td>
@@ -1781,7 +1783,7 @@ function incidents() {
               <tr class="clk ${selected && selected.id === inc.id ? 'fresh' : ''}" data-select-incident="${esc(inc.id)}">
                 <td class="mono"><b>${esc(inc.id)}</b></td>
                 <td>${tg(inc.severity, inc.severity === 'Critical' ? 'crit' : 'high')}</td>
-                <td><b>${esc(inc.title)}</b><div class="mu" style="font-size:11px">${esc(inc.created_at)} · ${inc.linked_alert_ids ? inc.linked_alert_ids.length : 0} alerts</div></td>
+                <td><button type="button" class="tbl-btn" data-select-incident="${esc(inc.id)}" aria-label="Inspect incident ${esc(inc.id)}: ${esc(inc.title)}"><b>${esc(inc.title)}</b></button><div class="mu" style="font-size:11px">${esc(inc.created_at)} · ${inc.linked_alert_ids ? inc.linked_alert_ids.length : 0} alerts</div></td>
                 <td>${tg(inc.status, inc.status === 'Closed' ? 'ok' : inc.status === 'Containment' ? 'crit' : 'wr')}</td>
                 <td style="font-size:11px" class="mu">${esc(inc.lead_responder)}</td>
               </tr>
@@ -2011,7 +2013,7 @@ function remediation() {
               <tr class="clk ${selected && selected.id === r.id ? 'fresh' : ''}" data-select-rem="${esc(r.id)}">
                 <td class="mono"><b>${esc(r.id)}</b></td>
                 <td>${tg(r.severity, r.severity === 'Critical' ? 'crit' : 'high')}</td>
-                <td><b>${esc(r.title)}</b><div class="mu mono" style="font-size:11px">${esc(r.affected_resource)}</div></td>
+                <td><button type="button" class="tbl-btn" data-select-rem="${esc(r.id)}" aria-label="Inspect remediation ${esc(r.id)}: ${esc(r.title)}"><b>${esc(r.title)}</b></button><div class="mu mono" style="font-size:11px">${esc(r.affected_resource)}</div></td>
                 <td>${tg(r.status, r.status === 'Verified' ? 'ok' : r.status === 'Pending' ? 'wr' : 'in')}</td>
                 <td>${tg(r.verification_state, r.verification_state === 'PASS' ? 'pass' : r.verification_state === 'FAIL' ? 'fail' : 'gr')}</td>
               </tr>
@@ -2619,8 +2621,9 @@ function bind(){const r=route();
       const bRef = $$("btn-refresh-alerts");
       if (bRef) bRef.onclick = () => loadAlerts();
 
-      document.querySelectorAll("[data-select-alert]").forEach(tr => {
-        tr.onclick = () => {
+      document.querySelectorAll(".tbl tr[data-select-alert]").forEach(tr => {
+        tr.onclick = (e) => {
+          if (e && e.target && e.target.closest("a, button[data-link-incident]")) return;
           SELECTED_ALERT_ID = tr.dataset.selectAlert;
           render();
         };
@@ -2707,8 +2710,9 @@ function bind(){const r=route();
       const bAll = $$("btn-inc-view-all");
       if (bAll) bAll.onclick = () => { INC_VIEW = "all"; INCIDENTS_BOOT = false; loadIncidents(); };
 
-      document.querySelectorAll("[data-select-incident]").forEach(tr => {
-        tr.onclick = () => {
+      document.querySelectorAll(".tbl tr[data-select-incident]").forEach(tr => {
+        tr.onclick = (e) => {
+          if (e && e.target && e.target.closest("a, button:not(.tbl-btn)")) return;
           SELECTED_INCIDENT_ID = tr.dataset.selectIncident;
           render();
         };
@@ -2824,8 +2828,9 @@ function bind(){const r=route();
         };
       });
 
-      document.querySelectorAll("[data-select-rem]").forEach(tr => {
-        tr.onclick = () => {
+      document.querySelectorAll(".tbl tr[data-select-rem]").forEach(tr => {
+        tr.onclick = (e) => {
+          if (e && e.target && e.target.closest("a, button:not(.tbl-btn)")) return;
           SELECTED_REM_ID = tr.dataset.selectRem;
           render();
         };
@@ -2976,10 +2981,19 @@ document.addEventListener("click",e=>{
 document.addEventListener("keydown",e=>{
   if(e.key=="Escape"){if(window.closeModal)closeModal();closeDrawer()}
   if(e.key=="/"&&!/INPUT|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$$("gq")?.focus()}
-  if(e.key=="Enter"){
+  if(e.key=="Enter"||e.key==" "){
     const active=document.activeElement;
-    if(active&&(active.hasAttribute("data-kpi-route")||active.hasAttribute("data-pipe-route"))){
-      active.click();
+    if(active&&!/INPUT|SELECT|TEXTAREA|BUTTON|A/.test(active.tagName)){
+      if(active.classList&&active.classList.contains("clk")){
+        e.preventDefault();
+        active.click();
+        return;
+      }
+      if(active.hasAttribute("data-kpi-route")||active.hasAttribute("data-pipe-route")){
+        e.preventDefault();
+        active.click();
+        return;
+      }
     }
   }
 });
