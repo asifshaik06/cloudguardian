@@ -1,4 +1,4 @@
-"""Explainable AI (XAI) feature attribution for CloudGuardian.
+"""Explainable AI (XAI) feature attribution for ThreatGuard.
 
 Computes mathematically grounded feature attributions for Isolation Forest
 and multi-detector anomalies using decision-tree split traversal and standardized deviations.

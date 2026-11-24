@@ -1,4 +1,4 @@
-"""Graph REST API endpoints for CloudGuardian 2.0.
+"""Graph REST API endpoints for ThreatGuard.
 
 Provides:
 - GET /api/graph: Force-directed capability graph in ECharts format.
@@ -14,7 +14,7 @@ from backend.graph.iam_graph import IAMCapabilityGraph, NodeType
 from backend.graph.escalation import find_escalation_paths, find_all_escalation_paths
 from backend.graph.blast_radius import calculate_blast_radius
 
-logger = logging.getLogger("cloudguardian.graph.api")
+logger = logging.getLogger("threatguard.graph.api")
 
 
 def register_graph_api(

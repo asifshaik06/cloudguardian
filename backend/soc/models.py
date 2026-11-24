@@ -1,4 +1,4 @@
-"""Data models for CloudGuardian 2.0 Security Operations Center (SOC) Layer.
+"""Data models for ThreatGuard Security Operations Center (SOC) Layer.
 
 Defines Pydantic schemas for:
 - Alerts (lifecycle, severity, detection source, raw event evidence, timeline)

@@ -1,4 +1,4 @@
-"""AWS Safety Guard and Client Management for CloudGuardian.
+"""AWS Safety Guard and Client Management for ThreatGuard.
 
 Provides:
 - Guarded boto3 client factory for Moto vs Live AWS.
@@ -8,12 +8,13 @@ Provides:
 """
 import logging
 import os
+import socket
 from typing import Any, Callable, Dict, Optional, Tuple
 from urllib.parse import urlparse
 import boto3
 from botocore.exceptions import ClientError, EndpointConnectionError
 
-logger = logging.getLogger("cloudguardian.aws_guard")
+logger = logging.getLogger("threatguard.aws_guard")
 
 # Authorized local emulator hostnames in simulator mode
 ALLOWED_SIMULATOR_HOSTS = {
@@ -22,6 +23,23 @@ ALLOWED_SIMULATOR_HOSTS = {
     "::1",
     "0.0.0.0",
 }
+
+
+def is_simulator_available(endpoint_url: Optional[str] = None, timeout: float = 0.25) -> bool:
+    """Quickly probe if the local simulator endpoint is active without blocking boto3 calls.
+
+    Returns False immediately if connection is refused or times out, preventing
+    unbuffered boto3 client socket timeouts during offline execution.
+    """
+    raw_url = endpoint_url or os.getenv("AWS_ENDPOINT_URL", "http://127.0.0.1:5000")
+    try:
+        parsed = urlparse(raw_url)
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or (443 if parsed.scheme == "https" else 80 if parsed.scheme == "http" else 5000)
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        return False
 
 
 def validate_endpoint_url(endpoint_url: str) -> str:
@@ -59,7 +77,7 @@ def validate_endpoint_url(endpoint_url: str) -> str:
 
 
 def is_live_aws() -> bool:
-    """Return True if CloudGuardian is configured to connect to live AWS."""
+    """Return True if ThreatGuard is configured to connect to live AWS."""
     return os.getenv("CG_LIVE_AWS") == "1"
 
 
@@ -83,6 +101,13 @@ def get_aws_client(service_name: str, region_name: str = "us-east-1") -> Any:
     raw_endpoint = os.getenv("AWS_ENDPOINT_URL", "http://127.0.0.1:5000")
     validated_endpoint = validate_endpoint_url(raw_endpoint)
 
+    from botocore.config import Config
+    sim_config = Config(
+        connect_timeout=0.4,
+        read_timeout=0.6,
+        retries={"max_attempts": 0},
+    )
+
     return boto3.client(
         service_name,
         region_name=region_name,
@@ -90,6 +115,7 @@ def get_aws_client(service_name: str, region_name: str = "us-east-1") -> Any:
         aws_access_key_id="test",
         aws_secret_access_key="test",
         aws_session_token=None,
+        config=sim_config,
     )
 
 

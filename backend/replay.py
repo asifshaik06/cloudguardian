@@ -1,4 +1,4 @@
-"""CloudTrail Log Replay Engine for CloudGuardian.
+"""CloudTrail Log Replay Engine for ThreatGuard.
 
 Streams historical attack datasets (Splunk, flaws.cloud) into the live
 event ingestion pipeline, rolling window aggregator, and ML detector.
@@ -15,7 +15,7 @@ from backend.ml_engine.pipeline import read_records
 from backend.security import require_auth
 from backend.state import StateStore
 
-logger = logging.getLogger("cloudguardian.replay")
+logger = logging.getLogger("threatguard.replay")
 
 AVAILABLE_DATASETS: Dict[str, Dict[str, str]] = {
     "splunk_s3_public_bucket": {

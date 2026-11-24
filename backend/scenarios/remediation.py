@@ -1,4 +1,4 @@
-"""Remediation Playground & Independent Verification Engine for CloudGuardian 2.0.
+"""Remediation Playground & Independent Verification Engine for ThreatGuard.
 
 Simulates remediation actions on isolated scenario graphs, re-evaluates
 authorization semantics and path reachability, detects alternative residual vectors,
@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from backend.scenarios.models import RunStatus, ScenarioRun
 from backend.scenarios.session import ScenarioSessionManager
 
-logger = logging.getLogger("cloudguardian.scenarios.remediation")
+logger = logging.getLogger("threatguard.scenarios.remediation")
 
 
 def apply_remediation(
@@ -29,7 +29,7 @@ def apply_remediation(
         manager: ScenarioSessionManager holding the run.
         run_id: Target scenario run ID.
         remediation_action: Dictionary describing the fix (type, target, source, params).
-        state_store: Optional CloudGuardian StateStore instance for hash-chained audit logging.
+        state_store: Optional ThreatGuard StateStore instance for hash-chained audit logging.
 
     Returns:
         Detailed remediation and verification result dictionary.

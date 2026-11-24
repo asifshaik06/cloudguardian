@@ -1,4 +1,4 @@
-"""IAM Attack Simulation Lab Module for CloudGuardian 2.0.
+"""IAM Attack Simulation Lab Module for ThreatGuard.
 
 Provides isolated attack scenario modeling, deterministic IAM policy evaluation,
 predefined scenario catalog, dynamic scenario builder, and independent verification.

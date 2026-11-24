@@ -1,4 +1,4 @@
-"""Scenario Data Model for CloudGuardian 2.0 IAM Attack Simulation Lab.
+"""Scenario Data Model for ThreatGuard IAM Attack Simulation Lab.
 
 Defines declarative Pydantic schemas for predefined scenarios, dynamic custom scenarios,
 IAM statements, identities, resources, findings, and isolated runtime state.

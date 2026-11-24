@@ -1,4 +1,4 @@
-# CloudGuardian 2.0 — Independent QA Audit & Technical Validation Report
+# ThreatGuard — Independent QA Audit & Technical Validation Report
 
 **Author:** Independent Senior QA Architect, Cloud Security Tester & External University Evaluator  
 **Date:** November 14, 2026  

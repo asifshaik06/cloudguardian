@@ -1,4 +1,4 @@
-"""Integration tests for CloudGuardian Flask API endpoints:
+"""Integration tests for ThreatGuard Flask API endpoints:
 - Session cookie bootstrap and require_auth protection
 - Attack simulation endpoint validation and Live mode guard
 - Decision approval/rejection lifecycle
@@ -23,13 +23,15 @@ def auth_headers():
     return {AUTH_HEADER: get_active_api_key()}
 
 
-def test_home_page_serves_html_and_sets_cookie(client):
+def test_home_page_serves_html_and_does_not_leak_key(client):
     resp = client.get("/")
     assert resp.status_code == 200
-    assert b"CloudGuardian" in resp.data
-    # Verify session cookie was attached
+    assert b"ThreatGuard" in resp.data
+    # In secure architecture, public homepage must never leak the master API key
+    active_key = get_active_api_key()
+    assert active_key.encode("utf-8") not in resp.data
     cookie_header = resp.headers.get("Set-Cookie", "")
-    assert SESSION_COOKIE_NAME in cookie_header
+    assert active_key not in cookie_header
 
 
 def test_api_state_returns_expected_structure(client):

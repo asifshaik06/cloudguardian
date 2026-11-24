@@ -1,4 +1,4 @@
-"""Unit tests for CloudGuardian security module:
+"""Unit tests for ThreatGuard security module:
 - Authentication & tokens
 - Telegram user verification and callback payload validation
 - Sensitive data redaction
@@ -200,3 +200,86 @@ def test_init_active_api_key_fallback_on_corrupt(tmp_path, monkeypatch):
     new_key = _init_active_api_key(key_file=str(corrupted_file))
     assert len(new_key) == 48  # secrets.token_hex(24) produces 48 hex chars
     assert load_api_key_from_file(str(corrupted_file)) == new_key
+
+
+# ---- Session Store & CSRF Unit Tests ----
+
+def test_session_store_create_and_get():
+    """Verify SessionStore registers session and retrieves valid session details."""
+    from backend.security import SessionStore
+    store = SessionStore(session_ttl_seconds=3600)
+    sid, csrf = store.create_session(role="operator")
+    assert len(sid) == 64
+    assert len(csrf) == 48
+
+    sess = store.get_session(sid)
+    assert sess is not None
+    assert sess["session_id"] == sid
+    assert sess["csrf_token"] == csrf
+    assert sess["role"] == "operator"
+
+
+def test_session_store_invalidation():
+    """Verify session can be invalidated on logout."""
+    from backend.security import SessionStore
+    store = SessionStore()
+    sid, _ = store.create_session()
+    assert store.get_session(sid) is not None
+
+    assert store.invalidate_session(sid) is True
+    assert store.get_session(sid) is None
+    assert store.invalidate_session("non-existent-sid") is False
+
+
+def test_session_store_expiry():
+    """Verify expired sessions return None."""
+    from backend.security import SessionStore
+    import time
+    store = SessionStore(session_ttl_seconds=-1)  # expired immediately
+    sid, _ = store.create_session()
+    assert store.get_session(sid) is None
+
+
+def test_verify_operator_credential():
+    """Verify operator credential verification matches active key."""
+    from backend.security import verify_operator_credential, get_active_api_key
+    active_key = get_active_api_key()
+    assert verify_operator_credential(active_key) is True
+    assert verify_operator_credential("wrong-key") is False
+    assert verify_operator_credential("") is False
+    assert verify_operator_credential(None) is False
+
+
+def test_is_csrf_valid_api_key_exempt(app):
+    """Verify requests with X-API-Key or Bearer header are CSRF-exempt."""
+    from backend.security import is_csrf_valid, AUTH_HEADER, get_active_api_key
+    active_key = get_active_api_key()
+    with app.test_request_context(method="POST", headers={AUTH_HEADER: active_key}):
+        assert is_csrf_valid(request) is True
+
+    with app.test_request_context(method="POST", headers={"Authorization": f"Bearer {active_key}"}):
+        assert is_csrf_valid(request) is True
+
+
+def test_is_csrf_valid_session_cookie(app):
+    """Verify session cookie requests require valid X-CSRF-Token matching session."""
+    from backend.security import is_csrf_valid, session_store, SESSION_COOKIE_NAME, CSRF_HEADER
+    sid, csrf = session_store.create_session()
+
+    # Without CSRF header -> False
+    with app.test_request_context(method="POST", headers={"Cookie": f"{SESSION_COOKIE_NAME}={sid}"}):
+        assert is_csrf_valid(request) is False
+
+    # With mismatched CSRF header -> False
+    with app.test_request_context(
+        method="POST",
+        headers={"Cookie": f"{SESSION_COOKIE_NAME}={sid}", CSRF_HEADER: "mismatched-token"},
+    ):
+        assert is_csrf_valid(request) is False
+
+    # With matching CSRF header -> True
+    with app.test_request_context(
+        method="POST",
+        headers={"Cookie": f"{SESSION_COOKIE_NAME}={sid}", CSRF_HEADER: csrf},
+    ):
+        assert is_csrf_valid(request) is True

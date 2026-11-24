@@ -1,12 +1,12 @@
-# CloudGuardian 2.0 — Agent Guidelines and Conventions
+# ThreatGuard — Agent Guidelines and Conventions
 
-This document specifies mandatory conventions and operational rules for AI assistants, agents, and contributors working in the CloudGuardian 2.0 repository.
+This document specifies mandatory conventions and operational rules for AI assistants, agents, and contributors working in the ThreatGuard repository.
 
 ---
 
 ## 1. Strict Emoji Prohibition Convention
 
-**Never introduce emoji characters anywhere in CloudGuardian source code, frontend, backend, documentation, tests, assets, configuration or GitHub-facing files.**
+**Never introduce emoji characters anywhere in ThreatGuard source code, frontend, backend, documentation, tests, assets, configuration or GitHub-facing files.**
 
 - **Zero Tolerance:** No Unicode emoji characters (emoticons, pictographs, transport symbols, dingbats, or variation selectors) are permitted in any repository file.
 - **UI Elements:** Use clean, professional monochrome SVG icons or CSS indicators where visual cues are required.

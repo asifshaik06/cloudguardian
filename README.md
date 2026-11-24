@@ -1,8 +1,8 @@
-# CloudGuardian 2.0
+# ThreatGuard – AI-Based Cloud Security Monitoring and Threat Detection System
 
-**Explainable Cloud Threat Detection, IAM Attack-Path Intelligence, and Verified Incident Response**
+**AI-Based Cloud Security Monitoring, IAM Attack-Path Intelligence, and Verified Incident Response**
 
-CloudGuardian 2.0 is an enterprise-grade cloud security operations and posture management platform designed for Amazon Web Services (AWS) architectures. It combines deterministic Center for Internet Security (CIS) compliance checking with unsupervised machine learning anomaly detection, calculates multi-hop identity privilege escalation graphs, explains detections through decision-tree feature attribution, and enforces human-in-the-loop remediations that are independently verified against live infrastructure.
+ThreatGuard is an enterprise-grade cloud security operations and posture management platform designed for Amazon Web Services (AWS) architectures. It combines deterministic Center for Internet Security (CIS) compliance checking with unsupervised machine learning anomaly detection, calculates multi-hop identity privilege escalation graphs, explains detections through decision-tree feature attribution, and enforces human-in-the-loop remediations that are independently verified against live infrastructure.
 
 The platform operates in an isolated environment using a local AWS emulator (`moto`), eliminating external cloud infrastructure costs while providing deterministic reproducibility for security engineers, cloud architects, and security operations teams.
 
@@ -45,7 +45,7 @@ The platform operates in an isolated environment using a local AWS emulator (`mo
 
 Modern cloud environments are heavily identity-centric. As organizations scale infrastructure on AWS, perimeter-based security models become ineffective. Cloud security operations teams require platforms that can continuously monitor infrastructure configurations, analyze identity trust relationships, detect behavioral anomalies in management API activity, and remediate confirmed risks with auditability.
 
-CloudGuardian 2.0 unifies these operational requirements into a single cohesive architecture. By combining behavioral API analytics, graph theory, deterministic compliance rules, and closed-loop verification, CloudGuardian provides security operations teams with complete situational awareness across their cloud estate.
+ThreatGuard unifies these operational requirements into a single cohesive architecture. By combining behavioral API analytics, graph theory, deterministic compliance rules, and closed-loop verification, ThreatGuard provides security operations teams with complete situational awareness across their cloud estate.
 
 ---
 
@@ -87,7 +87,7 @@ Enterprise cloud security operations face four fundamental operational challenge
 
 ## 5. System Architecture
 
-CloudGuardian 2.0 is structured into five operational stages:
+ThreatGuard is structured into five operational stages:
 
 ```mermaid
 flowchart TD
@@ -153,21 +153,23 @@ flowchart TD
 | Component | Technology | Version | Functional Role |
 | :--- | :--- | :--- | :--- |
 | **Backend Framework** | Python / Flask | 3.12 / 3.1.3 | Core application server, REST APIs, session control |
+| **Frontend Architecture**| HTML5 / CSS3 / JavaScript | ES6+ / Native | Single-page SOC interface, reactive view controllers, modal dialogs |
 | **Cloud Simulation** | Moto | 5.2.5 | Local standalone AWS emulator providing S3, IAM, EC2, CloudTrail, and STS |
 | **AWS SDK** | Boto3 / Botocore | 1.43.126 | Resource configuration probing and independent remediation verification |
 | **Graph Modeling** | NetworkX | 3.7 | In-memory directed multigraph analysis, pathfinding, and blast radius |
-| **Machine Learning** | Scikit-Learn | 1.9.1 | Isolation Forest, Local Outlier Factor, and One-Class SVM implementations |
+| **Machine Learning** | Scikit-Learn / Joblib | 1.9.1 / 1.6.0 | Isolation Forest, Local Outlier Factor, One-Class SVM, model artifact persistence |
+| **Data Validation** | Pydantic | 2.14.3 | Declarative schema validation, event models, and scenario definitions |
 | **Numerical Computing** | NumPy / SciPy / Pandas | 2.5 / 1.18 / 3.1 | Feature aggregation, matrix math, statistical threshold calibration |
 | **Data Visualization** | Apache ECharts | 6.1.0 | SVG scatter charts and 2X supersampled Canvas timelines/graphs |
 | **Data Persistence** | SQLite (WAL mode) | 3.x | SOC store, incident records, and SHA-256 hash-chained audit ledger |
-| **Testing and Security**| Pytest / Gitleaks | 9.2.0 / 8.x | 255-test automated regression suite and pre-commit secret scanning |
+| **Testing and Security**| Pytest / Gitleaks | 9.2.0 / 8.x | 272-test automated regression suite and pre-commit secret scanning |
 
 ---
 
 ## 7. Project Directory Structure
 
 ```
-cloudguardian/
+threatguard/
 |-- app.py                      # Flask entry point and lifecycle orchestration
 |-- requirements.txt            # Core Python dependencies
 |-- AGENTS.md                   # Operational guidelines and safety invariants
@@ -225,17 +227,17 @@ cloudguardian/
 |   |-- logo.svg
 |   |-- vendor/
 |       |-- echarts.min.js
-|-- tests/                      # Automated test suite (255 tests)
-    |-- integration/            # Workflow and end-to-end API tests (10 files)
+|-- tests/                      # Automated test suite (272 tests)
+    |-- integration/            # Workflow, security hardening, and end-to-end API tests (11 files)
     |-- unit/                   # Component isolation unit tests (16 files)
 ```
 
 ### Test Suite Organization
 
-The 255-test automated regression suite is organized into two test scopes:
+The 272-test automated regression suite is organized into two test scopes:
 
-- **Unit Tests (`tests/unit/` — 16 modules, 192 tests):** Validates component logic in isolation, including AWS endpoint lockout guards (`test_aws_safety`), blast radius exposure scoring (`test_blast_radius`), cycle-safe privilege escalation pathfinding (`test_escalation`), CloudTrail event schema parsing (`test_event_schema`), IAM capability multigraph construction (`test_iam_graph`), anomaly scoring determinism (`test_ml_score_reproducibility`), decision threshold enforcement at $\tau = 0.610$ (`test_ml_threshold_enforcement`), model inference pipelines (`test_ml_unification`), deterministic IAM policy evaluation (`test_policy_evaluator`), security posture recovery lifecycles (`test_posture_and_remediation_lifecycle`), scenario catalog templates (`test_scenario_definitions`), remediation verification (`test_scenario_remediation`), session sandboxing (`test_scenario_session`), API authentication security (`test_security`), SQLite hash-chained persistence (`test_soc_store`), and thread-safe state concurrency (`test_state_thread_safety`).
-- **Integration Tests (`tests/integration/` — 10 modules, 63 tests):** Validates multi-service interactions across HTTP routes and mock AWS infrastructure, including alerts inspection workflows (`test_alerts_page_audit`), core Flask REST endpoints (`test_api_endpoints`), IAM graph and attack-path APIs (`test_graph_api`), alert-to-incident escalation workflows (`test_incident_escalation`), incident filtering state transitions (`test_incident_filtering`), playground remediation lifecycles (`test_playground_remediation`), CloudTrail replay ingestion pipelines (`test_replay_pipeline`), attack simulation lab execution APIs (`test_scenario_api`), SOC operations endpoints (`test_soc_api`), and comprehensive university evaluation readiness audits (`test_university_evaluator_audit`).
+- **Unit Tests (`tests/unit/` — 16 modules, 142 tests):** Validates component logic in isolation, including AWS endpoint lockout guards (`test_aws_safety`), blast radius exposure scoring (`test_blast_radius`), cycle-safe privilege escalation pathfinding (`test_escalation`), CloudTrail event schema parsing (`test_event_schema`), IAM capability multigraph construction (`test_iam_graph`), anomaly scoring determinism (`test_ml_score_reproducibility`), decision threshold enforcement at $\tau = 0.610$ (`test_ml_threshold_enforcement`), model inference pipelines (`test_ml_unification`), deterministic IAM policy evaluation (`test_policy_evaluator`), security posture recovery lifecycles (`test_posture_and_remediation_lifecycle`), scenario catalog templates (`test_scenario_definitions`), remediation verification (`test_scenario_remediation`), session sandboxing (`test_scenario_session`), API authentication security and SessionStore CSRF enforcement (`test_security`), SQLite hash-chained persistence (`test_soc_store`), and thread-safe state concurrency (`test_state_thread_safety`).
+- **Integration Tests (`tests/integration/` — 11 modules, 130 tests):** Validates multi-service interactions across HTTP routes and mock AWS infrastructure, including alerts inspection workflows (`test_alerts_page_audit`), core Flask REST endpoints (`test_api_endpoints`), IAM graph and attack-path APIs (`test_graph_api`), alert-to-incident escalation workflows (`test_incident_escalation`), incident filtering state transitions (`test_incident_filtering`), playground remediation lifecycles (`test_playground_remediation`), CloudTrail replay ingestion pipelines (`test_replay_pipeline`), attack simulation lab execution APIs (`test_scenario_api`), SOC operations endpoints (`test_soc_api`), end-to-end authentication hardening and CSRF validation (`test_security_hardening`), and comprehensive university evaluation readiness audits (`test_university_evaluator_audit`).
 
 ### Module Responsibility Reference
 
@@ -246,15 +248,15 @@ The 255-test automated regression suite is organized into two test scopes:
 | `backend/ml_engine/` | Extracts 12 behavioral features across 5-minute sliding identity windows, executes Isolation Forest anomaly scoring against calibrated threshold $\tau = 0.610$, and computes Tree-Path Information Gain Attribution for explainable alerts. |
 | `backend/scenarios/` | Manages predefined attack simulation scenarios (privilege escalation, S3 exfiltration, credential abuse), tracks isolated sandbox execution sessions, and validates human-in-the-loop policy remediation fixes. |
 | `backend/soc/` | Manages the Security Operations Center store, coordinates alert triage and incident escalation workflows, records responder investigation notes, and appends state mutations to a SHA-256 hash-chained cryptographic ledger. |
-| `static/` | Implements the single-page application frontend featuring the Midnight Aurora theme, reactive tab controllers, modal inspectors, and 2X supersampled Apache ECharts timelines and graph visualizations. |
+| `static/` | Implements the single-page application frontend featuring the dark graphite SOC theme, reactive tab controllers, modal inspectors, and 2X supersampled Apache ECharts timelines and graph visualizations. |
 | `models/` | Houses the serialized 200-estimator Isolation Forest machine learning model artifact (`baseline_v1.joblib`) calibrated for 1.0% false alarm rate baseline operation. |
-| `tests/` | Houses the complete 255-test automated regression suite covering unit component logic, API integration routes, AWS safety isolation, and closed-loop remediation workflows. |
+| `tests/` | Houses the complete 272-test automated regression suite covering unit component logic, API integration routes, AWS safety isolation, security hardening, and closed-loop remediation workflows. |
 
 ---
 
 ## 8. Dashboard Module Walkthrough
 
-The CloudGuardian 2.0 single-page application is structured into 11 dedicated functional modules:
+The ThreatGuard single-page application is structured into 11 dedicated functional modules:
 
 1. **Security Overview (`#overview`):** Central executive summary displaying the authoritative Security Posture Score, live telemetry status, quick-attack simulation buttons, and six synchronized high-DPI telemetry charts.
 2. **Alerts Management (`#alerts`):** Operational alert triage workspace displaying severity classifications, Isolation Forest anomaly scores, decision thresholds, feature attribution breakdowns, and alert status workflows (`New` -> `Investigating` -> `Resolved` -> `Suppressed`).
@@ -272,7 +274,7 @@ The CloudGuardian 2.0 single-page application is structured into 11 dedicated fu
 
 ## 9. Machine Learning Detection Methodology
 
-CloudGuardian 2.0 employs an ensemble of unsupervised anomaly detection models trained on temporal behavioral features extracted from AWS CloudTrail logs.
+ThreatGuard employs an ensemble of unsupervised anomaly detection models trained on temporal behavioral features extracted from AWS CloudTrail logs.
 
 ### Model Ensemble Components
 
@@ -310,7 +312,7 @@ Observations with $s(x) > 0.610$ automatically generate high-confidence security
 
 ## 10. Twelve-Dimensional Feature Engineering
 
-CloudGuardian extracts 12 numerical behavioral features aggregated over a sliding 5-minute identity window ($W_t = 300\text{s}$). The feature set combines call volume metrics, error ratios, permission and service access patterns, and novel entity indicators into a continuous observation vector.
+ThreatGuard extracts 12 numerical behavioral features aggregated over a sliding 5-minute identity window ($W_t = 300\text{s}$). The feature set combines call volume metrics, error ratios, permission and service access patterns, and novel entity indicators into a continuous observation vector.
 
 ### Feature Reference
 
@@ -352,7 +354,7 @@ For an identity observation window $W_t$ containing $N_t$ events:
 
 ## 11. Explainable AI (XAI) Methodology
 
-To explain detections without external black-box dependencies or performance overhead, CloudGuardian implements **Tree-Path Information Gain Attribution**.
+To explain detections without external black-box dependencies or performance overhead, ThreatGuard implements **Tree-Path Information Gain Attribution**.
 
 For an observation vector $x$, the attribution score for feature $f$ is computed by traversing all decision trees in the Isolation Forest ensemble and summing the information isolation gain at each node where feature $f$ was the splitting attribute:
 
@@ -368,7 +370,7 @@ The resulting attributions are normalized to percentage shares and presented in 
 
 ## 12. IAM Attack-Path Analysis
 
-CloudGuardian models cloud identities and permissions as a directed multigraph $G = (V, E)$ using NetworkX:
+ThreatGuard models cloud identities and permissions as a directed multigraph $G = (V, E)$ using NetworkX:
 
 - **Vertices ($V$):** IAM Users, Roles, Policies, and AWS Services.
 - **Edges ($E$):** Specific permissions and trust boundaries (`can_assume_role`, `has_policy`, `allows_action`, `passes_role`).
@@ -391,7 +393,7 @@ The graph engine executes a cycle-safe depth-first search (`dfs_escalation_paths
 
 ## 13. Blast-Radius Analysis
 
-When an identity or resource is compromised, CloudGuardian quantifies its operational blast radius:
+When an identity or resource is compromised, ThreatGuard quantifies its operational blast radius:
 
 $$\text{Blast Radius} = \frac{|\text{Reachable Critical Targets}(v)|}{|V_{\text{critical-assets}}|} \times 100\%$$
 
@@ -439,7 +441,7 @@ The Attack Simulation Lab allows security engineers to safely test cloud securit
 
 ## 16. Human-in-the-Loop Remediation
 
-CloudGuardian implements a **Human-in-the-Loop (HITL)** governance model. The platform does not execute unapproved autonomous remediation scripts:
+ThreatGuard implements a **Human-in-the-Loop (HITL)** governance model. The platform does not execute unapproved autonomous remediation scripts:
 
 1. **Remediation Proposal:** When an attack or misconfiguration is detected, the system generates a `RemediationTask` in `PENDING` status.
 2. **Configuration Diff Inspection:** Operators review side-by-side diffs showing the current "Before" state and the proposed "Expected After" state.
@@ -452,7 +454,7 @@ CloudGuardian implements a **Human-in-the-Loop (HITL)** governance model. The pl
 
 ### Mandatory Independent Cloud Verification
 
-CloudGuardian never assumes a remediation was successful based solely on script execution. Following fix execution, an independent verification module interrogates the AWS emulator directly:
+ThreatGuard never assumes a remediation was successful based solely on script execution. Following fix execution, an independent verification module interrogates the AWS emulator directly:
 
 - **S3 Public Exposure:** Queries `s3.get_public_access_block` to verify all four lock settings are active.
 - **CloudTrail Logging:** Queries `cloudtrail.get_trail_status` to verify logging is active.
@@ -463,7 +465,7 @@ Only when the independent cloud probe returns `VerificationState.PASS` is the ta
 
 ### Atomic 1-Click Rollback
 
-If a remediation action causes operational disruption, operators can trigger an atomic rollback. CloudGuardian restores the pre-remediation configuration captured in `before_config` and executes an independent verification probe to ensure the prior state is safely restored.
+If a remediation action causes operational disruption, operators can trigger an atomic rollback. ThreatGuard restores the pre-remediation configuration captured in `before_config` and executes an independent verification probe to ensure the prior state is safely restored.
 
 ---
 
@@ -500,14 +502,19 @@ The audit interface provides an automated verification tool that traverses the c
 
 ---
 
-## 20. Moto Simulator and AWS Safety Architecture
+## 20. Moto Simulator, AWS Safety and Authentication Architecture
 
-CloudGuardian 2.0 is designed for safe, zero-cost operation using local cloud emulation:
+ThreatGuard is designed for safe, zero-cost operation using local cloud emulation with enterprise-grade access controls:
 
 - **Isolated Emulation:** Uses `moto.server` running on `http://127.0.0.1:5000` to emulate AWS APIs locally.
-- **Defensive Isolation Guard (`backend/aws_guard.py`):** Intercepts Boto3 client initialization and forces all service endpoints to localhost using mock credentials (`AKIAIOSFODNN7EXAMPLE`) and region `us-east-1`.
+- **Defensive Isolation Guard (`backend/aws_guard.py`):** Intercepts Boto3 client initialization and forces all service endpoints to localhost using mock credentials (`AKIAIOSFODNN7EXAMPLE`) and region `us-east-1`. In addition, fast socket probes (<250ms) and short timeouts ensure non-blocking startup and offline resilience even when the Moto simulator process is offline.
 - **Live AWS Safe Lockout:** Any attempt to run mutating provisioning scripts against live AWS without setting `CG_ALLOW_LIVE_SETUP=1` raises a fatal `RuntimeError`, preventing accidental modification of real cloud environments.
-- **Authenticated REST Endpoints:** Mutating REST APIs require an authenticated session cookie or a valid `X-API-Key` header.
+- **Secure Authentication and Session Hardening:**
+  - **Public Demonstration Mode (`[PUBLIC DEMO]`):** Unauthenticated visitors have read-only visibility into posture scores, telemetry streams, findings, IAM graph topologies, and audit ledgers without exposing master API keys, internal credentials, or AWS account secrets.
+  - **Server-Side Session Store (`SessionStore`):** Generates cryptographically secure 256-bit session IDs stored server-side with rolling TTLs, issued via `HttpOnly`, `SameSite=Lax` cookies (`cg_op_session`).
+  - **Strict Anti-CSRF Token Enforcement:** Mutating operations (`POST`, `PUT`, `DELETE`, `PATCH`) triggered from authenticated browser sessions require a valid `X-CSRF-Token` header. Missing or forged tokens return `403 Forbidden`.
+  - **Direct API Key Header Support:** Programmatic clients, test suites, and CI/CD pipelines providing `X-API-Key` headers are authenticated directly without requiring session cookies or CSRF tokens.
+  - **Session Lifecycle APIs:** Provides `/api/auth/session` (session state check without secret leakage), `/api/auth/login` (operator credential verification and session issuance), and `/api/auth/logout` (server session termination).
 
 ---
 
@@ -524,8 +531,8 @@ CloudGuardian 2.0 is designed for safe, zero-cost operation using local cloud em
 
 ```powershell
 # 1. Clone repository
-git clone https://github.com/asifshaik06/cloudguardian.git
-cd cloudguardian
+git clone https://github.com/asifshaik06/threatguard.git
+cd threatguard
 
 # 2. Create and activate Python virtual environment
 python -m venv .venv
@@ -543,8 +550,8 @@ Copy-Item .env.example .env
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/asifshaik06/cloudguardian.git
-cd cloudguardian
+git clone https://github.com/asifshaik06/threatguard.git
+cd threatguard
 
 # 2. Create and activate Python virtual environment
 python3 -m venv .venv
@@ -562,7 +569,7 @@ cp .env.example .env
 
 ## 22. Running the Application
 
-CloudGuardian 2.0 operates with a decoupled two-process architecture (local emulator + application server). Two terminal sessions are required:
+ThreatGuard operates with a decoupled two-process architecture (local emulator + application server). Two terminal sessions are required:
 
 ### Terminal 1 — Start the Moto AWS Emulator
 
@@ -572,7 +579,7 @@ python -m moto.server -p 5000
 ```
 *Wait until Moto outputs:* `* Running on http://127.0.0.1:5000`
 
-### Terminal 2 — Start the CloudGuardian Application
+### Terminal 2 — Start the ThreatGuard Application
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -600,13 +607,13 @@ http://localhost:8000
 
 ## 23. Running Automated Tests
 
-CloudGuardian 2.0 maintains an automated regression suite with **255 tests** covering unit, integration, and security layers.
+ThreatGuard maintains an automated regression suite with **272 tests** covering unit, integration, and security layers.
 
 ```powershell
 # Activate virtual environment
 .\.venv\Scripts\Activate.ps1
 
-# Run the complete test suite (255 tests)
+# Run the complete test suite (272 tests)
 python -m pytest tests/ -q
 
 # Run specific unit test modules
@@ -622,7 +629,7 @@ python -m pytest tests/integration/test_university_evaluator_audit.py
 
 ## 24. Security Scanning
 
-To verify that no credentials, tokens, or private keys are introduced into the repository, CloudGuardian includes an automated secret scanner:
+To verify that no credentials, tokens, or private keys are introduced into the repository, ThreatGuard includes an automated secret scanner:
 
 ```powershell
 python scripts/gitleaks_precommit.py
@@ -639,7 +646,9 @@ This utility integrates with the official Gitleaks Docker container and provides
 | Method | Endpoint | Description | Authentication |
 | :--- | :--- | :--- | :---: |
 | `GET` | `/` | Web dashboard single-page interface | None |
-| `GET` | `/api/auth/session` | Inspect session authentication state | None |
+| `GET` | `/api/auth/session` | Inspect session authentication state (no secrets returned) | None |
+| `POST`| `/api/auth/login` | Authenticate operator, issue HttpOnly session and CSRF token | None (Valid Credential) |
+| `POST`| `/api/auth/logout` | Invalidate operator session and clear session cookie | None |
 | `GET` | `/api/state` | Global posture score, resources, findings, events | None |
 | `GET` | `/api/rules` | Benchmark compliance security rules catalog | None |
 | `GET` | `/api/ml` | Model card metadata, evaluation benchmark results | None |
@@ -685,7 +694,7 @@ This utility integrates with the official Gitleaks Docker container and provides
 
 ## 26. Security Limitations and Scope Boundaries
 
-- **Emulation vs. Production Cloud:** CloudGuardian is intentionally designed and evaluated against Moto local cloud emulation. Real AWS live connectivity is limited to read-only posture assessment; automated write operations on live accounts require explicit `CG_ALLOW_LIVE_SETUP=1` flags.
+- **Emulation vs. Production Cloud:** ThreatGuard is intentionally designed and evaluated against Moto local cloud emulation. Real AWS live connectivity is limited to read-only posture assessment; automated write operations on live accounts require explicit `CG_ALLOW_LIVE_SETUP=1` flags.
 - **Model Training Scope:** The baseline anomaly detection model (`models/baseline_v1.joblib`) was pre-trained on synthetic CloudTrail sequences combined with unlabelled `flaws.cloud` benchmark traces. Transferability to enterprise multi-tenant environments requires domain-specific threshold calibration.
 - **Relational Storage:** The cryptographic audit ledger provides tamper-evident, verifiable logging within SQLite rather than a distributed consensus blockchain.
 

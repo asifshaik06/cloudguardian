@@ -1,4 +1,4 @@
-"""Deterministic IAM Policy Evaluation Engine for CloudGuardian 2.0.
+"""Deterministic IAM Policy Evaluation Engine for ThreatGuard.
 
 Provides deterministic evaluation of AWS IAM policies, statement effects,
 action and resource wildcards, trust relationships, and condition keys.
@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from backend.graph.iam_graph import EdgeType, IAMCapabilityGraph
 from backend.scenarios.models import PathClassification, StatementSpec
 
-logger = logging.getLogger("cloudguardian.graph.evaluator")
+logger = logging.getLogger("threatguard.graph.evaluator")
 
 
 class PolicyEvaluator:

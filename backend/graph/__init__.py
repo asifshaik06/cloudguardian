@@ -1,4 +1,4 @@
-"""IAM Capability Graph and Attack-Path Intelligence package for CloudGuardian 2.0.
+"""IAM Capability Graph and Attack-Path Intelligence package for ThreatGuard.
 
 Provides:
 - Directed graph representation of IAM principals, policies, and AWS resources.

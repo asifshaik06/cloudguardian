@@ -1,4 +1,4 @@
-"""Unit tests for CloudGuardian SOC Store and Workflow Engine."""
+"""Unit tests for ThreatGuard SOC Store and Workflow Engine."""
 import pytest
 from backend.soc.models import (
     AlertSeverity,

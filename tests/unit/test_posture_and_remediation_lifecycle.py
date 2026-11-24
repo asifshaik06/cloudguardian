@@ -1,4 +1,4 @@
-"""Unit and Regression Tests for CloudGuardian 2.0 Posture Scoring & Remediation Lifecycle.
+"""Unit and Regression Tests for ThreatGuard Posture Scoring & Remediation Lifecycle.
 
 Validates:
 1. Attack-to-remediation persistence.

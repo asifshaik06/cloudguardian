@@ -1,4 +1,4 @@
-"""Dynamic Attack Blast-Radius Engine for CloudGuardian 2.0.
+"""Dynamic Attack Blast-Radius Engine for ThreatGuard.
 
 Calculates the lateral movement scope, accessible cloud assets, and potential
 administrative exposure if an IAM identity or cloud resource is compromised.
@@ -9,7 +9,7 @@ import networkx as nx
 
 from backend.graph.iam_graph import IAMCapabilityGraph, NodeType, EdgeType
 
-logger = logging.getLogger("cloudguardian.graph.blast_radius")
+logger = logging.getLogger("threatguard.graph.blast_radius")
 
 
 class BlastRadiusReport:

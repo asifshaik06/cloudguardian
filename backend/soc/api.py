@@ -1,4 +1,4 @@
-"""REST API Endpoints for CloudGuardian 2.0 SOC Operations.
+"""REST API Endpoints for ThreatGuard SOC Operations.
 
 Provides endpoints for:
 - Alerts Management (/api/alerts)
@@ -23,7 +23,7 @@ from backend.soc.models import (
 from backend.soc.store import SOCStore, soc_store
 from backend.security import require_auth
 
-logger = logging.getLogger("cloudguardian.soc.api")
+logger = logging.getLogger("threatguard.soc.api")
 
 
 def register_soc_api(
@@ -562,11 +562,11 @@ def register_soc_api(
     def get_architecture_details() -> Any:
         """Return structured project architecture documentation for evaluators."""
         return jsonify({
-            "project_title": "CloudGuardian 2.0",
-            "tagline": "Explainable Cloud Threat Detection, IAM Attack-Path Intelligence and Verified Incident Response",
+            "project_title": "ThreatGuard",
+            "tagline": "AI-Based Cloud Security Monitoring and Threat Detection",
             "academic_context": "Final Year B.Tech CSE (AI & ML) Project, 2026-27",
             "author": "Asif Shaik",
-            "repository": "https://github.com/asifshaik06/cloudguardian",
+            "repository": "https://github.com/asifshaik06/threatguard",
             "problem_statement": (
                 "Cloud environments suffer from critical security gaps: excessive IAM permissions, "
                 "insecure AssumeRole trust relationships, public S3 bucket exposures, cloud audit trail tampering, "
@@ -575,7 +575,7 @@ def register_soc_api(
                 "independently verifying that remediation actually fixed the security vulnerability."
             ),
             "solution_overview": (
-                "CloudGuardian 2.0 provides an evidence-driven security operations platform combining: "
+                "ThreatGuard provides an evidence-driven security operations platform combining: "
                 "(1) Real-time telemetry monitoring, (2) CIS rule checks, (3) 12-feature ML anomaly detection with Tree-Path XAI Feature Attribution, "
                 "(4) NetworkX IAM capability graph traversal with deterministic policy evaluation, "
                 "(5) Dynamic blast-radius calculation, (6) 12-scenario isolated simulation lab, "
@@ -630,10 +630,10 @@ def register_soc_api(
     def get_guided_demo_steps() -> Any:
         """Return the 17-step guided presentation script for faculty evaluation."""
         return jsonify({
-            "title": "CloudGuardian 2.0 Guided Viva / Demonstration Walkthrough",
+            "title": "ThreatGuard Guided Viva / Demonstration Walkthrough",
             "total_steps": 17,
             "steps": [
-                {"step": 1, "route": "architecture", "title": "Project Title & Introduction", "description": "Welcome to CloudGuardian 2.0: Explainable Cloud Threat Detection, IAM Attack-Path Intelligence and Verified Incident Response."},
+                {"step": 1, "route": "architecture", "title": "Project Title & Introduction", "description": "Welcome to ThreatGuard: AI-Based Cloud Security Monitoring and Threat Detection System."},
                 {"step": 2, "route": "architecture", "title": "Problem Statement", "description": "Understanding cloud attack vectors: IAM privilege escalation, lateral movement, public exposures, and lack of verified remediation."},
                 {"step": 3, "route": "architecture", "title": "End-to-End Architecture", "description": "Reviewing the 10-stage defense-in-depth pipeline connecting event ingestion to tamper-evident auditing."},
                 {"step": 4, "route": "overview", "title": "Security Posture Dashboard", "description": "Live posture score (0-100%), event throughput, anomaly scoring, and resource health status."},

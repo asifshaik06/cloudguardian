@@ -75,7 +75,7 @@ if check.returncode != 1:
     print("Could not inspect Git index.", file=sys.stderr)
     sys.exit(check.returncode)
 
-snapshot = Path(tempfile.mkdtemp(prefix="cloudguardian-gitleaks-"))
+snapshot = Path(tempfile.mkdtemp(prefix="threatguard-gitleaks-"))
 
 try:
     prefix = snapshot.as_posix().rstrip("/") + "/"

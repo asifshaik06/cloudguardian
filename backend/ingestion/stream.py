@@ -12,7 +12,7 @@ from backend.ml_engine.detector import RuntimeDetector
 from backend.ml_engine.window_aggregator import StreamingWindowAggregator
 from backend.state import StateStore
 
-logger = logging.getLogger("cloudguardian.stream")
+logger = logging.getLogger("threatguard.stream")
 
 
 class EventStreamPipeline:

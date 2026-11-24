@@ -1,4 +1,4 @@
-"""Integration tests for CloudGuardian SOC REST API Endpoints."""
+"""Integration tests for ThreatGuard SOC REST API Endpoints."""
 import pytest
 from app import app as flask_app
 from backend.security import AUTH_HEADER, get_active_api_key

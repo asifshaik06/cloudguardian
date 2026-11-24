@@ -1,4 +1,4 @@
-"""REST API Endpoints for CloudGuardian 2.0 IAM Attack Simulation Lab.
+"""REST API Endpoints for ThreatGuard IAM Attack Simulation Lab.
 
 Implements all Part H endpoints:
 - GET /api/scenarios: Catalog summaries
@@ -37,7 +37,7 @@ from backend.scenarios.session import (
 )
 from backend.security import require_auth
 
-logger = logging.getLogger("cloudguardian.scenarios.api")
+logger = logging.getLogger("threatguard.scenarios.api")
 
 
 def register_scenarios_api(

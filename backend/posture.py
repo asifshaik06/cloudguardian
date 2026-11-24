@@ -1,4 +1,4 @@
-"""Authoritative Security Posture Calculation Engine for CloudGuardian 2.0.
+"""Authoritative Security Posture Calculation Engine for ThreatGuard.
 
 Computes a single authoritative Security Posture Score (0-100%) based on:
 1. Actual cloud resource verification checks (R[k]["check"]()).
@@ -9,7 +9,7 @@ Computes a single authoritative Security Posture Score (0-100%) based on:
 import logging
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger("cloudguardian.posture")
+logger = logging.getLogger("threatguard.posture")
 
 # Monitored rules severity weights (sum strictly to 100)
 # CIS 3.1 CloudTrail Logging: Critical (30 pts)

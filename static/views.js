@@ -2,31 +2,170 @@
    Uses the globals defined in index.html (S, ML, AU, DS, BOOT, esc, tg, none, ring, stepper, evalTable, get, route). */
 const Views=(()=>{
 const _get=async p=>{if(typeof window.get==="function")return await window.get(p);try{return await(await fetch(p,{credentials:"include"})).json()}catch(e){return null}};
+window.CG_IS_OPERATOR = false;
+window.CG_CSRF_TOKEN = null;
+
+const checkAuthSession = async () => {
+  try {
+    const s = await (await fetch("/api/auth/session", { credentials: "include" })).json();
+    if (s && s.ok) {
+      window.CG_IS_OPERATOR = Boolean(s.authenticated && s.role === "operator");
+      window.CG_CSRF_TOKEN = s.csrf_token || null;
+      updateAuthUI();
+    }
+  } catch (e) {
+    window.CG_IS_OPERATOR = false;
+    window.CG_CSRF_TOKEN = null;
+    updateAuthUI();
+  }
+};
+window.checkAuthSession = checkAuthSession;
+
+const updateAuthUI = () => {
+  const badge = document.getElementById("auth-badge");
+  const loginBtn = document.getElementById("btn-login-modal");
+  const logoutBtn = document.getElementById("btn-logout");
+  if (badge) {
+    if (window.CG_IS_OPERATOR) {
+      badge.textContent = "[OPERATOR]";
+      badge.className = "tg ok";
+      badge.title = "Authenticated Security Operator (Write & Remediation Permitted)";
+    } else {
+      badge.textContent = "[PUBLIC DEMO]";
+      badge.className = "tg in";
+      badge.title = "Public Read-Only Demonstration Mode";
+    }
+  }
+  if (loginBtn) loginBtn.style.display = window.CG_IS_OPERATOR ? "none" : "inline-flex";
+  if (logoutBtn) logoutBtn.style.display = window.CG_IS_OPERATOR ? "inline-flex" : "none";
+};
+window.updateAuthUI = updateAuthUI;
+
+function openOperatorLoginModal() {
+  const m = document.getElementById("cg-login-modal");
+  const inp = document.getElementById("op-key-input");
+  const err = document.getElementById("op-login-err");
+  if (!m) return;
+  if (inp) {
+    inp.value = "";
+    inp.style.borderColor = "var(--ln)";
+  }
+  if (err) {
+    err.textContent = "";
+    err.style.display = "none";
+  }
+  m.style.display = "flex";
+  if (inp) inp.focus();
+}
+window.openOperatorLoginModal = openOperatorLoginModal;
+
+function closeOperatorLoginModal() {
+  const m = document.getElementById("cg-login-modal");
+  if (m) m.style.display = "none";
+}
+window.closeOperatorLoginModal = closeOperatorLoginModal;
+
+async function submitOperatorLogin() {
+  const inp = document.getElementById("op-key-input");
+  const err = document.getElementById("op-login-err");
+  const val = inp ? inp.value.trim() : "";
+  if (!val) {
+    if (err) {
+      err.textContent = "Please enter an operator key.";
+      err.style.display = "block";
+    }
+    if (inp) inp.focus();
+    return;
+  }
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ key: val }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      window.CG_IS_OPERATOR = true;
+      window.CG_CSRF_TOKEN = data.csrf_token || null;
+      updateAuthUI();
+      closeOperatorLoginModal();
+      if (window.showToast) window.showToast("Operator authenticated successfully.", "ok");
+      if (typeof window.poll === "function") window.poll();
+    } else {
+      if (err) {
+        err.textContent = data.error || "Authentication failed. Invalid operator key.";
+        err.style.display = "block";
+      }
+      if (inp) inp.select();
+    }
+  } catch (e) {
+    if (err) {
+      err.textContent = "Network error during authentication.";
+      err.style.display = "block";
+    }
+  }
+}
+window.submitOperatorLogin = submitOperatorLogin;
+
+async function submitOperatorLogout() {
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      headers: window.CG_CSRF_TOKEN ? { "X-CSRF-Token": window.CG_CSRF_TOKEN } : {},
+    });
+    window.CG_IS_OPERATOR = false;
+    window.CG_CSRF_TOKEN = null;
+    updateAuthUI();
+    if (window.showToast) window.showToast("Operator session ended.", "info");
+    if (typeof window.poll === "function") window.poll();
+  } catch (e) {
+    window.CG_IS_OPERATOR = false;
+    window.CG_CSRF_TOKEN = null;
+    updateAuthUI();
+  }
+}
+window.submitOperatorLogout = submitOperatorLogout;
+
 const authFetch = async (url, opts = {}) => {
   opts.credentials = "include";
   opts.headers = opts.headers || {};
-  let key = window.CG_API_KEY;
-  if (!key) {
-    const m = document.cookie.match(/(^| )cg_session=([^;]+)/);
-    if (m && m[2]) key = m[2];
-  }
-  if (!key) {
-    try {
-      const s = await (await fetch("/api/auth/session", { credentials: "include" })).json();
-      if (s && s.api_key) {
-        window.CG_API_KEY = s.api_key;
-        key = s.api_key;
-      }
-    } catch (e) {}
-  }
-  if (key) {
+
+  // Attach CSRF token if active in operator session
+  if (window.CG_CSRF_TOKEN) {
     if (opts.headers instanceof Headers) {
-      opts.headers.set("X-API-Key", key);
+      opts.headers.set("X-CSRF-Token", window.CG_CSRF_TOKEN);
     } else {
-      opts.headers["X-API-Key"] = key;
+      opts.headers["X-CSRF-Token"] = window.CG_CSRF_TOKEN;
     }
   }
-  return fetch(url, opts);
+
+  // Ensure Content-Type is application/json when JSON body string is provided
+  if (opts.body && typeof opts.body === "string") {
+    if (opts.headers instanceof Headers) {
+      if (!opts.headers.has("Content-Type")) opts.headers.set("Content-Type", "application/json");
+    } else if (!opts.headers["Content-Type"]) {
+      opts.headers["Content-Type"] = "application/json";
+    }
+  }
+
+  const resp = await fetch(url, opts);
+  if (resp.status === 401) {
+    window.CG_IS_OPERATOR = false;
+    window.CG_CSRF_TOKEN = null;
+    updateAuthUI();
+    if (window.showToast) {
+      window.showToast("Operator authentication required for this action.", "bad");
+    }
+    openOperatorLoginModal();
+  } else if (resp.status === 403) {
+    const data = await resp.clone().json().catch(() => ({}));
+    if (window.showToast) {
+      window.showToast(data.error || "Action forbidden: operator permission required.", "bad");
+    }
+  }
+  return resp;
 };
 window.authFetch = authFetch;
 function highlightJSON(data) {
@@ -50,7 +189,7 @@ function highlightJSON(data) {
   });
 }
 window.highlightJSON = highlightJSON;
-let M={posture:[],anomaly:[],threshold:null,buckets:[],events_total:0,rem:{items:[],fixed:0,verified:0,rolled_back:0}},EVR=[],ES=new Set(),EBOOT=false,Q="",FSEV="",FST="",EK="",DR=null;
+let M={posture:[],anomaly:[],threshold:null,buckets:[],events_total:0,rem:{items:[],fixed:0,verified:0,rolled_back:0}},EVR=[],ES=new Set(),EBOOT=false,Q="",FSEV="",FST="",EK="",ESVC="",EV_PAGE=1,EV_PAGE_SIZE=25,DR=null;
 const ctx=()=>({S,ML,M}),mid=x=>(x.ref.match(/T\d{4}(\.\d{3})?/)||["n/a"])[0],$$=id=>document.getElementById(id);
 const stat=s=>({pending:tg("Awaiting approval","wr"),fixed:tg("Remediated","ok"),rejected:tg("Rejected","gr")}[s]||tg(s,"gr"));
 const noData=k=>k=="detectors"?!Object.values(ML.results||{}).some(r=>r.controlled):k=="calib"?!Object.values(ML.results||{}).some(r=>r.old_real_unlabelled):false,
@@ -191,14 +330,78 @@ function overview(){
     </div>
   `;
 }
-function findings(){return`<div class="tools"><select id="fsev" aria-label="Severity"><option value="">All severities</option>${["Critical","High","Medium","Low"].map(x=>`<option>${x}</option>`).join("")}</select><select id="fst" aria-label="Status"><option value="">All statuses</option><option value="pending">Awaiting approval</option><option value="fixed">Remediated</option><option value="rejected">Rejected</option></select><span class="mu" id="fcount"></span></div><section class="panel"><div class="wrap"><table class="tbl" id="ftbl"></table></div></section>`}
+function findings(){return`<div class="tools" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="fq" type="search" placeholder="Search findings (title, rule, ID)..." value="${esc(Q)}" style="padding:6px 10px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px;min-width:180px" /><select id="fsev" aria-label="Severity"><option value="">All severities</option>${["Critical","High","Medium","Low"].map(x=>`<option value="${x}" ${FSEV===x?"selected":""}>${x}</option>`).join("")}</select><select id="fst" aria-label="Status"><option value="">All statuses</option><option value="pending" ${FST==="pending"?"selected":""}>Awaiting approval</option><option value="fixed" ${FST==="fixed"?"selected":""}>Remediated</option><option value="rejected" ${FST==="rejected"?"selected":""}>Rejected</option></select><span class="mu" id="fcount"></span></div><section class="panel"><div class="wrap"><table class="tbl" id="ftbl"></table></div></section>`}
 function paintFindings(){const t=$$("ftbl");if(!t)return;const q=Q.toLowerCase(),L=S.findings.filter(x=>(!FSEV||x.sev==FSEV)&&(!FST||x.status==FST)&&(!q||(x.title+x.ref+x.id).toLowerCase().includes(q)));
  $$("fcount").textContent=`${L.length} of ${S.findings.length} findings`;
  t.innerHTML=L.length?`<tr><th>Severity</th><th>Finding</th><th>Technique</th><th>Source</th><th>Status</th><th>Detected in</th></tr>`+L.map(x=>`<tr class="clk" data-open="${x.id}"><td>${tg(x.sev,"bad")}</td><td>${esc(x.title)}</td><td class="mono">${mid(x)}</td><td>${x.id=="key"?"ML anomaly":"Rule"}</td><td>${stat(x.status)}</td><td>${x.tdetect}s</td></tr>`).join(""):`<tr><td colspan="6">${none(S.findings.length?"No findings match these filters.":"No findings yet. Use Simulate attack on the Overview page.")}</td></tr>`}
-function events(){return`<div class="tools"><select id="ek" aria-label="Kind"><option value="">All events</option><option value="attack">Attack actions</option><option value="baseline">Baseline traffic</option></select><span class="mu" id="ecount"></span></div><section class="panel"><div class="wrap"><table class="tbl mono" id="etbl"></table></div></section><p class="mu" style="margin-top:12px">${S.mode=="Live AWS"?"Live CloudTrail ingestion is not built yet, so no live events appear here.":"Events are CloudTrail-style records written by the simulator, because moto does not produce CloudTrail. Baseline traffic is simulated normal activity."}</p>`}
-function paintEvents(){const t=$$("etbl");if(!t)return;$$("ecount").textContent=`${EVR.length} shown`;
- t.innerHTML=EVR.length?`<tr><th>Time</th><th>Event</th><th>Service</th><th>Principal</th><th>Country</th><th>Kind</th><th>Mode</th></tr>`+EVR.map(e=>`<tr class="${EBOOT&&!ES.has(e.id)?"fresh":""}"><td>${esc(e.t)}</td><td>${esc(e.name)}</td><td>${esc(e.src)}</td><td>${esc(e.user)}</td><td>${esc(e.country)}</td><td>${tg(e.kind=="attack"?"Attack":"Baseline",e.kind=="attack"?"bad":"")}</td><td>${esc(e.mode)}</td></tr>`).join(""):`<tr><td colspan="7">${none("No events match.")}</td></tr>`;
- EVR.forEach(e=>ES.add(e.id));EBOOT=true}
+function events(){
+  return`<div class="tools" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <input id="eq" type="search" placeholder="Search event, principal, IP..." value="${esc(Q)}" style="padding:6px 10px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px;min-width:200px" />
+    <select id="ek" aria-label="Kind filter" style="padding:6px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px">
+      <option value="" ${EK===""?"selected":""}>All Event Kinds</option>
+      <option value="attack" ${EK==="attack"?"selected":""}>Attack Actions</option>
+      <option value="baseline" ${EK==="baseline"?"selected":""}>Baseline Traffic</option>
+    </select>
+    <select id="esvc" aria-label="Service filter" style="padding:6px;background:var(--sf2);border:1px solid var(--ln);border-radius:4px;color:var(--tx);font-size:12px">
+      <option value="" ${ESVC===""?"selected":""}>All Services</option>
+      <option value="s3" ${ESVC==="s3"?"selected":""}>S3</option>
+      <option value="iam" ${ESVC==="iam"?"selected":""}>IAM</option>
+      <option value="ec2" ${ESVC==="ec2"?"selected":""}>EC2</option>
+      <option value="cloudtrail" ${ESVC==="cloudtrail"?"selected":""}>CloudTrail</option>
+      <option value="sts" ${ESVC==="sts"?"selected":""}>STS</option>
+    </select>
+    <span class="mu" id="ecount" style="font-size:12px"></span>
+    <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+      <button class="btn sm" id="btn-ev-prev">Prev</button>
+      <span class="mu" id="ev-page-indicator" style="font-size:12px">Page 1</span>
+      <button class="btn sm" id="btn-ev-next">Next</button>
+    </div>
+  </div>
+  <section class="panel">
+    <div class="ph">
+      <span class="pt">Security Event Telemetry</span>
+      <span class="mu">Click any event row to inspect full CloudTrail JSON record</span>
+    </div>
+    <div class="wrap">
+      <table class="tbl mono" id="etbl"></table>
+    </div>
+  </section>
+  <p class="mu" style="margin-top:12px">${S.mode=="Live AWS"?"Live CloudTrail ingestion is not built yet, so no live events appear here.":"Events are CloudTrail-style records generated deterministically by the security telemetry engine and Moto simulator. Baseline traffic models simulated normal operational activity."}</p>`;
+}
+function paintEvents(){
+  const t=$$("etbl");if(!t)return;
+  const filtered=EVR.filter(e=>!ESVC||e.src===ESVC);
+  const total=filtered.length;
+  const totalPages=Math.max(1,Math.ceil(total/EV_PAGE_SIZE));
+  if(EV_PAGE>totalPages)EV_PAGE=totalPages;
+  if(EV_PAGE<1)EV_PAGE=1;
+  const startIdx=(EV_PAGE-1)*EV_PAGE_SIZE;
+  const paged=filtered.slice(startIdx,startIdx+EV_PAGE_SIZE);
+
+  $$("ecount").textContent=`${total} events (${paged.length} on page)`;
+  const pageInd=$$("ev-page-indicator");
+  if(pageInd)pageInd.textContent=`Page ${EV_PAGE} of ${totalPages}`;
+
+  const prevBtn=$$("btn-ev-prev");
+  const nextBtn=$$("btn-ev-next");
+  if(prevBtn)prevBtn.disabled=EV_PAGE<=1;
+  if(nextBtn)nextBtn.disabled=EV_PAGE>=totalPages;
+
+  t.innerHTML=paged.length?`<tr><th>Time</th><th>Event</th><th>Service</th><th>Principal</th><th>Origin</th><th>Kind</th><th>Mode</th></tr>`+paged.map(e=>`
+    <tr class="clk ${EBOOT&&!ES.has(e.id)?"fresh":""}" data-event-id="${e.id}" title="Click to inspect event details and CloudTrail JSON">
+      <td class="mono">${esc(e.t)}</td>
+      <td class="mono"><b>${esc(e.name)}</b></td>
+      <td><span class="chip" style="font-size:10px">${esc(e.src)}</span></td>
+      <td class="mono">${esc(e.user)}</td>
+      <td>${esc(e.country)}</td>
+      <td>${tg(e.kind=="attack"?"Attack":"Baseline",e.kind=="attack"?"bad":"ok")}</td>
+      <td class="mu">${esc(e.mode)}</td>
+    </tr>
+  `).join(""):`<tr><td colspan="7">${none("No events match current filters.")}</td></tr>`;
+
+  paged.forEach(e=>ES.add(e.id));
+  EBOOT=true;
+}
 async function loadEvents(){const r=await _get("/api/events?kind="+encodeURIComponent(EK)+"&q="+encodeURIComponent(Q));if(r){EVR=r.rows;if(route()=="events")paintEvents()}}
 function audit(){return`<section class="panel"><div class="ph"><span class="pt">Audit trail</span><span>${tg(AU.chain_ok?"Hash chain verified":"Chain broken at entry "+AU.first_bad,AU.chain_ok?"ok":"bad")}${tg((AU.matched!=null&&AU.matched!=AU.count?AU.matched+" of ":"")+AU.count+" entries")}</span></div><div class="wrap"><table class="tbl mono">${AU.rows.map(r=>`<tr><td class="mu">#${r.i}</td><td class="mu">${esc(r.hash)}</td><td>${esc(r.text)}</td></tr>`).join("")||`<tr><td>${none("No entries match.")}</td></tr>`}</table></div></section>
  <section class="panel mt"><div class="ph"><span class="pt">Model evaluation</span></div>${evalTable()}${ML.multi?`<div class="pb"><div class="lb">Seed results (synthetic benchmark)</div><pre>${esc(ML.multi)}</pre></div>`:""}</section>
@@ -229,6 +432,79 @@ function drawerHTML(x){const lab={pending:["Awaiting approval","wr"],fixed:["Fix
  <div class="lb">Approval history and rollback</div><div class="tl">${hist.map(t=>`<div>${esc(t)}</div>`).join("")||'<span class="mu">No approvals yet.</span>'}</div><div class="ac">${acts}</div></div>`}
 async function openDrawer(id){DR=id;const d=$$("drawer");d.className="drawer open";d.innerHTML='<div class="dh"><b>Loading…</b></div><div class="db"><div class="sk" style="height:200px;margin-top:12px"></div></div>';const x=await _get("/api/finding/"+id);if(DR!=id)return;d.innerHTML=x&&!x.error?drawerHTML(x):'<div class="dh"><b>Finding not available</b><button class="btn sm" id="dclose">Close</button></div>'}
 function closeDrawer(){DR=null;$$("drawer").className="drawer"}
+function eventDrawerHTML(e){
+  const isAttack=e.kind==="attack";
+  const isoTime=new Date((e.ts||Date.now()/1000)*1000).toISOString();
+  const rawCloudTrail={
+    eventVersion:"1.08",
+    userIdentity:{
+      type:e.user&&e.user.startsWith("role/")?"AssumedRole":"IAMUser",
+      principalId:`AIDA${(e.user||"intern-dev").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,16)}`,
+      arn:`arn:aws:iam::123456789012:${e.user||"user/intern-dev"}`,
+      accountId:"123456789012",
+      userName:(e.user||"user/intern-dev").split("/").pop()
+    },
+    eventTime:isoTime,
+    eventSource:`${e.src||"s3"}.amazonaws.com`,
+    eventName:e.name||"UnknownAction",
+    awsRegion:"us-east-1",
+    sourceIPAddress:isAttack?"198.51.100.42":"192.0.2.15",
+    userAgent:isAttack?"aws-cli/2.15.15 Python/3.11.8 Linux/5.15.0-bot":"console.amazonaws.com",
+    requestParameters:{
+      targetResource:`${e.src||"s3"}/demo-resource`,
+      action:e.name,
+      executionMode:e.mode||"simulator"
+    },
+    responseElements:{
+      status:"SUCCESS",
+      requestId:`req-${String(e.id||1).padStart(8,"0")}`
+    },
+    readOnly:!isAttack,
+    eventType:"AwsApiCall",
+    managementEvent:true,
+    recipientAccountId:"123456789012"
+  };
+  const jsonStr=JSON.stringify(rawCloudTrail,null,2);
+  const highlighted=highlightJSON(jsonStr);
+  return`<div class="dh">
+    <div>
+      <div class="pt">${esc(e.name)}</div>
+      <div class="mu">Event #${e.id} &middot; ${esc(e.t)}</div>
+    </div>
+    <button class="btn sm" id="dclose">Close</button>
+  </div>
+  <div class="db">
+    <div style="margin-top:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      ${tg(isAttack?"Attack Action":"Baseline Telemetry",isAttack?"bad":"ok")}
+      ${tg("Service: "+(e.src||"s3"),"in")}
+      ${tg("Region: us-east-1","gr")}
+      ${tg(e.mode==="Live AWS"?"Live AWS":"Simulator","gr")}
+    </div>
+    <div class="lb">Event Context</div>
+    <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px;margin-top:6px;font-size:12px">
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;line-height:1.6">
+        <span class="mu">Event ID:</span> <span class="mono">#${e.id}</span>
+        <span class="mu">Timestamp:</span> <span>${isoTime}</span>
+        <span class="mu">Principal:</span> <span class="mono"><b>${esc(e.user)}</b></span>
+        <span class="mu">Service:</span> <span class="mono">${esc(e.src)}</span>
+        <span class="mu">Source IP:</span> <span class="mono">${isAttack?"198.51.100.42":"192.0.2.15"} (${esc(e.country||"US")})</span>
+        <span class="mu">Classification:</span> <span>${isAttack?"<b style='color:var(--bad)'>High-Risk Attack Simulation</b>":"Normal Baseline Ingestion"}</span>
+      </div>
+    </div>
+    <div class="lb" style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+      <span>CloudTrail-Style JSON Record</span>
+    </div>
+    <pre class="json-code" style="max-height:420px;overflow:auto;padding:12px;background:var(--sf2);border:1px solid var(--ln);border-radius:6px;font-size:11px">${highlighted}</pre>
+  </div>`;
+}
+function openEventDrawer(id){
+  const e=EVR.find(x=>x.id===id);
+  if(!e)return;
+  DR=`event-${id}`;
+  const d=$$("drawer");
+  d.className="drawer open";
+  d.innerHTML=eventDrawerHTML(e);
+}
 let KS="";async function loadMetrics(){const m=await _get("/api/metrics");if(!m)return;M=m;CG.update(ctx());const p=$$("pipe");if(p)p.innerHTML=pipe();const k=JSON.stringify([m.rem.rolled_back,m.rem.items.map(i=>i.ttr)]);if(k!==KS){KS=k;if(route()=="overview"&&BOOT)render()}}
 function renderInspectorHTML(){
  const edge = window.SELECTED_EDGE;
@@ -1860,7 +2136,7 @@ function architecture() {
     <div style="margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px">
       <h2 style="margin:0 0 4px;font-size:18px;font-weight:600">Project Architecture &amp; Technical Reference</h2>
       <div class="mu" style="font-size:12px">
-        <b>${esc(d.academic_context || "Final Year B.Tech CSE (AI & ML) Project")}</b> · Author: <b>${esc(d.author || "Asif Shaik")}</b> · <a class="lk" href="${esc(d.repository || 'https://github.com/asifshaik06/cloudguardian')}" target="_blank">GitHub Repository</a>
+        <b>${esc(d.academic_context || "Final Year B.Tech CSE (AI & ML) Project")}</b> · Author: <b>${esc(d.author || "Asif Shaik")}</b> · <a class="lk" href="${esc(d.repository || 'https://github.com/asifshaik06/threatguard')}" target="_blank">GitHub Repository</a>
       </div>
     </div>
 
@@ -2027,8 +2303,40 @@ function demo() {
 
 function refresh(){const r=route();if(r=="findings")paintFindings();if(r=="events")loadEvents();if(r=="audit")loadAudit();if(r=="graph"&&window.loadGraph)loadGraph();if(r=="alerts")loadAlerts();if(r=="incidents")loadIncidents();if(r=="remediation"||r=="response")loadRemediations();if(r=="architecture")loadArchitecture();if(r=="demo")loadDemo()}
 function bind(){const r=route();
- if(r=="findings"){$$("fsev").value=FSEV;$$("fst").value=FST;$$("fsev").onchange=e=>{FSEV=e.target.value;paintFindings()};$$("fst").onchange=e=>{FST=e.target.value;paintFindings()};paintFindings()}
- if(r=="events"){$$("ek").value=EK;$$("ek").onchange=e=>{EK=e.target.value;loadEvents()};loadEvents()}
+ if(r=="findings"){
+   const fq=$$("fq");
+   if(fq){
+     fq.value=Q;
+     fq.oninput=e=>{Q=e.target.value.trim();paintFindings();};
+   }
+   const fsev=$$("fsev");
+   if(fsev){fsev.value=FSEV;fsev.onchange=e=>{FSEV=e.target.value;paintFindings();};}
+   const fst=$$("fst");
+   if(fst){fst.value=FST;fst.onchange=e=>{FST=e.target.value;paintFindings();};}
+   paintFindings();
+ }
+ if(r=="events"){
+   const eq=$$("eq");
+   if(eq){
+     eq.value=Q;
+     eq.oninput=e=>{Q=e.target.value.trim();EV_PAGE=1;loadEvents();};
+   }
+   const ek=$$("ek");
+   if(ek){
+     ek.value=EK;
+     ek.onchange=e=>{EK=e.target.value;EV_PAGE=1;loadEvents();};
+   }
+   const esvc=$$("esvc");
+   if(esvc){
+     esvc.value=ESVC;
+     esvc.onchange=e=>{ESVC=e.target.value;EV_PAGE=1;paintEvents();};
+   }
+   const btnPrev=$$("btn-ev-prev");
+   if(btnPrev)btnPrev.onclick=()=>{if(EV_PAGE>1){EV_PAGE--;paintEvents();}};
+   const btnNext=$$("btn-ev-next");
+   if(btnNext)btnNext.onclick=()=>{EV_PAGE++;paintEvents();};
+   loadEvents();
+ }
  if(r=="graph"){
    bindInspectorEvents();
    const bSearch=$$("graph-search");
@@ -2662,7 +2970,8 @@ document.addEventListener("click",e=>{
     }
     return;
   }
-  const o=e.target.closest("[data-open]");if(o)openDrawer(o.dataset.open);if(e.target.id=="dclose")closeDrawer();if(e.target.closest("[data-p]")&&DR)setTimeout(()=>DR&&openDrawer(DR),900);
+  const evRow=e.target.closest("[data-event-id]");if(evRow){openEventDrawer(+evRow.dataset.eventId);return;}
+  const o=e.target.closest("[data-open]");if(o)openDrawer(o.dataset.open);if(e.target.id=="dclose")closeDrawer();if(e.target.closest("[data-p]")&&DR&&!String(DR).startsWith("event-"))setTimeout(()=>DR&&openDrawer(DR),900);
 });
 document.addEventListener("keydown",e=>{
   if(e.key=="Escape"){if(window.closeModal)closeModal();closeDrawer()}

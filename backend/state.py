@@ -1,4 +1,4 @@
-"""Thread-safe state management and hash-chained audit storage for CloudGuardian.
+"""Thread-safe state management and hash-chained audit storage for ThreatGuard.
 
 Provides:
 - ThreadSafeStateStore: Reentrant lock protection over all shared application data.
@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 class StateStore:
-    """Thread-safe central state container for CloudGuardian."""
+    """Thread-safe central state container for ThreatGuard."""
 
     def __init__(self, db_path: str = "cg_audit.db", check_same_thread: bool = False):
         self._lock = threading.RLock()

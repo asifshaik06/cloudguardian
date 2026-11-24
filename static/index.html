@@ -1,42 +1,42 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CloudGuardian</title>
+<title>ThreatGuard</title>
 <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
 <style>
 :root{
-  --bg:#10141C;
-  --side:#141A23;
-  --sf:#171D27;
-  --sf2:#202936;
-  --sf-elevated:#263240;
-  --ln:#303B49;
-  --tx:#DCE5EF;
-  --mu:#9BAABD;
-  --sub:#78879A;
-  --cyan:#55BFCB;
-  --violet:#9A87D5;
-  --emerald:#48A98B;
-  --amber:#D5A64B;
-  --coral:#D66C79;
-  --magenta:#B87CCB;
-  --ac:#55BFCB;
-  --ach:#68CFDB;
-  --onac:#0B1220;
-  --ok:#48A98B;
-  --bad:#D66C79;
-  --wr:#D5A64B;
-  --med:#D5A64B;
-  --low:#55BFCB;
-  --c1:#55BFCB;
-  --c2:#9A87D5;
-  --c3:#D5A64B;
-  --c4:#B87CCB;
-  --c5:#48A98B;
-  --fl:rgba(85,191,203,0.12);
-  --oka:rgba(72,169,139,0.22);
-  --bada:rgba(214,108,121,0.22);
-  --wra:rgba(213,166,75,0.22);
-  --vla:rgba(154,135,213,0.22);
+  --bg:#0D1117;
+  --side:#161B22;
+  --sf:#161B22;
+  --sf2:#21262D;
+  --sf-elevated:#2A313C;
+  --ln:#30363D;
+  --tx:#E6EDF3;
+  --mu:#8B949E;
+  --sub:#6E7681;
+  --cyan:#39C5CF;
+  --violet:#BC8CFF;
+  --emerald:#3FB950;
+  --amber:#D29922;
+  --coral:#F85149;
+  --magenta:#D2A8FF;
+  --ac:#58A6FF;
+  --ach:#79C0FF;
+  --onac:#0D1117;
+  --ok:#3FB950;
+  --bad:#F85149;
+  --wr:#D29922;
+  --med:#D29922;
+  --low:#58A6FF;
+  --c1:#58A6FF;
+  --c2:#BC8CFF;
+  --c3:#D29922;
+  --c4:#D2A8FF;
+  --c5:#3FB950;
+  --fl:rgba(88,166,255,0.12);
+  --oka:rgba(63,185,80,0.22);
+  --bada:rgba(248,81,73,0.22);
+  --wra:rgba(210,153,34,0.22);
+  --vla:rgba(188,140,255,0.22);
   --pad:24px;
   --gap:16px;
   --side-w:240px;
@@ -80,10 +80,12 @@
 /* shell: sidebar + header + main */
 .shell{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);min-height:100vh;transition:grid-template-columns .2s ease}.mainc{min-width:0}
 .side{background:var(--side);border-right:1px solid var(--ln);padding:16px 12px;display:flex;flex-direction:column;gap:12px;position:sticky;top:0;height:100vh;overflow-y:auto;overflow-x:hidden;transition:width .2s ease,padding .2s ease}
-.logo{display:flex;align-items:center;gap:10px;padding:0 8px;height:36px;font-weight:600;font-size:15px;color:var(--tx);text-decoration:none;letter-spacing:-0.01em}
+.logo{display:flex;flex-direction:column;gap:3px;padding:2px 8px;font-weight:600;font-size:15px;color:var(--tx);text-decoration:none;letter-spacing:-0.01em}
+.logo-head{display:flex;align-items:center;gap:10px;width:100%}
 .logo-mark{width:24px;height:24px;flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.2))}
 .logo-text{font-weight:700;font-size:15px;color:var(--tx);white-space:nowrap}
 .logo-badge{font-size:10px;font-weight:600;padding:1px 5px;border-radius:4px;background:rgba(154,135,213,0.15);color:var(--violet);border:1px solid rgba(154,135,213,0.28);margin-left:auto}
+.logo-sub{font-size:9.5px;font-weight:400;color:var(--mu);line-height:1.25;letter-spacing:0}
 .side-nav-wrap{flex:1;min-height:0;overflow-y:auto}
 nav{display:flex;flex-direction:column;gap:2px}
 .nav-group{margin-bottom:10px}
@@ -112,9 +114,11 @@ nav{display:flex;flex-direction:column;gap:2px}
 /* Collapsed sidebar mode */
 body.collapsed-sidebar .shell{grid-template-columns:64px minmax(0,1fr)}
 body.collapsed-sidebar .side{padding:16px 8px}
-body.collapsed-sidebar .logo{justify-content:center;padding:0}
+body.collapsed-sidebar .logo{align-items:center;padding:0}
+body.collapsed-sidebar .logo-head{justify-content:center}
 body.collapsed-sidebar .logo-text,
 body.collapsed-sidebar .logo-badge,
+body.collapsed-sidebar .logo-sub,
 body.collapsed-sidebar .nv-label,
 body.collapsed-sidebar .nav-group-title{display:none}
 body.collapsed-sidebar .nav-group{margin-bottom:4px}
@@ -205,10 +209,13 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:10
 </style></head><body>
 <div class="shell">
 <aside class="side">
-  <a class="logo" href="#overview" title="CloudGuardian Security Operations Center">
-    <img src="/static/logo.svg" class="logo-mark" alt="CloudGuardian Logo" width="24" height="24">
-    <span class="logo-text">CloudGuardian</span>
-    <span class="logo-badge">v2.0</span>
+  <a class="logo" href="#overview" title="ThreatGuard — AI-Based Cloud Security Monitoring and Threat Detection">
+    <div class="logo-head">
+      <img src="/static/logo.svg" class="logo-mark" alt="ThreatGuard Logo" width="24" height="24">
+      <span class="logo-text">ThreatGuard</span>
+      <span class="logo-badge">v2.0</span>
+    </div>
+    <div class="logo-sub">AI-Based Cloud Security Monitoring and Threat Detection</div>
   </a>
   <div class="side-nav-wrap">
     <nav id="nav"></nav>
@@ -231,6 +238,9 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:10
     <span class="sq-kbd">/</span>
   </div>
   <div class="rt">
+    <span id="auth-badge" class="tg in" title="Public Demonstration Mode (Read-Only)">[PUBLIC DEMO]</span>
+    <button class="btn sm" id="btn-login-modal" aria-label="Operator login" title="Sign in as security operator">Operator Login</button>
+    <button class="btn sm danger" id="btn-logout" aria-label="Operator logout" title="Sign out of operator session" style="display:none;">Logout</button>
     <span id="mode" class="tg in"></span>
     <span class="live" title="Autonomous monitoring active"><i class="pd"></i><span id="ver">Connecting</span></span>
     <button class="btn sm" id="theme" aria-label="Toggle color theme" title="Toggle dark / light mode">
@@ -254,6 +264,24 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:10
     </div>
     <div class="cg-modal-body" id="cg-modal-body" style="margin:16px 0;font-size:13px;line-height:1.5;"></div>
     <div class="cg-modal-footer" id="cg-modal-footer" style="display:flex;justify-content:flex-end;gap:8px;"></div>
+  </div>
+</div>
+<div class="cg-modal-backdrop" id="cg-login-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cg-login-modal-title">
+  <div class="cg-modal-box">
+    <div class="cg-modal-header">
+      <h3 id="cg-login-modal-title" style="margin:0;font-size:15px;font-weight:600;">Operator Authentication</h3>
+      <button class="btn sm" id="cg-login-modal-x" aria-label="Close dialog" style="padding:2px 8px;border:none;background:transparent;cursor:pointer;font-size:18px;color:var(--mu);line-height:1;">&times;</button>
+    </div>
+    <div class="cg-modal-body" style="margin:16px 0;font-size:13px;line-height:1.5;">
+      <p style="margin:0 0 12px;color:var(--mu);">Authenticate with your authorized operator key to enable state-modifying security operations (attack simulation, remediation approval, rollback, and incident management).</p>
+      <label for="op-key-input" style="display:block;margin-bottom:6px;font-weight:500;color:var(--tx);font-size:12px;">OPERATOR API KEY</label>
+      <input type="password" id="op-key-input" class="inp" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;background:var(--sf2);color:var(--tx);border:1px solid var(--ln);border-radius:6px;font-family:ui-monospace,Menlo,Consolas,monospace;" placeholder="Enter operator key from .cg_key" autocomplete="current-password" />
+      <div id="op-login-err" style="display:none;color:var(--bad);font-size:12px;margin-top:8px;font-weight:500;"></div>
+    </div>
+    <div class="cg-modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" id="cg-login-cancel">Cancel</button>
+      <button class="btn primary" id="cg-login-submit">Authenticate</button>
+    </div>
   </div>
 </div>
 <div class="cg-toast-container" id="cg-toast" aria-live="polite"></div>
@@ -528,5 +556,25 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-p]");if(b)
 $("theme").onclick=()=>setTheme(document.documentElement.dataset.theme=="light"?"dark":"light");
 window.addEventListener("hashchange",()=>{render(true);window.scrollTo(0,0);if(route()=="audit")loadAudit()});
 let T0="dark";try{T0=localStorage.cgTheme||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){}setTheme(T0);
+
+const btnLoginModal = $("btn-login-modal");
+if (btnLoginModal) btnLoginModal.onclick = () => window.openOperatorLoginModal && window.openOperatorLoginModal();
+const btnLogout = $("btn-logout");
+if (btnLogout) btnLogout.onclick = () => window.submitOperatorLogout && window.submitOperatorLogout();
+const btnLoginSubmit = $("cg-login-submit");
+if (btnLoginSubmit) btnLoginSubmit.onclick = () => window.submitOperatorLogin && window.submitOperatorLogin();
+const btnLoginCancel = $("cg-login-cancel");
+if (btnLoginCancel) btnLoginCancel.onclick = () => window.closeOperatorLoginModal && window.closeOperatorLoginModal();
+const btnLoginX = $("cg-login-modal-x");
+if (btnLoginX) btnLoginX.onclick = () => window.closeOperatorLoginModal && window.closeOperatorLoginModal();
+const opInp = $("op-key-input");
+if (opInp) {
+  opInp.onkeydown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); window.submitOperatorLogin && window.submitOperatorLogin(); }
+    if (e.key === "Escape") { e.preventDefault(); window.closeOperatorLoginModal && window.closeOperatorLoginModal(); }
+  };
+}
+if (window.checkAuthSession) window.checkAuthSession();
+
 render(true);poll().then(()=>render(true));loadStatic();loadAudit();setInterval(poll,1500);setInterval(()=>{if(route()=="audit")loadAudit()},4000);
 </script></body></html>

@@ -1,4 +1,4 @@
-"""Comprehensive reproducibility tests for CloudGuardian 2.0 ML inference and XAI attribution.
+"""Comprehensive reproducibility tests for ThreatGuard ML inference and XAI attribution.
 
 Covers:
 1. Exact ALT-0004 feature-vector inference reproduction.

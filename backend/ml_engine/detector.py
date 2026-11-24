@@ -1,4 +1,4 @@
-"""Runtime multi-detector ML inference engine for CloudGuardian.
+"""Runtime multi-detector ML inference engine for ThreatGuard.
 
 Loads models/baseline_v1.joblib:
 - StandardScaler
@@ -18,7 +18,7 @@ import numpy as np
 from backend.ml_engine.pipeline import FEATURES
 from backend.ml_engine.xai import explain_isolation_forest_sample
 
-logger = logging.getLogger("cloudguardian.detector")
+logger = logging.getLogger("threatguard.detector")
 
 LOG_FEATURES = ["call_count", "call_velocity", "unique_services", "unique_events", "sensitive_count", "iam_change_count"]
 

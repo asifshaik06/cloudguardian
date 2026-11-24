@@ -1,4 +1,4 @@
-"""CloudGuardian SOC package: Alerts, Incidents, and Verified Remediation."""
+"""ThreatGuard SOC package: Alerts, Incidents, and Verified Remediation."""
 from backend.soc.models import (
     AlertRecord,
     AlertSeverity,

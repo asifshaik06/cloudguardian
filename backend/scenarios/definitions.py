@@ -1,4 +1,4 @@
-"""Predefined Scenario Catalog for CloudGuardian 2.0 IAM Attack Simulation Lab.
+"""Predefined Scenario Catalog for ThreatGuard IAM Attack Simulation Lab.
 
 Implements all 12 comprehensive cloud attack scenarios spanning:
 1. IAM Privilege Escalation (Excessive IAM, Risky Trust, PassRole+Compute, Policy Versioning)

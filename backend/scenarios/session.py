@@ -1,4 +1,4 @@
-"""Scenario Session Manager for CloudGuardian 2.0 IAM Attack Simulation Lab.
+"""Scenario Session Manager for ThreatGuard IAM Attack Simulation Lab.
 
 Manages isolated scenario execution runs, runtime state tracking,
 dynamic graph instantiation, path evaluation, and independent verification.
@@ -21,7 +21,7 @@ from backend.scenarios.models import (
     ScenarioRun,
 )
 
-logger = logging.getLogger("cloudguardian.scenarios.session")
+logger = logging.getLogger("threatguard.scenarios.session")
 
 
 class ScenarioSessionManager:

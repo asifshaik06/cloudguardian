@@ -1,4 +1,4 @@
-"""Telemetry and Metrics module for CloudGuardian.
+"""Telemetry and Metrics module for ThreatGuard.
 
 Provides:
 - Background posture polling loop (score over time).
@@ -22,7 +22,7 @@ from backend.posture import compute_posture_score
 from backend.soc.store import soc_store
 from backend.state import StateStore
 
-logger = logging.getLogger("cloudguardian.telemetry")
+logger = logging.getLogger("threatguard.telemetry")
 
 # Reference data (MITRE ATT&CK mapping and project risk weights)
 MITRE = {

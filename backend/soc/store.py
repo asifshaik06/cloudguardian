@@ -1,4 +1,4 @@
-"""Thread-safe persistent storage and workflow engine for CloudGuardian SOC Operations.
+"""Thread-safe persistent storage and workflow engine for ThreatGuard SOC Operations.
 
 Manages Alert, Incident, and Remediation lifecycles with SQLite audit trail
 integration, independent verification, and cross-module referencing.
@@ -21,7 +21,7 @@ from backend.soc.models import (
     VerificationState,
 )
 
-logger = logging.getLogger("cloudguardian.soc.store")
+logger = logging.getLogger("threatguard.soc.store")
 
 
 class SOCStore:
@@ -643,7 +643,7 @@ class SOCStore:
     # ---- Seed Initial SOC Records for High-Quality Demo ----
 
     def _seed_default_soc_records(self) -> None:
-        """Seed realistic SOC records correlated with CloudGuardian's core resources."""
+        """Seed realistic SOC records correlated with ThreatGuard's core resources."""
         # 1. S3 Public Bucket Alert & Remediation
         self.create_alert(
             title="Public S3 Bucket Exposure Detected",

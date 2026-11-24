@@ -1,4 +1,4 @@
-"""Integration tests for CloudGuardian IAM Capability Graph and Attack-Path API endpoints."""
+"""Integration tests for ThreatGuard IAM Capability Graph and Attack-Path API endpoints."""
 import pytest
 from app import app as flask_app, iam_graph
 from backend.security import AUTH_HEADER, get_active_api_key

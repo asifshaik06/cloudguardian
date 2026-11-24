@@ -1,4 +1,4 @@
-"""Comprehensive University Evaluator & Readiness Audit Test Suite for CloudGuardian 2.0.
+"""Comprehensive University Evaluator & Readiness Audit Test Suite for ThreatGuard.
 
 Verifies:
 - All 10 End-to-End Security Workflows

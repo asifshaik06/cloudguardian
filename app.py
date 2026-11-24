@@ -1,4 +1,4 @@
-"""CloudGuardian 2.0 — Explainable AI-Assisted Cloud Security Platform.
+"""ThreatGuard – AI-Based Cloud Security Monitoring and Threat Detection System.
 
 Main application entry point providing:
 - Guarded Moto simulation and safe Live AWS integration.
@@ -25,6 +25,7 @@ from backend.aws_guard import (
     get_aws_client,
     is_dry_run,
     is_live_aws,
+    is_simulator_available,
     resolve_account_id,
     safe_setup,
 )
@@ -36,13 +37,18 @@ from backend.ml_engine.detector import RuntimeDetector
 from backend.ml_engine.window_aggregator import StreamingWindowAggregator
 from backend.replay import register_replay_api
 from backend.security import (
+    AUTH_HEADER,
+    CSRF_HEADER,
     SESSION_COOKIE_NAME,
     get_active_api_key,
     is_authenticated,
+    is_csrf_valid,
     is_telegram_user_authorized,
     redact_sensitive_data,
     require_auth,
+    session_store,
     validate_telegram_callback_data,
+    verify_operator_credential,
 )
 from backend.state import StateStore
 from backend.soc.models import (
@@ -57,7 +63,7 @@ from backend.posture import compute_posture_score
 # Load environment configuration
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger("cloudguardian.app")
+logger = logging.getLogger("threatguard.app")
 
 # Core operational modes
 LIVE: bool = is_live_aws()
@@ -88,15 +94,19 @@ pipeline = EventStreamPipeline(store, aggregator, detector)
 
 # IAM Capability Graph Engine & Attack-Path Intelligence
 iam_graph = IAMCapabilityGraph()
-try:
-    iam_graph.build_from_aws_or_moto(
-        iam_client=iam,
-        s3_client=s3,
-        ec2_client=ec2,
-        populate_defaults_if_empty=True,
-    )
-except Exception as _g_err:
-    logger.warning("Failed building IAM graph on startup, falling back to default topology: %s", _g_err)
+if LIVE or is_simulator_available():
+    try:
+        iam_graph.build_from_aws_or_moto(
+            iam_client=iam,
+            s3_client=s3,
+            ec2_client=ec2,
+            populate_defaults_if_empty=True,
+        )
+    except Exception as _g_err:
+        logger.warning("Failed building IAM graph on startup, falling back to default topology: %s", _g_err)
+        iam_graph.seed_default_topology()
+else:
+    logger.info("Simulator offline; loaded realistic default IAM capability graph.")
     iam_graph.seed_default_topology()
 
 BLOCK: Dict[str, bool] = dict(
@@ -385,7 +395,7 @@ def tg_alert(k: str) -> None:
             timeout=10,
             json={
                 "chat_id": CHAT,
-                "text": f"CloudGuardian: {R[k]['title']} ({R[k]['sev']})\nProposed fix: {R[k]['fixtxt']}",
+                "text": f"ThreatGuard: {R[k]['title']} ({R[k]['sev']})\nProposed fix: {R[k]['fixtxt']}",
                 "reply_markup": kb,
             },
         )
@@ -669,50 +679,84 @@ app = Flask(__name__, static_folder="static")
 
 @app.get("/")
 def home() -> Any:
-    """Serve single-page application dashboard and establish session cookie."""
-    resp = make_response(send_from_directory("static", "index.html"))
-    # Set or refresh session cookie if missing or stale/mismatched with active server instance
-    if not is_authenticated(request):
-        resp.set_cookie(
-            SESSION_COOKIE_NAME,
-            get_active_api_key(),
-            path="/",
-            httponly=False,
-            samesite="Lax",
-        )
-    return resp
+    """Serve single-page application dashboard without dispensing sensitive credentials."""
+    return make_response(send_from_directory("static", "index.html"))
 
 
 @app.get("/api/auth/session")
 def auth_session() -> Any:
-    """Provide session validation and active API key for dashboard client."""
-    resp = jsonify({
+    """Check active session status and provide CSRF token if authenticated as operator.
+
+    Never exposes master API keys or internal secrets in response.
+    """
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    sess = session_store.get_session(cookie_token) if cookie_token else None
+    is_auth = is_authenticated(request)
+    role = sess["role"] if sess else ("operator" if is_auth else "viewer")
+    csrf_token = sess["csrf_token"] if sess else None
+
+    return jsonify({
+        "ok": True,
+        "authenticated": is_auth,
+        "role": role,
+        "csrf_token": csrf_token,
+    })
+
+
+@app.post("/api/auth/login")
+def auth_login() -> Any:
+    """Authenticate operator and establish a secure, server-managed session with CSRF protection."""
+    payload = request.get_json(silent=True) or {}
+    candidate = payload.get("key") or payload.get("token") or payload.get("password") or ""
+    if not verify_operator_credential(candidate):
+        return jsonify({
+            "ok": False,
+            "error": "Invalid operator key or credentials.",
+        }), 401
+
+    session_id, csrf_token = session_store.create_session(role="operator")
+    audit("OPERATOR session authenticated via dashboard login")
+    resp = make_response(jsonify({
         "ok": True,
         "authenticated": True,
-        "api_key": get_active_api_key(),
-    })
+        "role": "operator",
+        "csrf_token": csrf_token,
+        "message": "Operator authentication successful.",
+    }))
     resp.set_cookie(
         SESSION_COOKIE_NAME,
-        get_active_api_key(),
-        path="/",
-        httponly=False,
+        session_id,
+        httponly=True,
         samesite="Lax",
+        secure=request.is_secure,
+        path="/",
+        max_age=28800,
     )
     return resp
 
 
-@app.after_request
-def ensure_dashboard_session(response: Any) -> Any:
-    """Ensure HTML and top-level browser responses refresh stale session cookies."""
-    if not is_authenticated(request) and request.method == "GET" and not request.path.startswith("/api/"):
-        response.set_cookie(
-            SESSION_COOKIE_NAME,
-            get_active_api_key(),
-            path="/",
-            httponly=False,
-            samesite="Lax",
-        )
-    return response
+@app.post("/api/auth/logout")
+def auth_logout() -> Any:
+    """Terminate active operator session and clear session cookie."""
+    cookie_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if cookie_token:
+        session_store.invalidate_session(cookie_token)
+    audit("OPERATOR session terminated via logout")
+    resp = make_response(jsonify({
+        "ok": True,
+        "authenticated": False,
+        "role": "viewer",
+        "message": "Operator logged out successfully.",
+    }))
+    resp.set_cookie(
+        SESSION_COOKIE_NAME,
+        "",
+        httponly=True,
+        samesite="Lax",
+        expires=0,
+        path="/",
+    )
+    return resp
 
 
 @app.get("/api/state")
@@ -851,21 +895,26 @@ register_soc_api(app, soc_store, R)
 
 def run_server() -> None:
     """Boot application with safe setup guards and background workers."""
-    success, res_ids, msg = safe_setup(
-        s3, ct, ec2, iam, BUCKET, TRAIL, USER, BLOCK, PERM
-    )
-    if success:
-        for r_name, r_val in res_ids.items():
-            store.set_resource_id(r_name, r_val)
-        logger.info("Environment initialized: %s", msg)
+    if DRY_RUN:
+        logger.info("[DRY-RUN] Startup: Real and simulated infrastructure mutations are disabled.")
+    elif not LIVE and not is_simulator_available():
+        logger.info("Simulator offline: Moto not detected on port 5000; starting in offline demonstration mode.")
     else:
-        logger.warning("Setup guard: %s", msg)
+        success, res_ids, msg = safe_setup(
+            s3, ct, ec2, iam, BUCKET, TRAIL, USER, BLOCK, PERM
+        )
+        if success:
+            for r_name, r_val in res_ids.items():
+                store.set_resource_id(r_name, r_val)
+            logger.info("Environment initialized: %s", msg)
+        else:
+            logger.warning("Setup guard: %s", msg)
 
     threading.Thread(target=scan, daemon=True).start()
     if TG:
         threading.Thread(target=tg_poll, daemon=True).start()
 
-    logger.info("Starting CloudGuardian server on port 8000...")
+    logger.info("Starting ThreatGuard server on port 8000...")
     app.run(port=8000)
 
 

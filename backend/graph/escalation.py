@@ -1,4 +1,4 @@
-"""Privilege Escalation Pathfinding Engine for CloudGuardian 2.0.
+"""Privilege Escalation Pathfinding Engine for ThreatGuard.
 
 Analyzes the IAM capability graph to discover privilege escalation vectors,
 role-assumption chains, and direct paths to administrative control or sensitive assets.
@@ -10,7 +10,7 @@ import networkx as nx
 
 from backend.graph.iam_graph import IAMCapabilityGraph, NodeType, EdgeType
 
-logger = logging.getLogger("cloudguardian.graph.escalation")
+logger = logging.getLogger("threatguard.graph.escalation")
 
 # MITRE ATT&CK Mapping for privilege escalation primitives
 ESCALATION_MITRE: Dict[str, Dict[str, str]] = {

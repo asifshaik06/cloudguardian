@@ -2,7 +2,7 @@ import logging
 from pydantic import ValidationError
 from .event_schema import Event
 
-log = logging.getLogger("cloudguardian.ingest")
+log = logging.getLogger("threatguard.ingest")
 _seen = set()
 
 

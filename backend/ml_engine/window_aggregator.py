@@ -1,4 +1,4 @@
-"""Streaming 5-minute rolling window feature aggregator for CloudGuardian.
+"""Streaming 5-minute rolling window feature aggregator for ThreatGuard.
 
 Extracts all 12 behavioral features in real time per principal identity:
 - call_count

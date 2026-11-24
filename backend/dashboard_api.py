@@ -1,4 +1,4 @@
-"""Dashboard API module for CloudGuardian.
+"""Dashboard API module for ThreatGuard.
 
 Provides:
 - State versioning and cryptographic verification.
@@ -21,7 +21,7 @@ from backend.aws_guard import safe_execute_remediation
 from backend.security import redact_sensitive_data, require_auth
 from backend.state import StateStore
 
-logger = logging.getLogger("cloudguardian.dashboard_api")
+logger = logging.getLogger("threatguard.dashboard_api")
 
 
 def register(app: Flask, g: Dict[str, Any]) -> None:

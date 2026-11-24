@@ -1,4 +1,4 @@
-"""NetworkX IAM Capability Graph Engine for CloudGuardian 2.0.
+"""NetworkX IAM Capability Graph Engine for ThreatGuard.
 
 Models IAM principals (users, roles, groups), IAM policies, and cloud resources
 (S3 buckets, EC2 instances, KMS keys) as a directed capability graph.
@@ -10,7 +10,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import networkx as nx
 
-logger = logging.getLogger("cloudguardian.graph.iam")
+logger = logging.getLogger("threatguard.graph.iam")
 
 
 class NodeType(str, Enum):

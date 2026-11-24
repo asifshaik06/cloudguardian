@@ -1,4 +1,4 @@
-"""Security module for CloudGuardian.
+"""Security module for ThreatGuard.
 
 Provides:
 - Authentication & token verification for API endpoints.
@@ -9,6 +9,8 @@ from functools import wraps
 import os
 import re
 import secrets
+import threading
+import time
 from typing import Any, Callable, Dict, Optional, Set, Tuple
 from flask import Request, jsonify, request
 
@@ -75,6 +77,77 @@ _ACTIVE_API_KEY: str = _init_active_api_key()
 AUTH_HEADER = "X-API-Key"
 BEARER_PREFIX = "Bearer "
 SESSION_COOKIE_NAME = "cg_session"
+CSRF_HEADER = "X-CSRF-Token"
+
+
+# ---- Server-Managed Session Store & CSRF Protection ----
+
+class SessionStore:
+    """Thread-safe server-managed session store independent of API key tokens."""
+
+    def __init__(self, session_ttl_seconds: int = 28800):  # 8-hour operator session
+        self._lock = threading.Lock()
+        self._sessions: Dict[str, Dict[str, Any]] = {}
+        self._ttl = session_ttl_seconds
+
+    def create_session(self, role: str = "operator") -> Tuple[str, str]:
+        """Generate high-entropy session ID and CSRF token; register and return (session_id, csrf_token)."""
+        session_id = secrets.token_hex(32)
+        csrf_token = secrets.token_hex(24)
+        now_ts = time.time()
+        with self._lock:
+            self._cleanup_expired_locked(now_ts)
+            self._sessions[session_id] = {
+                "session_id": session_id,
+                "role": role,
+                "csrf_token": csrf_token,
+                "created_at": now_ts,
+                "expires_at": now_ts + self._ttl,
+            }
+        return session_id, csrf_token
+
+    def get_session(self, session_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Retrieve active valid session dictionary or None if expired/absent."""
+        if not session_id or not isinstance(session_id, str):
+            return None
+        now_ts = time.time()
+        with self._lock:
+            sess = self._sessions.get(session_id.strip())
+            if not sess:
+                return None
+            if sess["expires_at"] < now_ts:
+                self._sessions.pop(session_id.strip(), None)
+                return None
+            return dict(sess)
+
+    def invalidate_session(self, session_id: Optional[str]) -> bool:
+        """Invalidate and remove a session (logout)."""
+        if not session_id or not isinstance(session_id, str):
+            return False
+        with self._lock:
+            return bool(self._sessions.pop(session_id.strip(), None))
+
+    def _cleanup_expired_locked(self, now_ts: float) -> None:
+        expired = [sid for sid, s in self._sessions.items() if s["expires_at"] < now_ts]
+        for sid in expired:
+            self._sessions.pop(sid, None)
+
+    def clear(self) -> None:
+        """Clear all active sessions (for test harnesses)."""
+        with self._lock:
+            self._sessions.clear()
+
+
+# Global server session store
+session_store = SessionStore()
+
+
+def verify_operator_credential(candidate: str) -> bool:
+    """Verify submitted operator credentials against active master API key in constant time."""
+    if not candidate or not isinstance(candidate, str):
+        return False
+    return secrets.compare_digest(candidate.strip(), _ACTIVE_API_KEY)
+
 
 # Redaction patterns
 RE_ACCOUNT_ID = re.compile(r"\b\d{12}\b")
@@ -115,24 +188,86 @@ def extract_token_from_request(req: Request) -> Optional[str]:
 
 
 def is_authenticated(req: Request) -> bool:
-    """Verify whether the incoming request contains a valid token."""
-    token = extract_token_from_request(req)
-    if not token:
-        return False
-    # Constant-time comparison to prevent timing attacks
-    return secrets.compare_digest(token, _ACTIVE_API_KEY)
+    """Verify whether incoming request contains valid operator credentials or active session."""
+    # 1. Direct X-API-Key header check (constant-time)
+    api_key = req.headers.get(AUTH_HEADER)
+    if api_key and secrets.compare_digest(api_key.strip(), _ACTIVE_API_KEY):
+        return True
+
+    # 2. Bearer Authorization header check (constant-time)
+    auth_header = req.headers.get("Authorization")
+    if auth_header and auth_header.startswith(BEARER_PREFIX):
+        token = auth_header[len(BEARER_PREFIX):].strip()
+        if secrets.compare_digest(token, _ACTIVE_API_KEY):
+            return True
+
+    # 3. Session cookie check against server-managed SessionStore
+    cookie_token = req.cookies.get(SESSION_COOKIE_NAME)
+    if cookie_token:
+        c_val = cookie_token.strip()
+        sess = session_store.get_session(c_val)
+        if sess is not None:
+            return True
+        # Backwards-compatible test harness check
+        if secrets.compare_digest(c_val, _ACTIVE_API_KEY):
+            return True
+
+    return False
+
+
+def is_csrf_valid(req: Request) -> bool:
+    """Verify CSRF token for state-changing HTTP requests.
+
+    - API Key and Bearer token requests are CSRF-exempt (non-browser or programmatic API access).
+    - Session cookie requests MUST include an X-CSRF-Token header matching the session CSRF secret.
+    """
+    # 1. API Key or Bearer header authentication is CSRF-exempt
+    api_key = req.headers.get(AUTH_HEADER)
+    if api_key and secrets.compare_digest(api_key.strip(), _ACTIVE_API_KEY):
+        return True
+
+    auth_header = req.headers.get("Authorization")
+    if auth_header and auth_header.startswith(BEARER_PREFIX):
+        token = auth_header[len(BEARER_PREFIX):].strip()
+        if secrets.compare_digest(token, _ACTIVE_API_KEY):
+            return True
+
+    # 2. Session cookie authentication requires CSRF header validation
+    cookie_token = req.cookies.get(SESSION_COOKIE_NAME)
+    if cookie_token:
+        sess = session_store.get_session(cookie_token.strip())
+        if sess is not None:
+            csrf_header = req.headers.get(CSRF_HEADER)
+            if not csrf_header:
+                return False
+            return secrets.compare_digest(csrf_header.strip(), sess.get("csrf_token", ""))
+
+        # Backwards-compatible direct key check for test harness
+        if secrets.compare_digest(cookie_token.strip(), _ACTIVE_API_KEY):
+            return True
+
+    return False
 
 
 def require_auth(f: Callable[..., Any]) -> Callable[..., Any]:
-    """Flask route decorator requiring valid authentication token for protected endpoints."""
+    """Flask route decorator requiring valid operator authentication and CSRF for state changes."""
     @wraps(f)
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
         if not is_authenticated(request):
             return jsonify({
                 "ok": False,
-                "error": "Unauthorized: Valid API key or session required.",
-                "hint": f"Provide '{AUTH_HEADER}' header or authenticate via dashboard."
+                "error": "Unauthorized: Operator authentication required.",
+                "hint": f"Provide '{AUTH_HEADER}' header or sign in as an operator."
             }), 401
+
+        # Enforce CSRF protection on state-modifying requests (POST, PUT, DELETE, PATCH)
+        if request.method in ("POST", "PUT", "DELETE", "PATCH") and not is_csrf_valid(request):
+            return jsonify({
+                "ok": False,
+                "error": "Forbidden: CSRF validation failed. Missing or invalid X-CSRF-Token header.",
+                "hint": "Include 'X-CSRF-Token' header matching active operator session."
+            }), 403
+
         return f(*args, **kwargs)
     return decorated_function
 
