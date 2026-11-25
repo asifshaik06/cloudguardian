@@ -1,38 +1,44 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ThreatGuard</title>
-<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v=2">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=2">
+<link rel="shortcut icon" href="/static/favicon.ico?v=2">
+<link rel="manifest" href="/static/site.webmanifest">
 <style>
 :root{
-  --bg:#0D1117;
-  --side:#161B22;
-  --sf:#161B22;
-  --sf2:#21262D;
-  --sf-elevated:#2A313C;
-  --ln:#30363D;
-  --tx:#E6EDF3;
-  --mu:#8B949E;
+  --bg:#121215;
+  --side:#18181B;
+  --sf:#18181B;
+  --sf2:#27272A;
+  --sf-elevated:#3F3F46;
+  --ln:#2E2E33;
+  --tx:#FAFAFA;
+  --mu:#A1A1AA;
   --sub:#7D8590;
+  --sec-grey:#52525B;
   --cyan:#39C5CF;
   --violet:#BC8CFF;
   --emerald:#3FB950;
   --amber:#D29922;
   --coral:#F85149;
   --magenta:#D2A8FF;
-  --ac:#58A6FF;
-  --ach:#79C0FF;
-  --onac:#0D1117;
+  --ac:#F97316;
+  --ach:#FB923C;
+  --onac:#FFFFFF;
   --ok:#3FB950;
   --bad:#F85149;
   --wr:#D29922;
   --med:#D29922;
-  --low:#58A6FF;
-  --c1:#58A6FF;
+  --low:#F97316;
+  --c1:#F97316;
   --c2:#BC8CFF;
   --c3:#D29922;
   --c4:#D2A8FF;
   --c5:#3FB950;
-  --fl:rgba(88,166,255,0.12);
+  --fl:rgba(249,115,22,0.12);
   --oka:rgba(63,185,80,0.22);
   --bada:rgba(248,81,73,0.22);
   --wra:rgba(210,153,34,0.22);
@@ -42,57 +48,58 @@
   --side-w:240px;
   --radius:6px;
   --radius-sm:4px;
-  --json-str:#68CFDB;
-  --crit-bg:rgba(214,108,121,0.14);
-  --crit-bdr:rgba(214,108,121,0.35);
-  --wr-bg:rgba(213,166,75,0.14);
-  --wr-bdr:rgba(213,166,75,0.35);
-  --wr-bg-subtle:rgba(213,166,75,0.10);
-  --wr-bdr-subtle:rgba(213,166,75,0.25);
-  --cyan-bg:rgba(85,191,203,0.10);
-  --cyan-bdr:rgba(85,191,203,0.25);
-  --ok-bg:rgba(72,169,139,0.14);
-  --ok-bdr:rgba(72,169,139,0.35);
-  --vlt-bg:rgba(154,135,213,0.14);
-  --vlt-bdr:rgba(154,135,213,0.35);
-  --mag-bg:rgba(184,124,203,0.14);
-  --mag-bdr:rgba(184,124,203,0.35);
+  --json-str:#F97316;
+  --crit-bg:rgba(248,81,73,0.14);
+  --crit-bdr:rgba(248,81,73,0.35);
+  --wr-bg:rgba(210,153,34,0.14);
+  --wr-bdr:rgba(210,153,34,0.35);
+  --wr-bg-subtle:rgba(210,153,34,0.10);
+  --wr-bdr-subtle:rgba(210,153,34,0.25);
+  --cyan-bg:rgba(57,197,207,0.10);
+  --cyan-bdr:rgba(57,197,207,0.25);
+  --ok-bg:rgba(63,185,80,0.14);
+  --ok-bdr:rgba(63,185,80,0.35);
+  --vlt-bg:rgba(188,140,255,0.14);
+  --vlt-bdr:rgba(188,140,255,0.35);
+  --mag-bg:rgba(210,168,255,0.14);
+  --mag-bdr:rgba(210,168,255,0.35);
 }
 :root[data-theme=light]{
-  --bg:#F5F6F8;
+  --bg:#F4F4F5;
   --side:#FFFFFF;
   --sf:#FFFFFF;
-  --sf2:#F0F2F5;
+  --sf2:#E4E4E7;
   --sf-elevated:#FFFFFF;
-  --ln:#DCE1E8;
-  --tx:#263342;
-  --mu:#637184;
-  --sub:#525F72;
+  --ln:#D4D4D8;
+  --tx:#18181B;
+  --mu:#52525B;
+  --sub:#71717A;
+  --sec-grey:#52525B;
   --cyan:#0E7490;
   --violet:#6D28D9;
   --emerald:#047857;
   --amber:#B45309;
   --coral:#BE123C;
   --magenta:#86198F;
-  --ac:#0E7490;
-  --ach:#155E75;
+  --ac:#EA580C;
+  --ach:#C2410C;
   --onac:#FFFFFF;
   --ok:#047857;
   --bad:#BE123C;
   --wr:#B45309;
   --med:#B45309;
-  --low:#0E7490;
-  --c1:#0E7490;
+  --low:#EA580C;
+  --c1:#EA580C;
   --c2:#6D28D9;
   --c3:#B45309;
   --c4:#86198F;
   --c5:#047857;
-  --fl:rgba(14,116,144,0.08);
+  --fl:rgba(234,88,12,0.08);
   --oka:rgba(4,120,87,0.18);
   --bada:rgba(190,18,60,0.18);
   --wra:rgba(180,83,9,0.18);
   --vla:rgba(109,40,217,0.18);
-  --json-str:#155E75;
+  --json-str:#C2410C;
   --crit-bg:rgba(190,18,60,0.12);
   --crit-bdr:rgba(190,18,60,0.32);
   --wr-bg:rgba(180,83,9,0.12);
@@ -114,9 +121,8 @@
 .side{background:var(--side);border-right:1px solid var(--ln);padding:16px 12px;display:flex;flex-direction:column;gap:12px;position:sticky;top:0;height:100vh;overflow-y:auto;overflow-x:hidden;transition:width .2s ease,padding .2s ease}
 .logo{display:flex;flex-direction:column;gap:3px;padding:2px 8px;font-weight:600;font-size:15px;color:var(--tx);text-decoration:none;letter-spacing:-0.01em}
 .logo-head{display:flex;align-items:center;gap:10px;width:100%}
-.logo-mark{width:24px;height:24px;flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.2))}
+.logo-mark{width:24px;height:29px;flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3));object-fit:contain}
 .logo-text{font-weight:700;font-size:15px;color:var(--tx);white-space:nowrap}
-.logo-badge{font-size:10px;font-weight:600;padding:1px 5px;border-radius:4px;background:rgba(154,135,213,0.15);color:var(--violet);border:1px solid rgba(154,135,213,0.28);margin-left:auto}
 .logo-sub{font-size:9.5px;font-weight:400;color:var(--mu);line-height:1.25;letter-spacing:0}
 .side-nav-wrap{flex:1;min-height:0;overflow-y:auto}
 nav{display:flex;flex-direction:column;gap:2px}
@@ -148,8 +154,8 @@ body.collapsed-sidebar .shell{grid-template-columns:64px minmax(0,1fr)}
 body.collapsed-sidebar .side{padding:16px 8px}
 body.collapsed-sidebar .logo{align-items:center;padding:0}
 body.collapsed-sidebar .logo-head{justify-content:center}
+body.collapsed-sidebar .logo-mark{width:28px;height:34px}
 body.collapsed-sidebar .logo-text,
-body.collapsed-sidebar .logo-badge,
 body.collapsed-sidebar .logo-sub,
 body.collapsed-sidebar .nv-label,
 body.collapsed-sidebar .nav-group-title{display:none}
@@ -164,7 +170,10 @@ body.collapsed-sidebar .toggle-icon{transform:rotate(180deg)}
 .sq{width:100%;padding-left:32px;padding-right:36px;height:32px;background:var(--sf2);border:1px solid var(--ln);border-radius:var(--radius);color:var(--tx);font:inherit;transition:border-color .14s,box-shadow .14s}
 .sq:focus,.sq:focus-visible{outline:2px solid var(--ac);outline-offset:1px;border-color:var(--ac);box-shadow:0 0 0 3px var(--fl)}
 .sq-kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);font:10px ui-monospace,Menlo,Consolas,monospace;background:var(--sf);border:1px solid var(--ln);border-radius:4px;padding:1px 5px;color:var(--sub);pointer-events:none}
-.rt{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}.menu{display:none;align-items:center;justify-content:center;width:34px;padding:0}.menu svg{width:18px;height:18px}
+.rt{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+.rt #auth-badge,.rt #mode{height:28px;line-height:26px;display:inline-flex;align-items:center;padding:0 8px;box-sizing:border-box}
+.rt .btn.sm{height:28px;padding:0 10px;font-size:11.5px;display:inline-flex;align-items:center;justify-content:center}
+.menu{display:none;align-items:center;justify-content:center;width:34px;padding:0}.menu svg{width:18px;height:18px}
 .mb{padding:6px var(--pad);font-size:12px;border-bottom:1px solid var(--ln)}.mb.sim{background:var(--fl);color:var(--ac)}.mb.live{background:rgba(72,169,139,0.12);color:var(--ok)}
 .live{display:flex;align-items:center;gap:8px;color:var(--mu);font-size:12px;white-space:nowrap}.pd{width:7px;height:7px;border-radius:50%;background:var(--ok)}
 .content{padding:var(--pad) var(--pad) 48px}.scrim{display:none}
@@ -173,6 +182,71 @@ body.collapsed-sidebar .toggle-icon{transform:rotate(180deg)}
 .ph{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--ln);min-height:41px}
 .pt{font-weight:600;font-size:13px}.pb{padding:14px}.mt{margin-top:var(--gap)}
 .g3,.g2,.cols2,.kpis{display:grid;gap:var(--gap)}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2,.cols2{grid-template-columns:repeat(2,minmax(0,1fr))}.span2{grid-column:span 2}
+.alerts-layout{display:grid;gap:var(--gap);grid-template-columns:minmax(0,1.38fr) minmax(0,1fr);align-items:start}
+@media(max-width:1220px){.alerts-layout{grid-template-columns:minmax(0,1fr)}}
+.cost-reports-layout{display:flex;flex-direction:column;gap:var(--gap);width:100%}
+.cost-history-panel{overflow:hidden}
+.cost-history-bar{display:flex;justify-content:space-between;align-items:center;gap:10px 12px;flex-wrap:wrap;padding:10px 14px;cursor:pointer;user-select:none}
+.cost-history-bar:hover{background:var(--sf2)}
+.cost-history-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.cost-history-meta{font-size:12px;color:var(--mu);overflow-wrap:anywhere}
+.cost-history-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+.cost-history-chev{display:inline-flex;align-items:center;gap:6px}
+.cost-history-chev svg{transition:transform .18s ease}
+.cost-history-panel.open .cost-history-chev svg{transform:rotate(180deg)}
+.cost-history-body{max-height:320px;overflow-y:auto;border-top:1px solid var(--ln)}
+.cost-history-body[hidden]{display:none}
+.cost-history-tbl th,.cost-history-tbl td{padding:8px 12px;height:auto;line-height:1.4;vertical-align:middle}
+@media(max-width:640px){
+.cost-history-tbl thead{display:none}
+.cost-history-tbl,.cost-history-tbl tbody{display:block;width:100%}
+.cost-history-tbl tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px 12px;border-bottom:1px solid var(--ln);width:100%;box-sizing:border-box}
+.cost-history-tbl tr:last-child{border-bottom:0}
+.cost-history-tbl td{display:block;padding:0 !important;border:0 !important}
+.cost-history-tbl td.ch-id{grid-column:1 / -1}
+.cost-history-tbl td.ch-cost{text-align:right;white-space:nowrap}
+}
+.cost-report-detail{width:100%}
+.cost-report-body{padding:14px}
+.cost-tbl{width:100%;border-collapse:collapse}
+.cost-tbl th{white-space:normal;line-height:1.3;padding:8px 10px;height:auto}
+.cost-tbl td{padding:8px 10px;height:auto;vertical-align:top;overflow-wrap:break-word;word-break:normal;line-height:1.45}
+.cost-tbl .tg{white-space:normal;text-align:left;line-height:1.25}
+.cost-tbl .mono-wrap{overflow-wrap:anywhere;word-break:break-word}
+.tools>input,.tools>select{max-width:100%}
+.cost-rpt-sec{margin-top:20px;padding-top:16px;border-top:1px solid var(--ln);width:100%}
+.cost-rpt-sec:first-of-type{margin-top:8px;padding-top:0;border-top:0}
+.cost-kpis-5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:14px}
+@media(max-width:960px){.cost-kpis-5{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.cost-kpis-5{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:640px){.cost-report-body{padding:12px}}
+.alerts-tbl{width:100%;table-layout:fixed;border-collapse:collapse}
+.alerts-tbl th,.alerts-tbl td{box-sizing:border-box}
+.alerts-tbl th.col-id{width:72px;min-width:68px;padding:8px 6px 8px 10px}
+.alerts-tbl td.col-id{width:72px;padding:8px 6px 8px 10px}
+.alerts-tbl th.col-sev{width:68px;min-width:64px;text-align:center;padding:8px 4px}
+.alerts-tbl td.col-sev{width:68px;text-align:center;padding:8px 4px}
+.alerts-tbl th.col-title{min-width:0;padding:8px 10px}
+.alerts-tbl td.col-title{min-width:0;padding:8px 10px}
+.alerts-tbl th.col-res{width:145px;min-width:130px;padding:8px 8px}
+.alerts-tbl td.col-res{width:145px;padding:8px 8px}
+.alerts-tbl th.col-status{width:148px;min-width:138px;padding:8px 10px 8px 8px}
+.alerts-tbl td.col-status{width:148px;padding:8px 10px 8px 8px}
+.alerts-tbl tr{min-height:52px}
+.alerts-tbl td{height:auto;min-height:52px;vertical-align:middle}
+@media(max-width:680px){
+.alerts-tbl thead{display:none}
+.alerts-tbl,.alerts-tbl tbody{display:block;width:100%}
+.alerts-tbl tr{display:grid;grid-template-areas:"id sev" "title title" "res res" "status status";grid-template-columns:1fr auto;gap:6px 10px;padding:12px;border-bottom:1px solid var(--ln);box-sizing:border-box;width:100%;cursor:pointer}
+.alerts-tbl tr.selected{background:var(--fl);box-shadow:inset 3px 0 0 var(--ac)}
+.alerts-tbl td{display:block;padding:0 !important;height:auto !important;border:0 !important;width:100% !important}
+.alerts-tbl td.col-id{grid-area:id;display:flex;align-items:center}
+.alerts-tbl td.col-sev{grid-area:sev;display:flex;justify-content:flex-end;align-items:center}
+.alerts-tbl td.col-title{grid-area:title}
+.alerts-tbl td.col-res{grid-area:res;display:flex;align-items:center;gap:6px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.alerts-tbl td.col-res::before{content:"RESOURCE:";color:var(--mu);font-size:10px;font-weight:600;letter-spacing:0.04em;flex:none}
+.alerts-tbl td.col-status{grid-area:status;padding-top:6px !important;border-top:1px dashed var(--ln) !important;margin-top:2px}
+}
 .kpis{grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:var(--gap)}
 .kpis-6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--gap);margin-bottom:var(--gap)}
 .kp{padding:12px 14px;min-height:76px;display:flex;flex-direction:column;justify-content:center;position:relative}
@@ -226,13 +300,15 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:var(--radius);
 @media(max-width:768px){.diff-view{grid-template-columns:1fr}}
 .step-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;background:var(--sf2);border-radius:var(--radius);border:1px solid var(--ln);margin-bottom:16px}
 @media(max-width:1200px){.kpis-6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1160px){.bar{flex-wrap:wrap}.sq-wrap{order:3;flex-basis:100%;max-width:none;margin:8px 0 0}}
 @media(max-width:1100px){.g3{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.span2{grid-column:auto}}
-@media(max-width:1024px){:root{--pad:16px}.shell{grid-template-columns:minmax(0,1fr)}.side{position:fixed;left:0;top:0;width:240px;z-index:30;transform:translateX(-100%);visibility:hidden;transition:transform .2s ease,visibility .2s}body.navopen .side{transform:none;visibility:visible}.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}body.navopen .scrim{display:block}.menu{display:inline-flex}.bar{flex-wrap:wrap}.sq-wrap{order:3;flex-basis:100%;max-width:none;margin:8px 0 0}.g2,.cols2,.cmp{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:640px){.g3,.kpis,.kpis-6{grid-template-columns:minmax(0,1fr)}.pipe{grid-template-columns:repeat(2,minmax(0,1fr))}.stg{border-bottom:1px solid var(--ln)}.live span,#theme-label{display:none}#theme{padding:0 6px}#theme svg{margin-right:0}.rt{gap:6px}.feed .ev{grid-template-columns:64px 1fr}}
-@media(max-width:440px){:root{--pad:12px}.bar{padding:8px var(--pad);gap:8px}.bar h1{font-size:14px}.rt{gap:4px}#auth-badge{font-size:10px;padding:1px 5px}.btn.sm{height:24px;padding:0 6px;font-size:11px}#mode{font-size:10px;padding:1px 5px}}
+@media(max-width:1024px){:root{--pad:16px}.shell{grid-template-columns:minmax(0,1fr)}.side{position:fixed;left:0;top:0;width:240px;z-index:30;transform:translateX(-100%);visibility:hidden;transition:transform .2s ease,visibility .2s}body.navopen .side{transform:none;visibility:visible}.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}body.navopen .scrim{display:block}.menu{display:inline-flex}.g2,.cols2,.cmp{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:640px){.g3,.kpis,.kpis-6{grid-template-columns:minmax(0,1fr)}.pipe{grid-template-columns:repeat(2,minmax(0,1fr))}.pipe .stg:last-child{grid-column:1 / -1;border-right:0}.stg{border-bottom:1px solid var(--ln)}.live span,#theme-label{display:none}#theme{padding:0 6px}#theme svg{margin-right:0}.rt{gap:6px}.feed .ev{grid-template-columns:64px 1fr}}
+@media(max-width:440px){:root{--pad:12px}.bar{padding:8px var(--pad);gap:8px}.bar h1{font-size:14px}.rt{gap:4px}.rt #auth-badge,.rt #mode{height:24px;line-height:22px;font-size:10px;padding:0 5px}.rt .btn.sm{height:24px;padding:0 6px;font-size:11px}}
+@media(max-width:390px){.pipe{grid-template-columns:1fr}.pipe .stg:last-child{grid-column:auto}.pipe .stg{border-right:0;border-bottom:1px solid var(--ln)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 .cg-modal-backdrop{position:fixed;inset:0;background:rgba(5,9,18,0.72);backdrop-filter:blur(3px);z-index:90;display:flex;align-items:center;justify-content:center;padding:16px}
-.cg-modal-box{background:var(--sf);border:1px solid var(--ln);border-radius:var(--radius);padding:20px;max-width:500px;width:100%;box-shadow:0 12px 28px rgba(0,0,0,0.4);animation:fade .2s ease-out}
+.cg-modal-box{background:var(--sf);border:1px solid var(--ln);border-radius:var(--radius);padding:20px;max-width:500px;width:100%;max-height:calc(100vh - 32px);overflow-y:auto;box-shadow:0 12px 28px rgba(0,0,0,0.4);animation:fade .2s ease-out}
 .cg-modal-header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--ln);padding-bottom:12px}
 .cg-toast-container{position:fixed;bottom:24px;right:24px;z-index:95;display:flex;flex-direction:column;gap:10px;pointer-events:none}
 .cg-toast{pointer-events:auto;padding:12px 18px;border-radius:var(--radius);background:var(--sf);border:1px solid var(--ln);font-size:13px;color:var(--tx);display:flex;align-items:center;gap:10px;box-shadow:0 8px 20px rgba(0,0,0,0.3);animation:fade .2s ease-out;max-width:380px}
@@ -244,9 +320,8 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:var(--radius);
 <aside class="side">
   <a class="logo" href="#overview" title="ThreatGuard — AI-Based Cloud Security Monitoring and Threat Detection">
     <div class="logo-head">
-      <img src="/static/logo.svg" class="logo-mark" alt="ThreatGuard Logo" width="24" height="24">
+      <img src="/static/img/threatguard-emblem-dark.png" id="logo-img" class="logo-mark" alt="ThreatGuard TG Emblem" width="24" height="29">
       <span class="logo-text">ThreatGuard</span>
-      <span class="logo-badge">v2.0</span>
     </div>
     <div class="logo-sub">AI-Based Cloud Security Monitoring and Threat Detection</div>
   </a>
@@ -299,21 +374,23 @@ pre{background:var(--bg);border:1px solid var(--ln);border-radius:var(--radius);
     <div class="cg-modal-footer" id="cg-modal-footer" style="display:flex;justify-content:flex-end;gap:8px;"></div>
   </div>
 </div>
-<div class="cg-modal-backdrop" id="cg-login-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cg-login-modal-title">
+<div class="cg-modal-backdrop" id="cg-login-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cg-login-modal-title" aria-describedby="op-login-desc">
   <div class="cg-modal-box">
     <div class="cg-modal-header">
-      <h3 id="cg-login-modal-title" style="margin:0;font-size:15px;font-weight:600;">Operator Authentication</h3>
-      <button class="btn sm" id="cg-login-modal-x" aria-label="Close dialog" style="padding:2px 8px;border:none;background:transparent;cursor:pointer;font-size:18px;color:var(--mu);line-height:1;">&times;</button>
+      <h3 id="cg-login-modal-title" style="margin:0;font-size:15px;font-weight:600;">Security Operator Authorization</h3>
+      <button class="btn sm" id="cg-login-modal-x" aria-label="Close operator login dialog" style="padding:2px 8px;border:none;background:transparent;cursor:pointer;font-size:18px;color:var(--mu);line-height:1;">&times;</button>
     </div>
     <div class="cg-modal-body" style="margin:16px 0;font-size:13px;line-height:1.5;">
-      <p style="margin:0 0 12px;color:var(--mu);">Authenticate with your authorized operator key to enable state-modifying security operations (attack simulation, remediation approval, rollback, and incident management).</p>
-      <label for="op-key-input" style="display:block;margin-bottom:6px;font-weight:500;color:var(--tx);font-size:12px;">OPERATOR API KEY</label>
-      <input type="password" id="op-key-input" class="inp" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;background:var(--sf2);color:var(--tx);border:1px solid var(--ln);border-radius:6px;font-family:ui-monospace,Menlo,Consolas,monospace;" placeholder="Enter operator key from .cg_key" autocomplete="current-password" />
-      <div id="op-login-err" style="display:none;color:var(--bad);font-size:12px;margin-top:8px;font-weight:500;"></div>
+      <p id="op-login-desc" style="margin:0 0 10px;color:var(--mu);">ThreatGuard operates in <b>Public Observer Mode</b> by default. All telemetry, findings, IAM capability graphs, alert investigation queues, and detection analytics are fully accessible for public review.</p>
+      <p style="margin:0 0 12px;font-size:12px;color:var(--sub);line-height:1.45;">Operator authentication elevates your session to execute privileged, state-modifying actions: launching attack simulations, authorizing remediation fixes, executing rollbacks, and updating incident lifecycle stages.</p>
+      <label for="op-key-input" style="display:block;margin-bottom:6px;font-weight:600;color:var(--tx);font-size:12px;letter-spacing:0.04em;">OPERATOR ACCESS CREDENTIAL</label>
+      <input type="password" id="op-key-input" class="inp" style="width:100%;box-sizing:border-box;height:34px;padding:0 10px;background:var(--sf2);color:var(--tx);border:1px solid var(--ln);border-radius:var(--radius);font-family:ui-monospace,Menlo,Consolas,monospace;" placeholder="Enter operator access credential" autocomplete="current-password" aria-describedby="op-login-help" />
+      <div id="op-login-help" class="mu" style="font-size:11.5px;margin-top:6px;line-height:1.4">Local administrator and examiner setup: provide the configured operator access token (environment variable <code>CG_API_KEY</code> or generated in local runtime file <code>.cg_key</code>).</div>
+      <div id="op-login-err" style="display:none;color:var(--bad);font-size:12px;margin-top:8px;font-weight:500;" role="alert"></div>
     </div>
     <div class="cg-modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
-      <button class="btn" id="cg-login-cancel">Cancel</button>
-      <button class="btn primary" id="cg-login-submit">Authenticate</button>
+      <button class="btn" id="cg-login-cancel" aria-label="Cancel operator login">Cancel</button>
+      <button class="btn primary" id="cg-login-submit" aria-label="Authenticate as security operator">Authenticate</button>
     </div>
   </div>
 </div>
@@ -337,7 +414,8 @@ const IC={
   events:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   audit:'<path d="M5 6h14M5 12h14M5 18h9"/>',
   architecture:'<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
-  demo:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polygon points="10 8 16 10 10 12 10 8" fill="currentColor"/>'
+  demo:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polygon points="10 8 16 10 10 12 10 8" fill="currentColor"/>',
+  portfolio:'<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>'
 };
 const NAV_GROUPS=[
   {label:"Operations",items:["overview","alerts","findings"]},
@@ -370,8 +448,10 @@ const TITLES={
   threats:"Detection and XAI",
   events:"Event viewer",
   audit:"Audit and evaluation",
+  cost:"Cost Intelligence & Optimization",
   architecture:"Architecture & Viva",
-  demo:"Guided Demo"
+  demo:"Guided Demo",
+  portfolio:"Project Portfolio & Technical Showcase"
 };
 const NAMES={zscore:"Z-score",isolation_forest:"Isolation Forest",lof:"LocalOutlierFactor",ocsvm:"OneClassSVM"};
 const MET=[["precision","Precision"],["recall","Recall"],["f1","F1"],["pr_auc","PR-AUC"]],COL=["var(--c1)","var(--c2)","var(--c3)","var(--c4)"];
@@ -485,7 +565,7 @@ function alertModal({ title, message, type="info" }){
 }
 window.alertModal = alertModal;
 
-async function act(p){const r=await (window.authFetch?window.authFetch(p,{method:"POST"}):fetch(p,{method:"POST",credentials:"include"}));if(!r.ok){const j=await r.json().catch(()=>({}));showToast(j.error||"Action failed","bad")}SIG="";await poll()}
+async function act(p){const r=await (window.authFetch?window.authFetch(p,{method:"POST"}):fetch(p,{method:"POST",credentials:"include"}));if(!r.ok && r.status!==401){const j=await r.json().catch(()=>({}));showToast(j.error||"Action failed","bad")}SIG="";await poll()}
 async function poll(){const s=await get("/api/state");if(!s)return;S=s;if(!BOOT){BOOT=true;S.events.forEach(e=>SEEN.add(evk(e)));S.findings.forEach(f=>FSEEN.add(f.id+f.status))}head();const g=JSON.stringify([s.findings,s.resources,s.events,s.score,s.evidence]);if(g!==SIG){SIG=g;render()}}
 async function loadStatic(){ML=(await get("/api/ml"))||ML;DS=(await get("/api/datasets"))||[];RU=(await get("/api/rules"))||[];await loadGraph();render()}
 async function loadAudit(){AU=(await get("/api/audit?q="+encodeURIComponent(Views.q())))||AU;if(route()=="audit")render()}
@@ -536,16 +616,27 @@ remediation(){return Views.remediation()},
 response(){return Views.remediation()},
 architecture(){return Views.architecture()},
 demo(){return Views.demo()},
+portfolio(){return Views.portfolio()},
 inventory(){const ev=esc(JSON.stringify(S.evidence,null,2)).replace(/&quot;([^&]*?)&quot;:/g,'<span class="k">&quot;$1&quot;:</span>');
- return`<section class="panel"><div class="ph"><span class="pt">Resources</span></div><div class="wrap"><table class="tbl"><tr><th>Resource</th><th>Description</th><th>State</th><th>Simulated attack</th></tr>${S.resources.map(r=>`<tr><td>${esc(r.name)}</td><td class="mu">${esc(r.desc)}</td><td>${tg(r.ok?r.good:r.badtxt,r.ok?"ok":"bad")}</td><td class="mu">${esc(r.attack)}</td></tr>`).join("")}</table></div></section>
+ return`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:10px;flex-wrap:wrap">
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn sm primary" href="#inventory">Posture &amp; Resources</a>
+    <a class="btn sm" href="#cost" onclick="window.COST_TAB='overview'">Cost Intelligence</a>
+    <a class="btn sm" href="#cost" onclick="window.COST_TAB='reports'">Optimization Reports</a>
+  </div>
+  <span class="mu" style="font-size:12px">Governance, Posture &amp; Cloud FinOps</span>
+ </div>
+ <section class="panel"><div class="ph"><span class="pt">Resources</span></div><div class="wrap"><table class="tbl"><tr><th>Resource</th><th>Description</th><th>State</th><th>Simulated attack</th></tr>${S.resources.map(r=>`<tr><td>${esc(r.name)}</td><td class="mu">${esc(r.desc)}</td><td>${tg(r.ok?r.good:r.badtxt,r.ok?"ok":"bad")}</td><td class="mu">${esc(r.attack)}</td></tr>`).join("")}</table></div></section>
  <section class="panel mt"><div class="ph"><span class="pt">Security rules</span></div><div class="wrap"><table class="tbl"><tr><th>Resource</th><th>Rule</th><th>Reference</th><th>Severity</th><th>Status</th></tr>${RU.map(u=>{const ok=(S.resources.find(r=>r.id==u.id)||{ok:u.ok}).ok;return`<tr><td>${esc(u.name)}</td><td>${esc(u.title)}</td><td class="mu">${esc(u.ref)}</td><td>${esc(u.sev)}</td><td>${tg(ok?"Pass":"Fail",ok?"ok":"bad")}</td></tr>`}).join("")}</table></div></section>
  <section class="panel mt"><div class="ph"><span class="pt">Raw API responses</span><span class="mu">${S.mode=="Live AWS"?"Live AWS":"Local AWS emulator"}</span></div><div class="pb"><pre>${ev}</pre></div></section>`},
+cost(){return Views.cost()},
 threats(){const c=ML.card||{},th=c.thresholds||{};
  return`<div class="cols2"><section class="panel"><div class="ph"><span class="pt">Controlled benchmark</span><span class="mu">synthetic data</span></div><div class="pb">${Views.slot("detectors",240)}</div></section><section class="panel"><div class="ph"><span class="pt">F1 across random seeds</span><span class="mu">mean and standard deviation</span></div><div class="pb">${cSeeds()}</div></section></div>
  <section class="panel mt"><div class="ph"><span class="pt">Calibration on real logs</span><span class="mu">flaws.cloud, unlabelled</span></div><div class="pb">${Views.slot("calib",200)}<p class="mu" style="margin-top:8px">Thresholds target a 1% alert rate on generated normal behaviour. The gap on real logs shows the generated baseline does not transfer.</p></div></section>
  <h2 class="sec">Alerts and explanations</h2>${S.findings.length?S.findings.map(f=>fcard(f,false)).join(""):'<div class="panel">'+none("No alerts yet. Simulate an attack on the Overview page.")+'</div>'}
  <div class="cols2 mt"><section class="panel"><div class="ph"><span class="pt">Model card</span></div><div class="pb">${c.features?`<p><span class="mu">Window</span> ${esc(c.window)} per identity</p><p><span class="mu">Threshold rule</span> ${esc(c.threshold_rule)}</p><div class="lb">Thresholds</div>${Object.keys(th).map(k=>`<p>${esc(NAMES[k]||k)} <span class="mu">${th[k]}</span></p>`).join("")}<div class="lb">Features (${c.features.length})</div>${c.features.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}`:none("Run scripts\\train_eval.py to create the model card.")}</div></section>
  <section class="panel"><div class="ph"><span class="pt">Review list</span><span class="mu">flaws.cloud, top windows</span></div>${ML.top&&ML.top.length?`<div class="wrap"><table class="tbl"><tr><th>Identity</th><th>Window</th><th>Calls</th><th>Errors</th></tr>${ML.top.map(t=>`<tr><td class="mono">${esc(String(t.principal).split("/").pop())}</td><td class="mono">${esc(String(t.win).slice(0,16))}</td><td>${esc(t.call_count)}</td><td>${esc(t.error_ratio)}</td></tr>`).join("")}</table></div>`:none("Run train_eval.py with the flaws.cloud logs.")}</section></div>`},
+xai(){return V.threats()},
 response(){return`<p class="note">Nothing is fixed without approval. Approvals are tied to the exact resource version, and every fix can be rolled back.</p>${S.findings.length?S.findings.map(f=>fcard(f,true)).join(""):'<div class="panel">'+none("Nothing to review yet.")+'</div>'}`},
 audit(){return Views.audit()}};
 function post(){document.querySelectorAll("[data-count]").forEach(el=>{const to=+el.dataset.count,k=el.dataset.k,dec=+(el.dataset.dec||0),suf=el.dataset.suf||"",from=PREV[k]==null?0:PREV[k];PREV[k]=to;if(from===to)return;const t0=performance.now();(function f(t){const p=Math.min(1,(t-t0)/700),e=1-Math.pow(1-p,3);el.textContent=(from+(to-from)*e).toFixed(dec)+suf;if(p<1)requestAnimationFrame(f)})(t0)});
@@ -557,6 +648,8 @@ function setTheme(t){
   document.documentElement.dataset.theme=t;
   try{localStorage.cgTheme=t}catch(e){}
   const isLight=t==="light";
+  const logoImg=$("logo-img");
+  if(logoImg) logoImg.src=isLight?"/static/img/threatguard-emblem.png":"/static/img/threatguard-emblem-dark.png";
   const icon=$("theme-icon");
   const label=$("theme-label");
   if(label) label.textContent=isLight?"Dark mode":"Light mode";
@@ -576,6 +669,7 @@ if(sideToggle){
     const titleText = isCol ? "Expand sidebar" : "Collapse sidebar";
     sideToggle.title = titleText;
     sideToggle.setAttribute("aria-label", titleText);
+    setTimeout(()=>{if(window.CG&&window.ctx)window.CG.update(window.ctx())},220);
   };
   try{
     if(localStorage.cgSideCollapsed==="1"){
@@ -600,14 +694,49 @@ const btnLoginCancel = $("cg-login-cancel");
 if (btnLoginCancel) btnLoginCancel.onclick = () => window.closeOperatorLoginModal && window.closeOperatorLoginModal();
 const btnLoginX = $("cg-login-modal-x");
 if (btnLoginX) btnLoginX.onclick = () => window.closeOperatorLoginModal && window.closeOperatorLoginModal();
+const loginModalBackdrop = $("cg-login-modal");
+if (loginModalBackdrop) {
+  loginModalBackdrop.onclick = e => {
+    if (e.target === loginModalBackdrop) window.closeOperatorLoginModal && window.closeOperatorLoginModal();
+  };
+  loginModalBackdrop.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      const focusables = loginModalBackdrop.querySelectorAll('button:not([disabled]), input:not([disabled])');
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
+}
 const opInp = $("op-key-input");
 if (opInp) {
+  opInp.oninput = () => {
+    opInp.style.borderColor = "var(--ln)";
+    const err = $("op-login-err");
+    if (err) { err.textContent = ""; err.style.display = "none"; }
+  };
   opInp.onkeydown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); window.submitOperatorLogin && window.submitOperatorLogin(); }
     if (e.key === "Escape") { e.preventDefault(); window.closeOperatorLoginModal && window.closeOperatorLoginModal(); }
   };
 }
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const lm = $("cg-login-modal");
+    if (lm && lm.style.display !== "none") {
+      window.closeOperatorLoginModal && window.closeOperatorLoginModal();
+    }
+  }
+});
 if (window.checkAuthSession) window.checkAuthSession();
+setInterval(() => { if (window.checkAuthSession) window.checkAuthSession(); }, 30000);
 
 render(true);poll().then(()=>render(true));loadStatic();loadAudit();setInterval(poll,1500);setInterval(()=>{if(route()=="audit")loadAudit()},4000);
 </script></body></html>

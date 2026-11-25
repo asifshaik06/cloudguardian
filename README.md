@@ -29,15 +29,16 @@ The platform operates in an isolated environment using a local AWS emulator (`mo
 - [17. Independent Verification and Rollback](#17-independent-verification-and-rollback)
 - [18. Security Posture Scoring](#18-security-posture-scoring)
 - [19. Tamper-Evident Audit Ledger](#19-tamper-evident-audit-ledger)
-- [20. Moto Simulator and AWS Safety Architecture](#20-moto-simulator-and-aws-safety-architecture)
-- [21. Installation and Configuration](#21-installation-and-configuration)
-- [22. Running the Application](#22-running-the-application)
-- [23. Running Automated Tests](#23-running-automated-tests)
-- [24. Security Scanning](#24-security-scanning)
-- [25. REST API Documentation](#25-rest-api-documentation)
-- [26. Security Limitations and Scope Boundaries](#26-security-limitations-and-scope-boundaries)
-- [27. Future Improvements](#27-future-improvements)
-- [28. License and Project Attribution](#28-license-and-project-attribution)
+- [20. FinOps Cost Intelligence and Demo Scenario](#20-finops-cost-intelligence-and-demo-scenario)
+- [21. Operator Authentication and Access Control](#21-operator-authentication-and-access-control)
+- [22. Installation and Configuration](#22-installation-and-configuration)
+- [23. Running the Application](#23-running-the-application)
+- [24. Running Automated Tests and Quality Verification](#24-running-automated-tests-and-quality-verification)
+- [25. Security Scanning](#25-security-scanning)
+- [26. REST API Documentation](#26-rest-api-documentation)
+- [27. Security and Simulator Limitations](#27-security-and-simulator-limitations)
+- [28. Future Improvements](#28-future-improvements)
+- [29. License and Project Attribution](#29-license-and-project-attribution)
 
 ---
 
@@ -81,7 +82,10 @@ Enterprise cloud security operations face four fundamental operational challenge
 - **Atomic 1-Click Rollback:** Automatically captures pre-remediation configurations to allow instant state reversal with cryptographic logging.
 - **Tamper-Evident SHA-256 Ledger:** SQLite-backed audit log linked with SHA-256 hash chaining, enabling dynamic mathematical verification of chain integrity.
 - **Attack Simulation Lab:** Built-in scenario execution engine allowing operators to simulate real attack chains and evaluate custom IAM policies in an isolated sandbox.
-- **High-Resolution SOC Dashboard:** Modern single-page interface featuring 2X supersampled Canvas graphics and native vector SVG charts for data readability.
+- **Cost Intelligence and AWS Optimization:** Evaluates simulated AWS infrastructure (`EC2`, `EBS`, `S3`, `IAM`, `CloudTrail`, `STS`) against a configurable local pricing dataset (`backend/cost/pricing_dataset.json`) to produce resource-level cost estimates, explicit status indicators, and optimization findings with deduplicated savings.
+- **In-Dashboard Cost Optimization Reports:** Generates structured 11-section reports and plain-text narratives persisted in SQLite (`cost_reports`), paired with a compact collapsible Report History bar above a full-width Report Detail view (no external PDF/CSV export endpoints).
+- **Operator-Controlled FinOps Demo Scenario:** Optional, idempotent Moto scenario inside Simulation Lab (`#lab`) provisioning tagged EC2 instances, attached/unattached EBS volumes, and populated S3 buckets with full lifecycle reset support while preserving baseline `safe_setup()` resources.
+- **High-Resolution Responsive SOC Dashboard:** Single-page interface featuring 2X supersampled Canvas graphics, native vector SVG charts, and responsive layouts verified across desktop, laptop, tablet, and mobile viewports.
 
 ---
 
@@ -146,23 +150,25 @@ flowchart TD
     end
 ```
 
+In parallel with security detection, the **Cost Intelligence & FinOps Pipeline** (`backend/cost/`) queries the active Moto/AWS clients, maps observed resources onto the versioned pricing configuration, synthesizes classified optimization findings (`confirmed` vs `inferred`), routes approved cost actions (`FIN-*`) through the shared HITL remediation verifier, and snapshots immutable 11-section reports to SQLite.
+
 ---
 
 ## 6. Technology Stack
 
 | Component | Technology | Version | Functional Role |
 | :--- | :--- | :--- | :--- |
-| **Backend Framework** | Python / Flask | 3.12 / 3.1.3 | Core application server, REST APIs, session control |
-| **Frontend Architecture**| HTML5 / CSS3 / JavaScript | ES6+ / Native | Single-page SOC interface, reactive view controllers, modal dialogs |
-| **Cloud Simulation** | Moto | 5.2.5 | Local standalone AWS emulator providing S3, IAM, EC2, CloudTrail, and STS |
-| **AWS SDK** | Boto3 / Botocore | 1.43.126 | Resource configuration probing and independent remediation verification |
+| **Backend Framework** | Python / Flask | 3.12 / 3.1.3 | Core application server, REST APIs, session and CSRF control |
+| **Frontend Architecture**| HTML5 / CSS3 / JavaScript | ES6+ / Native | Responsive single-page SOC and FinOps interface, reactive view controllers, modal dialogs |
+| **Cloud Simulation** | Moto | 5.2.5 | Local standalone AWS emulator providing EC2, EBS, S3, IAM, CloudTrail, and STS |
+| **AWS SDK** | Boto3 / Botocore | 1.43.126 | Resource configuration probing, FinOps inventory collection, and independent remediation verification |
 | **Graph Modeling** | NetworkX | 3.7 | In-memory directed multigraph analysis, pathfinding, and blast radius |
 | **Machine Learning** | Scikit-Learn / Joblib | 1.9.1 / 1.6.0 | Isolation Forest, Local Outlier Factor, One-Class SVM, model artifact persistence |
 | **Data Validation** | Pydantic | 2.14.3 | Declarative schema validation, event models, and scenario definitions |
-| **Numerical Computing** | NumPy / SciPy / Pandas | 2.5 / 1.18 / 3.1 | Feature aggregation, matrix math, statistical threshold calibration |
-| **Data Visualization** | Apache ECharts | 6.1.0 | SVG scatter charts and 2X supersampled Canvas timelines/graphs |
-| **Data Persistence** | SQLite (WAL mode) | 3.x | SOC store, incident records, and SHA-256 hash-chained audit ledger |
-| **Testing and Security**| Pytest / Gitleaks | 9.2.0 / 8.x | 272-test automated regression suite and pre-commit secret scanning |
+| **Numerical Computing** | NumPy / SciPy / Pandas | 2.5.4 / 1.18.1 / 3.1.1 | Feature aggregation, matrix math, statistical threshold calibration |
+| **Data Visualization** | Apache ECharts | 6.1.0 | Vector SVG charts and 2X supersampled Canvas timelines, attack graphs, and spend breakdowns |
+| **Data Persistence** | SQLite (WAL mode) | 3.x | SOC store, incident records, immutable `cost_reports` snapshots, and SHA-256 audit ledger |
+| **Testing and Security**| Pytest / Secret & Quality Scripts | 9.2.0 | 287-test automated regression suite, emoji audit, secret scanning, and Gitleaks pre-commit integration |
 
 ---
 
@@ -181,8 +187,18 @@ threatguard/
 |   |-- posture.py              # Security posture score calculation engine
 |   |-- replay.py               # CloudTrail telemetry replay processor
 |   |-- security.py             # Auth verification and bounded key reader
-|   |-- state.py                # Thread-safe in-memory state store
+|   |-- state.py                # Thread-safe in-memory state store & SQLite ledger/reports
 |   |-- telemetry.py            # Background loops and metrics service
+|   |-- cost/                   # FinOps Cost Intelligence, optimization, and demo scenario
+|   |   |-- api.py
+|   |   |-- demo_scenario.py
+|   |   |-- estimator.py
+|   |   |-- inventory.py
+|   |   |-- optimizer.py
+|   |   |-- pricing.py
+|   |   |-- pricing_dataset.json
+|   |   |-- remediation.py
+|   |   |-- reports.py
 |   |-- graph/                  # IAM capability graph and attack pathfinder
 |   |   |-- api.py
 |   |   |-- blast_radius.py
@@ -212,14 +228,20 @@ threatguard/
 |   |-- decisions.md
 |   |-- log.md
 |   |-- multi_seed_results.md
+|   |-- results_table.md
 |-- models/                     # Trained ML model artifacts
 |   |-- baseline_v1.joblib
 |-- reports/                    # Quality assurance audit reports
 |   |-- independent_qa_audit.md
-|-- scripts/                    # Training, benchmarking, and secret scans
+|-- scripts/                    # Training, validation, quality, and security scripts
 |   |-- gitleaks_precommit.py
+|   |-- make_table.py
 |   |-- multi_seed.py
 |   |-- train_eval.py
+|   |-- docs/
+|   |-- quality/
+|   |-- security/
+|   |-- testing/
 |-- static/                     # Single-page application frontend
 |   |-- index.html
 |   |-- charts.js
@@ -227,48 +249,55 @@ threatguard/
 |   |-- logo.svg
 |   |-- vendor/
 |       |-- echarts.min.js
-|-- tests/                      # Automated test suite (272 tests)
-    |-- integration/            # Workflow, security hardening, and end-to-end API tests (11 files)
-    |-- unit/                   # Component isolation unit tests (16 files)
+|-- tests/                      # Automated test suite (287 tests)
+    |-- integration/            # Workflow, security hardening, Cost API & UI audit tests (12 files)
+    |-- unit/                   # Component isolation unit tests (17 files)
 ```
 
 ### Test Suite Organization
 
-The 272-test automated regression suite is organized into two test scopes:
+The 287-test automated regression suite is organized into two test scopes:
 
-- **Unit Tests (`tests/unit/` — 16 modules, 142 tests):** Validates component logic in isolation, including AWS endpoint lockout guards (`test_aws_safety`), blast radius exposure scoring (`test_blast_radius`), cycle-safe privilege escalation pathfinding (`test_escalation`), CloudTrail event schema parsing (`test_event_schema`), IAM capability multigraph construction (`test_iam_graph`), anomaly scoring determinism (`test_ml_score_reproducibility`), decision threshold enforcement at $\tau = 0.610$ (`test_ml_threshold_enforcement`), model inference pipelines (`test_ml_unification`), deterministic IAM policy evaluation (`test_policy_evaluator`), security posture recovery lifecycles (`test_posture_and_remediation_lifecycle`), scenario catalog templates (`test_scenario_definitions`), remediation verification (`test_scenario_remediation`), session sandboxing (`test_scenario_session`), API authentication security and SessionStore CSRF enforcement (`test_security`), SQLite hash-chained persistence (`test_soc_store`), and thread-safe state concurrency (`test_state_thread_safety`).
-- **Integration Tests (`tests/integration/` — 11 modules, 130 tests):** Validates multi-service interactions across HTTP routes and mock AWS infrastructure, including alerts inspection workflows (`test_alerts_page_audit`), core Flask REST endpoints (`test_api_endpoints`), IAM graph and attack-path APIs (`test_graph_api`), alert-to-incident escalation workflows (`test_incident_escalation`), incident filtering state transitions (`test_incident_filtering`), playground remediation lifecycles (`test_playground_remediation`), CloudTrail replay ingestion pipelines (`test_replay_pipeline`), attack simulation lab execution APIs (`test_scenario_api`), SOC operations endpoints (`test_soc_api`), end-to-end authentication hardening and CSRF validation (`test_security_hardening`), and comprehensive university evaluation readiness audits (`test_university_evaluator_audit`).
+- **Unit Tests (`tests/unit/` — 17 modules, 151 tests):** Validates component logic in isolation, including AWS endpoint lockout guards (`test_aws_safety`), blast radius exposure scoring (`test_blast_radius`), Cost Intelligence pricing, resource estimation, optimization findings, remediation verification, and FinOps Demo idempotency/live-guard isolation (`test_cost_intelligence`), cycle-safe privilege escalation pathfinding (`test_escalation`), CloudTrail event schema parsing (`test_event_schema`), IAM capability multigraph construction (`test_iam_graph`), anomaly scoring determinism (`test_ml_score_reproducibility`), decision threshold enforcement at $\tau = 0.610$ (`test_ml_threshold_enforcement`), model inference pipelines (`test_ml_unification`), deterministic IAM policy evaluation (`test_policy_evaluator`), security posture recovery lifecycles (`test_posture_and_remediation_lifecycle`), scenario catalog templates (`test_scenario_definitions`), remediation verification (`test_scenario_remediation`), session sandboxing (`test_scenario_session`), API authentication security and SessionStore CSRF enforcement (`test_security`), SQLite hash-chained persistence (`test_soc_store`), and thread-safe state concurrency (`test_state_thread_safety`).
+- **Integration Tests (`tests/integration/` — 12 modules, 136 tests):** Validates multi-service interactions across HTTP routes and mock AWS infrastructure, including alerts inspection workflows (`test_alerts_page_audit`), core Flask REST endpoints (`test_api_endpoints`), Cost Intelligence APIs, report persistence, HITL remediation, and FinOps Demo workflow (`test_cost_api`), IAM graph and attack-path APIs (`test_graph_api`), alert-to-incident escalation workflows (`test_incident_escalation`), incident filtering state transitions (`test_incident_filtering`), playground remediation lifecycles (`test_playground_remediation`), CloudTrail replay ingestion pipelines (`test_replay_pipeline`), attack simulation lab execution APIs (`test_scenario_api`), SOC operations endpoints (`test_soc_api`), end-to-end authentication hardening and CSRF validation (`test_security_hardening`), and comprehensive university evaluation readiness audits (`test_university_evaluator_audit`).
 
 ### Module Responsibility Reference
 
 | Directory | Responsibility |
 | :--- | :--- |
+| `backend/cost/` | Collects simulated EC2, EBS, S3, IAM, CloudTrail, and STS inventory, estimates monthly spend against configurable regional pricing rates, identifies FinOps optimization findings, executes/verifies cost remediations, renders 11-section reports, and manages the optional FinOps Demo Scenario. |
 | `backend/graph/` | Builds the NetworkX IAM capability multigraph, computes dynamic blast radius exposure metrics, executes cycle-safe DFS privilege escalation pathfinding, and evaluates IAM policies with explicit `Deny` precedence. |
 | `backend/ingestion/` | Ingests CloudTrail management events, validates syntactic and semantic schemas, normalizes UTC timestamps and principal identifiers, and streams parsed event batches into rolling observation windows. |
 | `backend/ml_engine/` | Extracts 12 behavioral features across 5-minute sliding identity windows, executes Isolation Forest anomaly scoring against calibrated threshold $\tau = 0.610$, and computes Tree-Path Information Gain Attribution for explainable alerts. |
 | `backend/scenarios/` | Manages predefined attack simulation scenarios (privilege escalation, S3 exfiltration, credential abuse), tracks isolated sandbox execution sessions, and validates human-in-the-loop policy remediation fixes. |
 | `backend/soc/` | Manages the Security Operations Center store, coordinates alert triage and incident escalation workflows, records responder investigation notes, and appends state mutations to a SHA-256 hash-chained cryptographic ledger. |
-| `static/` | Implements the single-page application frontend featuring the dark graphite SOC theme, reactive tab controllers, modal inspectors, and 2X supersampled Apache ECharts timelines and graph visualizations. |
+| `static/` | Implements the responsive single-page application frontend featuring the dark/light SOC theme, reactive tab controllers, modal inspectors, collapsible FinOps report history, and 2X supersampled Apache ECharts visualizations. |
 | `models/` | Houses the serialized 200-estimator Isolation Forest machine learning model artifact (`baseline_v1.joblib`) calibrated for 1.0% false alarm rate baseline operation. |
-| `tests/` | Houses the complete 272-test automated regression suite covering unit component logic, API integration routes, AWS safety isolation, security hardening, and closed-loop remediation workflows. |
+| `tests/` | Houses the complete 287-test automated regression suite covering unit component logic, API integration routes, Cost Intelligence, AWS safety isolation, security hardening, and closed-loop remediation workflows. |
 
 ---
 
 ## 8. Dashboard Module Walkthrough
 
-The ThreatGuard single-page application is structured into 11 dedicated functional modules:
+The ThreatGuard single-page application is organized into 11 primary navigation modules plus integrated Cost Intelligence and architecture walkthrough views:
 
-1. **Security Overview (`#overview`):** Central executive summary displaying the authoritative Security Posture Score, live telemetry status, quick-attack simulation buttons, and six synchronized high-DPI telemetry charts.
+1. **Security Overview (`#overview`):** Central executive summary displaying the authoritative Security Posture Score, live telemetry status, quick-attack simulation buttons, synchronized telemetry charts, and a Cost Intelligence summary card.
 2. **Alerts Management (`#alerts`):** Operational alert triage workspace displaying severity classifications, Isolation Forest anomaly scores, decision thresholds, feature attribution breakdowns, and alert status workflows (`New` -> `Investigating` -> `Resolved` -> `Suppressed`).
 3. **Findings (`#findings`):** Comprehensive list of cloud misconfigurations discovered by the continuous CIS benchmark scanner, providing affected resource details, detection latencies, and mitigation recommendations.
 4. **Incident Management (`#incidents`):** Formal incident investigation console featuring preserved forensic evidence snapshots, MITRE ATT&CK technique mappings, responder notes, and active versus closed tab filtering.
 5. **IAM Attack Graph (`#graph`):** Interactive NetworkX force-directed graph modeling identity permissions, lateral movement vectors, confirmed privilege escalation paths, and dynamic blast radius metrics.
 6. **Detection and XAI (`#threats`):** Machine learning transparency center displaying model cards, real-time 12-dimensional feature values, model benchmark comparisons, and threshold calibration curves.
-7. **Simulation Lab (`#lab`):** Security testing suite allowing operators to launch predefined attack scenarios, analyze isolated execution runs, and author least-privilege IAM policies using an interactive JSON workbench with syntax validation.
-8. **Remediation and Verification (`#remediation`):** Closed-loop remediation console displaying pending proposals, side-by-side configuration diffs, human approval controls, independent cloud verification results, and 1-click rollback triggers.
-9. **Inventory and Posture (`#inventory`):** Catalog of all monitored cloud assets (S3 buckets, IAM users, security groups, CloudTrail trails) showing resource compliance statuses and configuration metadata.
+7. **Simulation Lab (`#lab`):** Security testing and FinOps simulation suite containing the Attack Scenario Library (12 scenarios), the interactive IAM Policy Workbench, custom scenario builder, and the operator-controlled **FinOps Demo Scenario** tab.
+8. **Remediation and Verification (`#remediation`):** Closed-loop remediation console for both security (`REM-*`) and FinOps optimization (`FIN-*`) tasks, displaying pending proposals, configuration diffs, human approval controls, independent cloud verification results, and 1-click rollback triggers.
+9. **Inventory and Posture (`#inventory`):** Catalog of monitored cloud assets (`EC2`, `EBS`, `S3`, `IAM`, `CloudTrail`), compliance statuses, raw API evidence, and direct links to Cost Intelligence (`#cost`) and Optimization Reports.
 10. **Event Viewer (`#events`):** Raw telemetry log stream displaying ingested CloudTrail management events with category filtering and JSON event inspection drawers.
 11. **Audit and Evaluation (`#audit`):** Cryptographic governance ledger displaying SHA-256 hash-chained event records and providing dynamic mathematical verification of chain integrity.
+12. **Cost Intelligence & AWS Optimization (`#cost`):** Dedicated FinOps workspace accessible from Overview, Inventory & Posture, Simulation Lab, or direct `#cost` routing, providing three views:
+    - **Overview & Breakdown:** KPI cards, spend status indicators, service-wise breakdown chart/table, resource-level property vs. usage basis table, and before-and-after spend comparison.
+    - **Optimization Findings:** Classified FinOps opportunities (`confirmed` vs `inferred`) with supporting JSON evidence, savings basis, and one-click staging into the Remediation queue.
+    - **Reports & History:** Compact collapsible Report History panel (`Show History` / `Hide History`) above a full-width 11-section Cost Optimization Report Detail panel with plain-text narrative toggle and preserved historical SQLite snapshots.
+
+Visual assets included in the repository: brand header and emblem PNG/SVG graphics reside under `static/img/` and `static/logo.svg`. Live dashboard views can be inspected interactively across desktop, laptop, tablet, and mobile viewports when running locally (`#overview`, `#cost`, `#lab`, `#architecture`, `#demo`, `#portfolio`).
 
 ---
 
@@ -502,101 +531,245 @@ The audit interface provides an automated verification tool that traverses the c
 
 ---
 
-## 20. Moto Simulator, AWS Safety and Authentication Architecture
+## 20. FinOps Cost Intelligence and Demo Scenario
 
-ThreatGuard is designed for safe, zero-cost operation using local cloud emulation with enterprise-grade access controls:
+ThreatGuard extends cloud posture governance into FinOps cost analysis through the `backend/cost/` engine (`inventory.py`, `pricing.py`, `estimator.py`, `optimizer.py`, `remediation.py`, `reports.py`, `demo_scenario.py`, and `api.py`).
 
-- **Isolated Emulation:** Uses `moto.server` running on `http://127.0.0.1:5000` to emulate AWS APIs locally.
-- **Defensive Isolation Guard (`backend/aws_guard.py`):** Intercepts Boto3 client initialization and forces all service endpoints to localhost using mock credentials (`AKIAIOSFODNN7EXAMPLE`) and region `us-east-1`. In addition, fast socket probes (<250ms) and short timeouts ensure non-blocking startup and offline resilience even when the Moto simulator process is offline.
-- **Live AWS Safe Lockout:** Any attempt to run mutating provisioning scripts against live AWS without setting `CG_ALLOW_LIVE_SETUP=1` raises a fatal `RuntimeError`, preventing accidental modification of real cloud environments.
-- **Secure Authentication and Session Hardening:**
-  - **Public Demonstration Mode (`[PUBLIC DEMO]`):** Unauthenticated visitors have read-only visibility into posture scores, telemetry streams, findings, IAM graph topologies, and audit ledgers without exposing master API keys, internal credentials, or AWS account secrets.
-  - **Server-Side Session Store (`SessionStore`):** Generates cryptographically secure 256-bit session IDs stored server-side with rolling TTLs, issued via `HttpOnly`, `SameSite=Lax` cookies (`cg_op_session`).
-  - **Strict Anti-CSRF Token Enforcement:** Mutating operations (`POST`, `PUT`, `DELETE`, `PATCH`) triggered from authenticated browser sessions require a valid `X-CSRF-Token` header. Missing or forged tokens return `403 Forbidden`.
-  - **Direct API Key Header Support:** Programmatic clients, test suites, and CI/CD pipelines providing `X-API-Key` headers are authenticated directly without requiring session cookies or CSRF tokens.
-  - **Session Lifecycle APIs:** Provides `/api/auth/session` (session state check without secret leakage), `/api/auth/login` (operator credential verification and session issuance), and `/api/auth/logout` (server session termination).
+### 20.1 Resource-Level Cost Estimation and Explicit Statuses
+
+`collect_resource_inventory()` queries only verified local Moto/AWS operations across **EC2**, **EBS**, **S3**, **IAM**, **CloudTrail**, and **STS** (excluding terminated EC2 instances and deleted EBS volumes), and `pricing.py` matches observed attributes against `backend/cost/pricing_dataset.json` (`2026.11-aws-finops-v1`, region `us-east-1`). Every estimated resource and service receives an explicit estimation classification:
+
+- **`Calculated`:** Rate applied directly to observed capacity or byte volume (for example, provisioned EBS GB-month or observed S3 object bytes).
+- **`Estimate based on assumptions`:** Cost derived from configured monthly runtime assumptions (default `730` hours/month for running EC2 instances).
+- **`Zero usage observed` / `Zero eligible spend`:** Resource exists in Moto with zero billable runtime or zero stored bytes (for example, empty baseline S3 buckets or stopped EC2 compute).
+- **`Governance only`:** IAM principals and policies do not receive fabricated direct AWS infrastructure compute/storage charges.
+- **`Pricing unavailable` / `Resource unavailable`:** Missing rate or unavailable service metadata is flagged explicitly rather than silently masquerading as zero cost.
+
+> **Estimation Notice:** All monetary figures reported by Cost Intelligence are configurable pricing-based estimates derived from `backend/cost/pricing_dataset.json` and configured monthly operating-hour assumptions — **they are not actual AWS billing invoices, Cost Explorer charges, or real CloudWatch utilization telemetry**.
+
+### 20.2 Optimization Findings and In-Dashboard Reports
+
+`optimizer.py` classifies optimization findings into **`confirmed`** (directly observed configuration waste, such as an `available` unattached EBS volume or missing FinOps ownership tags) and **`inferred`** (opportunities pending external utilization validation, such as EC2 rightsizing or S3 lifecycle transitions) while deduplicating overlapping savings.
+
+`reports.py` builds full **11-section Cost Optimization Reports** persisted as immutable JSON snapshots in the SQLite `cost_reports` table (`Report Information`, `Executive Summary`, `Cost Overview`, `Service-Wise Cost Analysis`, `Resource-Level Analysis`, `Cost Optimization Findings`, `Optimization Recommendations`, `Before-and-After Cost Comparison`, `Remediation Summary`, `Final Assessment`, and `Methodology and Limitations`). Reports are strictly rendered inside the dashboard (both structured responsive tables and plain-text narrative view, with a collapsible Report History header above full-width report details) and expose **no PDF, CSV, or external export endpoints**.
+
+### 20.3 Operator-Controlled FinOps Demo Scenario
+
+Default `safe_setup()` initializes only minimal baseline simulator assets (two empty S3 buckets, one IAM user, one CloudTrail trail, and one EC2 security group), yielding a verified `USD 0.00` monthly estimate. To demonstrate end-to-end FinOps analysis and remediation, operators can optionally load the **FinOps Demo Scenario** (`#lab` -> **FinOps Demo Scenario**):
+
+1. **Operator-Controlled Loading (`Load FinOps Demo Scenario`):** Requires operator authentication (`POST /api/cost/demo-scenario/load`). Never provisions demo resources automatically on server startup, and executes idempotently when triggered repeatedly.
+2. **Provisioned Moto Resources (Tagged `ThreatGuardScenario=finops-demo`):**
+   - **EC2 (`2` instances):** `finops-demo-compute-worker` (`t3.large`, `running`, missing `Owner` tag) and `finops-demo-batch-standby` (`m5.large`, `stopped`, `Owner=finops-batch-team`).
+   - **EBS (`4` volumes):** Two `8 GB gp2` root volumes (`in-use`), one explicit `100 GB gp3` attached volume (`finops-demo-standby-data`), and one explicit `80 GB gp2` unattached volume (`finops-demo-orphaned-vol`).
+   - **S3 (`2` populated buckets):** `finops-demo-analytics-data` (`12,582,912` bytes across 2 objects, Versioning enabled, no lifecycle policy) and `finops-demo-archive-logs` (`3,145,728` bytes across 2 objects, Versioning disabled, `STANDARD_IA` lifecycle configured).
+   - **IAM & CloudTrail:** Reuses existing simulator baseline identities (`user/intern-dev`) and telemetry (`main-trail`) without fabricating CloudTrail billing records.
+3. **Inspection & Cost Refresh (`Inspect Scenario Resources`, `Refresh Cost Intelligence`):** Displays live Moto IDs/states/tags and recomputes service-wise spend, findings, and optimization reports.
+4. **Closed-Loop FinOps Remediation:** Staging any eligible finding (`FIN-*`) creates a `RemediationTask` requiring human approval, verified execution against Moto (`delete_unattached_ebs_volume`, `apply_s3_lifecycle_policy`, or tag/lifecycle actions), independent cloud verification (`PASS`), hash-chained audit logging, and updated realized savings in Before-and-After report comparisons.
+5. **Selective Reset (`Reset FinOps Demo Scenario`):** `POST /api/cost/demo-scenario/reset` removes only resources tagged `ThreatGuardScenario=finops-demo`, restoring Moto to its baseline state while preserving baseline `safe_setup()` resources and historical SQLite reports.
 
 ---
 
-## 21. Installation and Configuration
+## 21. Operator Authentication and Access Control
+
+ThreatGuard implements a defense-in-depth authorization model that clearly separates public observation from privileged operational control. The platform enforces least-privilege role boundaries, cryptographic session tokens, anti-CSRF validation, and strict offline simulation safety guards.
+
+### 21.1 Core Concepts: Master API Key, Operator Credential, and Session Cookie
+
+Understanding the security model requires distinguishing between the three authentication tokens used in ThreatGuard:
+
+| Entity | Purpose | Storage & Lifetime | Transmission Mechanism |
+| :--- | :--- | :--- | :--- |
+| **Master API Key** (`CG_API_KEY` / `_ACTIVE_API_KEY`) | Server-side root authorization secret for machine-to-machine, CLI, and automated test suite access. | Stored server-side in environment variable `CG_API_KEY` or file `.cg_key` (`chmod 0600`). Persistent across server restarts. | Sent in `X-API-Key` or `Authorization: Bearer <token>` HTTP request headers. Never exposed to browser scripts. |
+| **Operator Access Credential** | Secret submitted by human operators into the web dashboard login dialog to authenticate a privileged session. | Entered into the client dialog; validated server-side in constant time against the master API key. Never stored in browser storage. | Sent once via `POST /api/auth/login` payload `{"key": "<credential>"}`. Cleared from memory immediately after submission. |
+| **Session Cookie** (`cg_session`) | Ephemeral server-managed browser session token issued upon successful operator authentication. | Managed server-side in `SessionStore` (thread-safe, 8-hour rolling TTL). Client stores as an `HttpOnly`, `SameSite=Lax` cookie. | Handled automatically by the browser with `credentials: "include"`. Inaccessible to JavaScript to prevent XSS credential theft. |
+| **Anti-CSRF Token** (`X-CSRF-Token`) | Cryptographically random per-session token tied to the authenticated operator session. | Stored in memory within the active browser tab; validated server-side against the session record. | Sent in `X-CSRF-Token` header on state-modifying requests (`POST`, `PUT`, `DELETE`). |
+
+### 21.2 Public Viewer Access (Public Observer Mode)
+
+By default, ThreatGuard runs in **Public Observer Mode** (`[PUBLIC DEMO]`). Unauthenticated visitors, university examiners, and external evaluators have unrestricted read-only visibility into:
+
+- Operational security posture scores and telemetry throughput graphs (`#overview`).
+- Streaming CloudTrail event records and raw event JSON drawers (`#events`).
+- Security findings catalog, rule traces, and evidence payloads (`#findings`).
+- Full SOC alert investigation queues and severity distributions (`#alerts`).
+- Security incident lifecycle workspaces and timeline notes (`#incidents`).
+- Detection model card, feature definitions, and controlled benchmark curves (`#threats`).
+- Complete IAM capability graph topology, multi-hop attack paths, and blast-radius reports (`#graph`).
+- Tamper-evident SHA-256 cryptographic audit ledger and chain verification (`#audit`).
+- Architectural, cost, and presentation views (`#cost`, `#architecture`, `#demo`, `#portfolio`).
+
+Public observer requests require no credentials, set no tracking cookies, and never expose internal infrastructure secrets or cloud account credentials.
+
+### 21.3 IAM Attack Graph Read-Only Access
+
+The IAM capability graph engine (`/api/graph`, `/api/graph/paths/<principal_id>`, `/api/graph/all-paths`, `/api/graph/blast-radius/<target_id>`, `/api/graph/stats`) is strictly classified as a read-only analytical subsystem. Public visitors can:
+
+- Zoom, pan, and filter nodes across users, roles, policies, and cloud resources.
+- Select arbitrary principals (e.g. `user/intern-dev`) to compute and visualize multi-hop privilege escalation trajectories to `role/admin-role`.
+- Calculate transitive blast radius metrics, inspecting reachable resources and exposed sensitive data tallies.
+
+Graph exploration does not modify cloud configurations or database state and therefore does not require operator authorization.
+
+### 21.4 Privileged Operations Requiring Operator Authorization
+
+Operator authentication elevates the session to authorize state-modifying operational actions. Unauthenticated requests to any of the following endpoints fail with HTTP 401 Unauthorized:
+
+1. **Attack Simulation & FinOps Demo Control:** Triggering misconfiguration attacks (`/api/attack/<resource_id>`), launching isolated attack lab scenarios (`/api/scenarios/<id>/launch`), and loading or resetting the FinOps Demo Scenario (`/api/cost/demo-scenario/load`, `/api/cost/demo-scenario/reset`).
+2. **Cost Optimization Reporting & Remediation Staging:** Generating persisted Cost Optimization Reports (`/api/cost/reports/generate`) and staging cost remediation tasks (`/api/cost/findings/<id>/remediate`).
+3. **Remediation Approval:** Authorizing proposed remediation task diffs via `/api/remediations/<id>/approve`.
+4. **Remediation Execution:** Dispatching approved remediation playbooks against the cloud environment via `/api/remediations/<id>/apply`.
+5. **Configuration Rollback:** Restoring pre-remediation configuration snapshots via `/api/remediations/<id>/rollback`.
+6. **Incident Lifecycle Escalation:** Progressing incident stages (Triage $\to$ Investigation $\to$ Containment $\to$ Remediation $\to$ Verification $\to$ Closed) or appending forensic notes via `/api/incidents/<id>/action`.
+
+### 21.5 Operator Credential Configuration, Storage, and Generation Procedure
+
+ThreatGuard automatically manages operator credentials according to strict security invariants:
+
+1. **Automatic Credential Initialization:**
+   On server startup, `backend/security.py` checks for an existing credential in the following order:
+   - Environment variable `CG_API_KEY`: If present and matching valid token format (16-256 alphanumeric characters), it is adopted as the active key.
+   - Persistent secret file `.cg_key`: If the file exists at project root (`C:\cloudguardian\.cg_key`), its token is safely loaded (bounded file read $\le 1024$ bytes).
+   - Dynamic token generation: If neither is found, the server automatically generates a high-entropy 24-byte hex token (`secrets.token_hex(24)`), writes it to `.cg_key`, and sets file permissions to owner-only read/write (`0600`).
+2. **Explicit Operator Key Configuration:**
+   Administrators can explicitly define a known operator credential by setting `CG_API_KEY` in the local `.env` configuration file or shell environment:
+   ```powershell
+   $env:CG_API_KEY = "<your-operator-token>"
+   ```
+3. **Credential Storage Safety Rules:**
+   - `.cg_key` and `.env` are strictly excluded from version control via `.gitignore` and `.dockerignore`.
+   - Never commit, push, or publish credentials, API keys, or `.cg_key` files.
+   - Pre-commit secret scanning hooks (`python scripts/security/scan_secrets.py`) enforce zero exposed secrets across all tracked files.
+
+### 21.6 Operator Login and Logout Workflow
+
+1. **Initiate Login:** Click the **Operator Login** button in the top-right header navigation. The modal dialog opens, focusing the password input.
+2. **Enter Credential:** Enter the configured operator access credential into the dialog.
+3. **Submit Authentication:** Click **Authenticate** (or press Enter). The client sends `POST /api/auth/login` containing `{"key": "<credential>"}`.
+   - The submit button is locked during transit to prevent duplicate in-flight requests.
+   - The backend validates the credential in constant time (`secrets.compare_digest`) to prevent timing side-channel attacks.
+4. **Session Establishment:** Upon successful verification (HTTP 200):
+   - The server creates an 8-hour session in `SessionStore` and returns an `HttpOnly`, `SameSite=Lax` session cookie (`cg_session`) along with a per-session `csrf_token`.
+   - The UI updates the header badge to `[OPERATOR]` (`class="tg ok"`), replaces "Operator Login" with "Logout", and enables privileged controls.
+   - A confirmation toast displays: *"Operator authenticated successfully."*
+5. **Termination (Logout):** Click **Logout**. The client submits `POST /api/auth/logout`.
+   - The server removes the session from memory and issues an expired `Set-Cookie` header.
+   - The UI immediately reverts to `[PUBLIC DEMO]` mode and restores the "Operator Login" button.
+
+### 21.7 Session Expiration and Automatic Reconciliation
+
+- **Server-Side TTL:** Operator sessions have an 8-hour maximum lifetime (`28800` seconds).
+- **In-Memory Cleanup:** Expired sessions are lazily purged during active lookups and session creations.
+- **Client-Side Polling:** The web dashboard periodically verifies session validity via `/api/auth/session` every 30 seconds.
+- **Graceful Downgrade:** If a session expires while an operator is viewing the dashboard, the client automatically downgrades the interface to Public Observer Mode without reloading the page or losing current view state.
+- **Unauthorized Action Interception:** If an operator attempts a privileged action after session expiry, the request fails with HTTP 401. The frontend intercepts the 401 response, shows an informative notification (*"Operator authentication required for this action."*), and re-opens the login dialog.
+
+### 21.8 Cross-Site Request Forgery (CSRF) Protection
+
+State-changing HTTP requests originating from browser sessions are strictly guarded against CSRF attacks:
+
+- Upon authentication, the server generates a cryptographically random 24-byte hex token stored in the server session record and delivered in the login JSON response.
+- Browser scripts store this token in memory (`window.CG_CSRF_TOKEN`) and attach it to privileged fetch requests in the `X-CSRF-Token` header.
+- The server validates that the header token matches the registered token of the active session cookie (`is_csrf_valid(req)`).
+- Any mutating request from a browser session that omits `X-CSRF-Token` or supplies an invalid token is rejected with **HTTP 403 Forbidden** (`CSRF validation failed: missing or invalid CSRF token`).
+- Programmatic API requests supplying the master API key via `X-API-Key` or `Authorization: Bearer` are exempt from CSRF checks.
+
+### 21.9 Local Moto Simulator and AWS Safety Guards
+
+ThreatGuard provides multi-layer isolation to prevent accidental mutation of real-world cloud resources:
+
+- **Isolated Local Emulation:** Operates against a local Moto AWS emulator running on `http://127.0.0.1:5000`, providing zero-cost, fully reproducible IAM, S3, CloudTrail, and EC2 simulation.
+- **Boto3 Endpoint Interception (`backend/aws_guard.py`):** Forces Boto3 clients to connect exclusively to the local Moto emulator using mock credentials (`AKIAIOSFODNN7EXAMPLE`) and region `us-east-1`.
+- **Live AWS Safety Guard (`CG_ALLOW_LIVE_SETUP=1`):** Any attempt to execute mutating provisioning scripts against a live AWS account without explicitly opting in via `CG_ALLOW_LIVE_SETUP=1` raises a fatal `RuntimeError`, guaranteeing that live cloud environments cannot be modified accidentally.
+
+### 21.10 Troubleshooting Authentication Issues
+
+- **HTTP 401 Unauthorized on Login:** Verify that the entered credential matches `CG_API_KEY` (if defined in environment) or the exact token stored in `.cg_key`. Ensure there are no leading or trailing whitespace characters.
+- **HTTP 403 Forbidden on Privileged Action:** Indicates a CSRF validation failure. Refresh the browser page or re-authenticate to obtain a fresh CSRF token. Ensure third-party browser extensions are not stripping `X-CSRF-Token` request headers.
+- **Session Lost on Browser Restart:** By design, session cookies are scoped to the browser session and server memory. Re-authenticating via the Operator Login dialog re-establishes an operator session.
+- **Cannot Locate `.cg_key`:** The file is created automatically at the repository root upon the first execution of `python app.py`. If lost or deleted, restarting the application server generates a new token automatically.
+
+### 21.11 Security Precautions
+
+- Never commit `.cg_key`, `.env`, or credential files to GitHub or public repositories.
+- Run `python scripts/security/scan_secrets.py` before committing changes to verify zero secret exposure.
+- In production deployments, ensure ThreatGuard runs behind a reverse proxy enforcing TLS/HTTPS with the `Secure` cookie flag enabled.
+- For multi-operator enterprise environments, rotate the master API key periodically by updating `CG_API_KEY` and restarting the application daemon.
+
+---
+
+## 22. Installation and Configuration
 
 ### System Prerequisites
 - **Operating System:** Windows 10/11, macOS, or Linux
-- **Python:** Version 3.11 or 3.12 (Python 3.12 recommended)
+- **Python:** Version 3.11 or 3.12 (Python 3.12 verified in local environment)
 - **Git:** Version 2.30+
 
-### Step-by-Step Setup
-
-#### Windows PowerShell
+### Verified Windows Setup (Existing `.venv` or Clean Clone)
 
 ```powershell
-# 1. Clone repository
-git clone https://github.com/asifshaik06/threatguard.git
-cd threatguard
-
-# 2. Create and activate Python virtual environment
-python -m venv .venv
+# 1. Activate the Python virtual environment
 .\.venv\Scripts\Activate.ps1
 
-# 3. Upgrade pip and install package dependencies
-python -m pip install --upgrade pip
+# If initializing a fresh environment:
+# python -m venv .venv
+# .\.venv\Scripts\Activate.ps1
+# python -m pip install --upgrade pip
+
+# 2. Install package dependencies
 pip install -r requirements.txt
 
-# 4. Copy environment configuration
+# 3. Copy environment configuration template
 Copy-Item .env.example .env
 ```
 
-#### Linux / macOS
+### Environment Variables (`.env.example`)
 
-```bash
-# 1. Clone repository
-git clone https://github.com/asifshaik06/threatguard.git
-cd threatguard
-
-# 2. Create and activate Python virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 3. Upgrade pip and install package dependencies
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-
-# 4. Copy environment configuration
-cp .env.example .env
-```
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `AWS_ENDPOINT_URL` | `http://127.0.0.1:5000` | Local Moto simulator endpoint used by `backend/aws_guard.py`. |
+| `CG_LIVE_AWS` | `0` | Keeps execution isolated to local Moto (`1` opts into live read probes). |
+| `CG_ALLOW_LIVE_SETUP` | `0` | Must be explicitly set to `1` to permit mutating live AWS operations. |
+| `CG_DRY_RUN` | `0` | Enables dry-run mode for guarded cloud operations. |
+| `CG_MASK_IDS` | `1` | Controls identifier masking inside exported/rendered telemetry views. |
+| `CG_BUCKET` | `student-records-demo` | Baseline S3 bucket initialized by `safe_setup()`. |
+| `CG_API_KEY` | *(auto-generated)* | Optional operator token; auto-generated into local `.cg_key` when unset. |
+| `CG_BASELINE` | `1` | Enables baseline telemetry replay generation when running in simulator mode. |
 
 ---
 
-## 22. Running the Application
+## 23. Running the Application
 
-ThreatGuard operates with a decoupled two-process architecture (local emulator + application server). Two terminal sessions are required:
+ThreatGuard operates with a decoupled two-process architecture (local Moto simulator + Flask application server). Two terminal sessions are required:
 
 ### Terminal 1 — Start the Moto AWS Emulator
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python -m moto.server -p 5000
+.venv\Scripts\python.exe -m moto.server -p 5000
 ```
 *Wait until Moto outputs:* `* Running on http://127.0.0.1:5000`
 
 ### Terminal 2 — Start the ThreatGuard Application
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python app.py
+.venv\Scripts\python.exe app.py
 ```
 *Wait until Flask outputs:* `* Running on http://127.0.0.1:8000`
 
-### Accessing the Dashboard
+### Local Service URLs
 
-Open any standard web browser and navigate to:
-```
-http://localhost:8000
-```
+- **ThreatGuard Dashboard:** `http://127.0.0.1:8000` (also reachable at `http://localhost:8000`)
+- **Local Moto AWS Simulator:** `http://127.0.0.1:5000`
+
+### Interactive Dashboard Views
+
+- **Security Overview (`#overview`):** `http://127.0.0.1:8000/#overview` — Posture score, event throughput, active KPIs, and Cost Intelligence summary.
+- **Cost Intelligence & Optimization (`#cost`):** `http://127.0.0.1:8000/#cost` — Resource-level estimates, FinOps findings, collapsible Report History, and 11-section reports.
+- **Simulation Lab & FinOps Demo (`#lab`):** `http://127.0.0.1:8000/#lab` — Attack Simulation Library (12 scenarios), IAM Policy Workbench, and operator-controlled FinOps Demo Scenario.
+- **Portfolio, Viva & Architecture Views (`#portfolio`, `#demo`, `#architecture`):** Guided walkthroughs and technical pipeline documentation.
 
 ### Common Startup Troubleshooting
 
-- **Port 5000 Already in Use:** If another process (e.g., macOS AirPlay Receiver) occupies port 5000, disable it or reconfigure `MOTO_PORT` in `.env`.
+- **Port 5000 Already in Use:** If another process occupies port 5000, free the port or configure `AWS_ENDPOINT_URL` to match the simulator port.
 - **PowerShell Execution Policy:** If virtual environment activation fails with `Script Execution Disabled`, run:
   ```powershell
   Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
@@ -605,41 +778,51 @@ http://localhost:8000
 
 ---
 
-## 23. Running Automated Tests
+## 24. Running Automated Tests and Quality Verification
 
-ThreatGuard maintains an automated regression suite with **272 tests** covering unit, integration, and security layers.
+ThreatGuard maintains an automated regression suite with **287 tests** (`151` unit tests across 17 modules and `136` integration tests across 12 modules).
 
 ```powershell
-# Activate virtual environment
-.\.venv\Scripts\Activate.ps1
+# Run the complete regression test suite (287 tests)
+.venv\Scripts\python.exe -m pytest tests/ -q
 
-# Run the complete test suite (272 tests)
-python -m pytest tests/ -q
+# Run Cost Intelligence unit & integration suites
+.venv\Scripts\python.exe -m pytest tests/unit/test_cost_intelligence.py tests/integration/test_cost_api.py -q
 
-# Run specific unit test modules
-python -m pytest tests/unit/test_posture_and_remediation_lifecycle.py
-python -m pytest tests/unit/test_ml_score_reproducibility.py
-python -m pytest tests/unit/test_iam_graph.py
+# Run security hardening and university evaluator audit checks
+.venv\Scripts\python.exe -m pytest tests/integration/test_security_hardening.py tests/integration/test_university_evaluator_audit.py -q
 
-# Run integration workflow tests
-python -m pytest tests/integration/test_university_evaluator_audit.py
+# Run repository quality, documentation, and formatting audits
+.venv\Scripts\python.exe scripts/quality/scan_emoji.py
+.venv\Scripts\python.exe scripts/docs/validate_readme.py
+.venv\Scripts\python.exe scripts/quality/validate_math.py
+git diff --check
+```
+
+### Latest Recorded Verification Run
+
+*(Reflects the latest verified run on branch `main`; re-run after future code changes rather than treating as a permanent guarantee.)*
+
+- **Automated Test Suite:** `287 passed` (`tests/ -q`).
+- **Unicode Emoji Audit:** Passed (`0` emoji characters detected across `115` scanned files).
+- **Secret Scan:** Passed (`0` exposed secrets detected across `96` tracked files).
+- **Formatting Diff Check:** `git diff --check` exited with code `0`.
+- **Live Browser QA:** Passed with `0` console errors and `0` failed HTTP requests across desktop (`1920x1080`, `1440x900`), laptop (`1280x800`, `1024x768`), tablet (`768x1024`), and mobile (`390x844`) viewports, including interactive verification of the collapsible Report History and full-width Report Detail panel.
+
+---
+
+## 25. Security Scanning
+
+To verify that no credentials, API tokens, or private keys are introduced into the repository, ThreatGuard provides both a native Python secret scanner and a Gitleaks pre-commit wrapper:
+
+```powershell
+.venv\Scripts\python.exe scripts/security/scan_secrets.py
+.venv\Scripts\python.exe scripts/gitleaks_precommit.py
 ```
 
 ---
 
-## 24. Security Scanning
-
-To verify that no credentials, tokens, or private keys are introduced into the repository, ThreatGuard includes an automated secret scanner:
-
-```powershell
-python scripts/gitleaks_precommit.py
-```
-
-This utility integrates with the official Gitleaks Docker container and provides a native Python regex fallback scanner.
-
----
-
-## 25. REST API Documentation
+## 26. REST API Documentation
 
 ### Core State and Telemetry
 
@@ -690,17 +873,40 @@ This utility integrates with the official Gitleaks Docker container and provides
 | `POST`| `/api/remediations/<id>/apply` | Execute fix and trigger independent cloud verifier | **Required** |
 | `POST`| `/api/remediations/<id>/rollback`| Restore pre-remediation configuration | **Required** |
 
+### Cost Intelligence & FinOps Demo
+
+| Method | Endpoint | Description | Authentication |
+| :--- | :--- | :--- | :---: |
+| `GET` | `/api/cost/overview` | Resource-level estimates, service breakdown, savings, and findings | None |
+| `GET` | `/api/cost/pricing` | Active configurable regional pricing dataset metadata and rates | None |
+| `GET` | `/api/cost/reports` | List persisted historical Cost Optimization Report summaries | None |
+| `GET` | `/api/cost/reports/<id>` | Fetch full 11-section Cost Optimization Report snapshot | None |
+| `POST` | `/api/cost/reports/generate` | Generate and persist a new 11-section report snapshot | **Required** |
+| `POST` | `/api/cost/findings/<id>/remediate` | Stage an approved HITL RemediationTask for a FinOps finding | **Required** |
+| `GET` | `/api/cost/demo-scenario` | Inspect loaded `ThreatGuardScenario=finops-demo` Moto resources | None |
+| `POST` | `/api/cost/demo-scenario/load` | Idempotently provision optional FinOps Demo resources in Moto | **Required** |
+| `POST` | `/api/cost/demo-scenario/reset` | Selectively remove FinOps Demo resources while preserving baseline | **Required** |
+
+### Architecture and Guided Viva Documentation
+
+| Method | Endpoint | Description | Authentication |
+| :--- | :--- | :--- | :---: |
+| `GET` | `/api/architecture` | 10-stage pipeline, technology stack, and 14 engineering highlights | None |
+| `GET` | `/api/demo` | 17-step presentation script and 21-step guided viva sequence | None |
+
 ---
 
-## 26. Security Limitations and Scope Boundaries
+## 27. Security and Simulator Limitations
 
-- **Emulation vs. Production Cloud:** ThreatGuard is intentionally designed and evaluated against Moto local cloud emulation. Real AWS live connectivity is limited to read-only posture assessment; automated write operations on live accounts require explicit `CG_ALLOW_LIVE_SETUP=1` flags.
+- **Moto Is a Local Simulator, Not Live AWS:** ThreatGuard runs against the local Moto AWS emulator (`http://127.0.0.1:5000`). Automated mutating setup against live AWS is blocked by default unless explicitly opted in via `CG_ALLOW_LIVE_SETUP=1`.
+- **Pricing & Usage Estimate Assumptions:** Cost figures depend on the configured regional rates in `backend/cost/pricing_dataset.json` and configured monthly operating hours (default `730` hours/month). **Reported USD figures are engineering estimates, not actual AWS billing invoices, Cost & Usage Reports (CUR), or AWS Cost Explorer charges.**
+- **Simulator Telemetry & Billing API Gaps:** Moto does not provide every AWS utilization metric (such as historical CloudWatch CPU/RAM time-series) or billing API. Findings whose validation depends on external utilization metrics are explicitly classified as `inferred` rather than guaranteed savings.
 - **Model Training Scope:** The baseline anomaly detection model (`models/baseline_v1.joblib`) was pre-trained on synthetic CloudTrail sequences combined with unlabelled `flaws.cloud` benchmark traces. Transferability to enterprise multi-tenant environments requires domain-specific threshold calibration.
-- **Relational Storage:** The cryptographic audit ledger provides tamper-evident, verifiable logging within SQLite rather than a distributed consensus blockchain.
+- **Relational Storage:** The cryptographic audit ledger and immutable cost report snapshots provide tamper-evident storage within SQLite (WAL mode) rather than a distributed consensus blockchain.
 
 ---
 
-## 27. Future Improvements
+## 28. Future Improvements
 
 - **Multi-Cloud Posture Coverage:** Extend graph modeling and policy evaluation to Microsoft Azure Resource Manager and Google Cloud Platform Cloud IAM.
 - **Streaming Ingestion:** Implement distributed Apache Kafka or AWS Kinesis event streaming ingestion for high-throughput enterprise environments.
@@ -708,7 +914,7 @@ This utility integrates with the official Gitleaks Docker container and provides
 
 ---
 
-## 28. License and Project Attribution
+## 29. License and Project Attribution
 
 Developed as an academic capstone project for the **Bachelor of Technology in Computer Science & Engineering (Artificial Intelligence & Machine Learning)** degree program (Academic Year 2026-2027).
 

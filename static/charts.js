@@ -43,65 +43,120 @@ function base(){
   };
 }
 
-const hm=t=>new Date(t*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",hour12:false});
+function formatTime12(val, includeSec = false) {
+  if (val === null || val === undefined) return "";
+  const d = (typeof val === "number" && val < 1e11) ? new Date(val * 1000) : new Date(val);
+  if (isNaN(d.getTime())) return "";
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  if (includeSec) {
+    const seconds = String(d.getSeconds()).padStart(2, "0");
+    return `${hours}:${minutes}:${seconds} ${ampm}`;
+  }
+  return `${hours}:${minutes} ${ampm}`;
+}
+
+const hm = t => formatTime12(t, false);
 const NM={zscore:"Z-score",isolation_forest:"Isolation Forest",lof:"LocalOutlierFactor",ocsvm:"OneClassSVM"};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 const B={
   posture(D){
     const{o,ax,tx}=base(),p=D.M.posture;
-    if(!p||!p.length)return empty("Collecting samples...");
-    const cyan=cv("--cyan")||"#55BFCB";
+    if(!p||!p.length)return empty("Collecting posture samples...");
+    const orange=cv("--ac")||"#F97316";
+    const sf2=cv("--sf2")||"#27272A";
+    const ln=cv("--ln")||"#3F3F46";
+    const mu=cv("--mu")||"#A1A1AA";
     return{
       ...o,
+      grid:{...o.grid,left:44,right:20,top:22,bottom:26},
       tooltip:{
-        ...o.tooltip,
-        valueFormatter:v=>v+" / 100",
-        axisPointer:{type:"cross",lineStyle:{color:cyan,type:"dashed",width:1}}
+        trigger:"axis",
+        backgroundColor:sf2,
+        borderColor:ln,
+        borderWidth:1,
+        padding:[8,12],
+        textStyle:{color:tx,fontSize:12},
+        formatter:params=>{
+          if(!params||!params.length)return"";
+          const p0=params[0];
+          const timeStr=formatTime12(p0.value[0], true);
+          const score=p0.value[1];
+          const status=score>=80?"Optimal":score>=50?"Elevated Risk":"Critical";
+          const color=score>=80?"#3FB950":score>=50?"#F97316":"#F85149";
+          return`<div style="font-weight:600;margin-bottom:3px">${timeStr}</div>`+
+            `<div>Security Posture: <b style="color:${color}">${score}% (${status})</b></div>`;
+        }
       },
-      xAxis:ax({type:"time",splitNumber:4,splitLine:{show:false}}),
-      yAxis:ax({type:"value",min:0,max:100,interval:25,name:"Score",nameTextStyle:{color:cv("--mu"),fontSize:11,align:"left"}}),
+      xAxis:ax({
+        type:"time",
+        splitNumber:4,
+        splitLine:{show:false},
+        axisLabel:{color:mu,fontSize:10,hideOverlap:true,formatter:val=>formatTime12(val,false)}
+      }),
+      yAxis:ax({
+        type:"value",
+        min:0,
+        max:100,
+        interval:25,
+        name:"Score (%)",
+        nameLocation:"end",
+        nameTextStyle:{color:mu,fontSize:10,align:"left"},
+        splitLine:{show:true,lineStyle:{color:ln,opacity:0.25,type:"dashed"}},
+        axisLabel:{color:mu,fontSize:10,formatter:v=>v+"%"}
+      }),
       series:[{
+        name:"Posture Score",
         type:"line",
         step:"end",
-        showSymbol:false,
+        showSymbol:true,
+        symbol:"circle",
+        symbolSize:4,
         data:p.map(x=>[x.t*1000,x.score]),
-        lineStyle:{color:cyan,width:2,shadowBlur:0},
+        lineStyle:{color:orange,width:2.2,shadowBlur:0},
+        itemStyle:{color:orange,borderWidth:0},
         areaStyle:{
           color:new echarts.graphic.LinearGradient(0,0,0,1,[
-            {offset:0,color:"rgba(85,191,203,0.18)"},
-            {offset:1,color:"rgba(85,191,203,0.01)"}
+            {offset:0,color:"rgba(249,115,22,0.22)"},
+            {offset:1,color:"rgba(249,115,22,0.01)"}
           ])
         },
         emphasis:{
-          scale:1.4,
-          itemStyle:{
-            color:cyan,
-            borderColor:tx,
-            borderWidth:1.5,
-            shadowBlur:0
-          }
+          scale:2.0,
+          itemStyle:{color:orange,borderColor:tx,borderWidth:1.5,shadowBlur:0}
         }
       }]
     };
   },
 
   anomaly(D){
-    const{o,ax,mu,tx,ln,sf2,sub}=base(),a=D.M.anomaly,thr=D.M.threshold;
-    if(!a||!a.length)return empty("Waiting for scored events...");
-    const baselineCol = "#22D3EE"; // Cyan for normal observations
-    const anomalyCol = "#FB7185";  // Coral for anomalous observations
-    const thresholdCol = "#FBBF24"; // Amber for threshold line
+    const{o,ax,mu,tx,ln,sf2,sub}=base(),a=D.M.anomaly;
+    const thr=(typeof D.M.threshold==='number'&&!isNaN(D.M.threshold))?D.M.threshold:0.610;
+    if(!a||!a.length)return empty("Waiting for scored telemetry...");
+    const baselineCol = "#71717A"; // Neutral secondary grey for normal baseline
+    const anomalyCol = "#F85149";  // Coral red for anomalous observations
+    const thresholdCol = "#F97316"; // Brand orange for threshold line
 
-    const dataPoints = a.map((x, idx) => {
+    const baselinePoints = [];
+    const attackPoints = [];
+    const scores = [];
+    const times = [];
+
+    a.forEach((x, idx) => {
       const origT = x.t * 1000;
       const origScore = x.score;
+      if(typeof origScore === 'number' && !isNaN(origScore)) scores.push(origScore);
+      if(!isNaN(origT)) times.push(origT);
       const isAtk = x.kind === "attack";
       const isAnomaly = origScore > thr || isAtk;
       const color = isAnomaly ? anomalyCol : baselineCol;
       const obsId = x.obs_id || `OBS-${String(idx + 1).padStart(4, "0")}`;
 
-      return {
+      const pt = {
         value: [origT, origScore],
         rawScore: origScore,
         rawT: origT,
@@ -109,23 +164,60 @@ const B={
         kind: x.kind,
         isAnomaly: isAnomaly,
         symbol: "circle",
-        symbolSize: 3.5, // Crisp 3.5px diameter marker for clean point separation without crowding
+        symbolSize: isAnomaly ? 6 : 3,
         itemStyle: {
           color: color,
-          opacity: 0.82, // Balanced opacity: reveals density when overlapping without vanishing
-          borderWidth: 0,
-          shadowBlur: 0 // Strict 0 shadowBlur: removes all halos and fuzzy glow
+          opacity: isAnomaly ? 0.95 : 0.65,
+          borderWidth: isAnomaly ? 1 : 0,
+          borderColor: isAnomaly ? tx : "transparent",
+          shadowBlur: 0
         }
       };
+
+      if(isAnomaly){
+        attackPoints.push(pt);
+      } else {
+        baselinePoints.push(pt);
+      }
     });
+
+    times.sort((u, v) => u - v);
+    const minT = times.length ? times[0] : Date.now() - 600000;
+    const maxT = times.length ? times[times.length - 1] : Date.now();
+    const timeSpan = Math.max(60000, maxT - minT);
+    const timePad = timeSpan * 0.02;
+    const xMin = minT - timePad;
+    const xMax = maxT + timePad;
+    const thresholdLineData = [[xMin, thr], [xMax, thr]];
+
+    // Dynamic Y-axis scale that always encompasses both observed score distribution and threshold with visual padding
+    const minScore = scores.length ? Math.min(...scores) : 0.50;
+    const maxScore = scores.length ? Math.max(...scores) : 0.55;
+    const yMin = Math.max(0, Math.floor((Math.min(minScore, thr) - 0.03) * 20) / 20);
+    const yMax = Math.ceil((Math.max(maxScore, thr) + 0.04) * 20) / 20;
 
     return {
       ...o,
       grid: {
-        left: 44,
-        right: 86, // Dedicated margin on the right for edge threshold badge outside data points
-        top: 22,
-        bottom: 26
+        left: 42,
+        right: 20, // Uses full available width without unnecessary empty horizontal space
+        top: 46,   // Dedicated height for legend above chart plot area
+        bottom: 28
+      },
+      legend: {
+        show: true,
+        type: "plain",
+        top: 2,
+        right: 8,
+        itemGap: 10,
+        textStyle: { color: mu, fontSize: 10 },
+        itemWidth: 12,
+        itemHeight: 8,
+        data: [
+          { name: "Baseline", icon: "circle", itemStyle: { color: baselineCol } },
+          { name: "Attack anomaly", icon: "circle", itemStyle: { color: anomalyCol } },
+          { name: `Threshold (${thr.toFixed(3)})`, icon: "line", itemStyle: { color: thresholdCol, lineStyle: { type: "dashed" } } }
+        ]
       },
       dataZoom: [
         {
@@ -134,7 +226,17 @@ const B={
           filterMode: "none",
           zoomOnMouseWheel: true,
           moveOnMouseMove: true,
-          moveOnMouseWheel: false
+          moveOnMouseWheel: false,
+          ...(window._ANOMALY_ZOOM && window._ANOMALY_ZOOM.startValue !== undefined ? {
+            startValue: window._ANOMALY_ZOOM.startValue,
+            endValue: window._ANOMALY_ZOOM.endValue
+          } : window._ANOMALY_ZOOM && typeof window._ANOMALY_ZOOM.start === "number" ? {
+            start: window._ANOMALY_ZOOM.start,
+            end: window._ANOMALY_ZOOM.end
+          } : {
+            start: 0,
+            end: 100
+          })
         }
       ],
       tooltip: {
@@ -146,7 +248,13 @@ const B={
         textStyle: { color: tx, fontSize: 12 },
         extraCssText: "box-shadow: 0 4px 14px rgba(0,0,0,0.35); border-radius: 6px;",
         formatter: p => {
+          if (p.componentType === "markLine" || (p.seriesName && p.seriesName.toLowerCase().includes("threshold"))) {
+            return `<div style="font-weight:700;font-size:12px;color:${tx}">Isolation Forest Decision Threshold</div>` +
+              `<div style="font-size:11px;margin-top:2px;color:${thresholdCol}">Detection Threshold (&tau;): <b style="font-family:monospace">${thr.toFixed(4)}</b></div>` +
+              `<div style="font-size:10px;color:${mu};margin-top:2px">Calibrated on 12-feature sliding telemetry windows</div>`;
+          }
           const d = p.data;
+          if (!d || d.rawScore === undefined) return "";
           const isAtk = d.kind === "attack";
           const col = d.isAnomaly ? anomalyCol : baselineCol;
           const obsId = d.obsId || `OBS-${String(p.dataIndex + 1).padStart(4, "0")}`;
@@ -156,7 +264,7 @@ const B={
           const scoreStatus = d.rawScore > thr 
             ? `<span style="color:${anomalyCol};font-weight:700">ANOMALY (&gt; ${thr.toFixed(3)})</span>` 
             : `<span style="color:${baselineCol};font-weight:600">NORMAL (&le; ${thr.toFixed(3)})</span>`;
-          const timeStr = new Date(d.rawT).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const timeStr = formatTime12(d.rawT, true);
 
           return `<div style="font-weight:700;font-size:12px;margin-bottom:4px;color:${tx}">Observation ${obsId} &middot; ${timeStr}</div>` +
             `<div style="font-size:11px;margin-bottom:2px">${tag}</div>` +
@@ -169,20 +277,30 @@ const B={
       },
       xAxis: ax({
         type: "time",
+        min: xMin,
+        max: xMax,
         splitNumber: 5,
         splitLine: { show: false },
         axisLabel: {
           color: mu,
           fontSize: 10,
-          hideOverlap: true
+          hideOverlap: true,
+          formatter: val => formatTime12(val, false)
         }
       }),
       yAxis: ax({
         type: "value",
-        scale: true,
+        min: yMin,
+        max: yMax,
         name: "Score",
         nameLocation: "end",
-        nameTextStyle: { color: mu, fontSize: 10, align: "left" },
+        nameGap: 6,
+        nameTextStyle: {
+          color: mu,
+          fontSize: 10,
+          align: "left",
+          padding: [0, 0, 0, -28]
+        },
         splitLine: {
           show: true,
           lineStyle: { color: ln, opacity: 0.15, type: "dashed" }
@@ -191,48 +309,77 @@ const B={
           color: mu,
           fontSize: 10,
           formatter: v => v.toFixed(2)
-        },
-        boundaryGap: ["10%", "10%"]
+        }
       }),
-      series: [{
-        type: "scatter",
-        data: dataPoints,
-        emphasis: {
-          scale: 2.2, // Clean enlargement from 3.5px to ~7.7px on hover with crisp border
-          itemStyle: {
-            borderColor: tx,
-            borderWidth: 1.5,
-            opacity: 1.0,
-            shadowBlur: 0
+      series: [
+        {
+          name: "Baseline",
+          type: "scatter",
+          data: baselinePoints,
+          emphasis: {
+            scale: 2.2,
+            itemStyle: {
+              borderColor: tx,
+              borderWidth: 1.5,
+              opacity: 1.0,
+              shadowBlur: 0
+            }
           }
         },
-        markLine: {
-          silent: true,
-          symbol: "none",
-          lineStyle: { color: thresholdCol, type: "dashed", width: 1.2, opacity: 0.85 },
-          label: {
-            formatter: "Threshold " + thr.toFixed(3),
+        {
+          name: "Attack anomaly",
+          type: "scatter",
+          data: attackPoints,
+          emphasis: {
+            scale: 2.2,
+            itemStyle: {
+              borderColor: tx,
+              borderWidth: 1.5,
+              opacity: 1.0,
+              shadowBlur: 0
+            }
+          }
+        },
+        {
+          name: `Threshold (${thr.toFixed(3)})`,
+          type: "line",
+          data: thresholdLineData,
+          showSymbol: false,
+          silent: false,
+          lineStyle: {
             color: thresholdCol,
-            position: "end",
-            distance: 6,
-            fontSize: 10,
-            fontWeight: 600,
-            padding: [2, 5],
-            backgroundColor: sf2,
-            borderRadius: 3,
-            borderColor: ln,
-            borderWidth: 1
+            type: "dashed",
+            width: 2,
+            opacity: 0.95
           },
-          data: [{ yAxis: thr }]
+          markLine: {
+            silent: false,
+            symbol: ["none", "none"],
+            lineStyle: { color: thresholdCol, type: "dashed", width: 2, opacity: 0.95 },
+            label: {
+              formatter: "Threshold " + thr.toFixed(3),
+              color: thresholdCol,
+              position: "insideEndBottom",
+              distance: 5,
+              fontSize: 9.5,
+              fontWeight: 700,
+              padding: [2, 5],
+              backgroundColor: sf2,
+              borderRadius: 3,
+              borderColor: thresholdCol,
+              borderWidth: 1
+            },
+            data: [{ yAxis: thr, name: `Threshold (${thr.toFixed(3)})` }]
+          }
         }
-      }]
+      ]
     };
   },
 
   activity(D){
     const{o,ax,lg}=base(),b=D.M.buckets;
     if(!b||!b.length)return empty("No events yet");
-    const bad=cv("--bad")||"#D66C79",sub=cv("--sub")||"#78879A";
+    const bad="#F85149",baseline="#52525B",sub="#71717A";
     return{
       ...o,
       legend:lg,
@@ -240,17 +387,17 @@ const B={
         ...o.tooltip,
         axisPointer:{type:"shadow"}
       },
-      xAxis:ax({type:"category",data:b.map(v=>hm(v.t)),splitLine:{show:false}}),
-      yAxis:ax({type:"value",minInterval:1,name:"Events",nameTextStyle:{color:cv("--mu"),fontSize:11,align:"left"}}),
+      xAxis:ax({type:"category",data:b.map(v=>hm(v.t)),splitLine:{show:false},axisLabel:{color:cv("--mu")||"#A1A1AA",fontSize:10}}),
+      yAxis:ax({type:"value",minInterval:1,name:"Events / min",nameTextStyle:{color:cv("--mu")||"#A1A1AA",fontSize:10,align:"left"},splitLine:{show:true,lineStyle:{color:cv("--ln")||"#27272A",opacity:0.25,type:"dashed"}}}),
       series:[
         {
-          name:"Baseline (simulated)",
+          name:"Baseline telemetry",
           type:"bar",
           stack:"e",
-          barMaxWidth:16,
+          barMaxWidth:14,
           data:b.map(v=>v.baseline),
           itemStyle:{
-            color:"rgba(120,135,154,0.45)",
+            color:"rgba(113,113,122,0.45)",
             borderRadius:[0,0,0,0],
             shadowBlur:0
           },
@@ -260,7 +407,7 @@ const B={
           name:"Attack actions",
           type:"bar",
           stack:"e",
-          barMaxWidth:16,
+          barMaxWidth:14,
           data:b.map(v=>v.attack),
           itemStyle:{
             color:bad,
@@ -644,6 +791,49 @@ B.scenario_graph=function(D){
   };
 };
 
+B.cost_services=function(D){
+  const{o,ax,lg,mu,tx,ln,sf2}=base();
+  const c=(D&&D.COST_DATA)||window.COST_DATA;
+  const rows=(c&&c.service_breakdown)?c.service_breakdown:[];
+  if(!rows.length)return empty("No service cost data available.");
+  const orange=cv("--ac")||"#F97316";
+  const emerald=cv("--emerald")||"#3FB950";
+  const names=rows.map(r=>String(r.service||"").toUpperCase());
+  const costs=rows.map(r=>+(r.estimated_monthly_cost||0));
+  const counts=rows.map(r=>+(r.optimization_opportunities||0));
+  return{
+    ...o,
+    legend:{...lg,data:["Monthly Cost (USD)","Optimization Findings"]},
+    grid:{...o.grid,left:72,right:24,top:34,bottom:26},
+    tooltip:{
+      trigger:"axis",
+      axisPointer:{type:"shadow"},
+      backgroundColor:sf2,
+      borderColor:ln,
+      borderWidth:1,
+      textStyle:{color:tx,fontSize:12}
+    },
+    xAxis:ax({type:"value",splitLine:{show:true,lineStyle:{color:ln,opacity:0.25,type:"dashed"}}}),
+    yAxis:ax({type:"category",data:names,inverse:true,splitLine:{show:false}}),
+    series:[
+      {
+        name:"Monthly Cost (USD)",
+        type:"bar",
+        barMaxWidth:16,
+        data:costs,
+        itemStyle:{color:orange,borderRadius:[0,3,3,0],shadowBlur:0}
+      },
+      {
+        name:"Optimization Findings",
+        type:"bar",
+        barMaxWidth:16,
+        data:counts,
+        itemStyle:{color:emerald,borderRadius:[0,3,3,0],shadowBlur:0}
+      }
+    ]
+  };
+};
+
 function paint(k,D){
   const c=CH[k];
   if(!c||!c.inst||!c.el.isConnected||!B[k])return;
@@ -658,7 +848,26 @@ function paint(k,D){
     c._hasRendered=true;
   }
   const o=B[k](D),e=!!o.graphic;
-  c.inst.setOption(o,{notMerge:c.empty!==e||e,lazyUpdate:true});
+  const isGraph = (k === "iam_graph" || k === "scenario_graph");
+  if(k === "anomaly"){
+    if(window._ANOMALY_ZOOM && o.dataZoom && o.dataZoom.length){
+      o.dataZoom.forEach(dz => {
+        if(window._ANOMALY_ZOOM.startValue !== undefined && window._ANOMALY_ZOOM.endValue !== undefined){
+          dz.startValue = window._ANOMALY_ZOOM.startValue;
+          dz.endValue = window._ANOMALY_ZOOM.endValue;
+          delete dz.start;
+          delete dz.end;
+        } else if(typeof window._ANOMALY_ZOOM.start === "number"){
+          dz.start = window._ANOMALY_ZOOM.start;
+          dz.end = window._ANOMALY_ZOOM.end;
+        }
+      });
+    }
+    c.inst.setOption(o, {notMerge: false, lazyUpdate: false});
+    if(window.updateResetZoomButton) window.updateResetZoomButton();
+  } else {
+    c.inst.setOption(o, {notMerge: !isGraph || c.empty !== e || e, lazyUpdate: false});
+  }
   c.empty=e;
 }
 
@@ -699,6 +908,29 @@ function mount(D){
           else if(window.onGraphElementClick)window.onGraphElementClick(params);
         });
       }
+      if(k==="anomaly"){
+        c.inst.on("datazoom", () => {
+          try {
+            const opt = c.inst.getOption();
+            if (opt && opt.dataZoom && opt.dataZoom.length) {
+              const dz = opt.dataZoom[0];
+              const isSubrange = (typeof dz.start === "number" && (dz.start > 0.5 || dz.end < 99.5)) ||
+                                 (dz.startValue !== undefined && dz.endValue !== undefined);
+              if (isSubrange) {
+                window._ANOMALY_ZOOM = {
+                  start: dz.start,
+                  end: dz.end,
+                  startValue: dz.startValue,
+                  endValue: dz.endValue
+                };
+              } else {
+                window._ANOMALY_ZOOM = null;
+              }
+            }
+          } catch(err) {}
+          if (window.updateResetZoomButton) window.updateResetZoomButton();
+        });
+      }
     }
     c.inst.resize();
     paint(k,D);
@@ -707,6 +939,26 @@ function mount(D){
     });
   });
 }
+
+window.resetAnomalyZoom = function(){
+  window._ANOMALY_ZOOM = null;
+  const c = CH["anomaly"];
+  if(c && c.inst){
+    c.inst.dispatchAction({
+      type: "dataZoom",
+      start: 0,
+      end: 100
+    });
+  }
+  if(window.updateResetZoomButton) window.updateResetZoomButton();
+};
+
+window.updateResetZoomButton = function(){
+  const btn = document.getElementById("btn-reset-anomaly-zoom");
+  if(btn){
+    btn.style.display = window._ANOMALY_ZOOM ? "inline-flex" : "none";
+  }
+};
 
 window.graphZoom=function(factor){
   const c=CH["iam_graph"];if(!c||!c.inst)return;

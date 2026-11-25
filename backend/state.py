@@ -8,6 +8,7 @@ Provides:
 from collections import deque
 import copy
 import hashlib
+import json
 import sqlite3
 import threading
 import time
@@ -45,6 +46,23 @@ class StateStore:
                 "text TEXT, "
                 "prev TEXT, "
                 "hash TEXT)"
+            )
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS cost_reports ("
+                "report_id TEXT PRIMARY KEY, "
+                "title TEXT NOT NULL, "
+                "generated_at TEXT NOT NULL, "
+                "reporting_period TEXT NOT NULL, "
+                "service_filter TEXT, "
+                "environment TEXT NOT NULL, "
+                "currency TEXT NOT NULL, "
+                "pricing_version TEXT NOT NULL, "
+                "total_monthly_cost REAL NOT NULL, "
+                "potential_monthly_savings REAL NOT NULL, "
+                "optimized_monthly_cost REAL NOT NULL, "
+                "resource_count INTEGER NOT NULL, "
+                "findings_count INTEGER NOT NULL, "
+                "snapshot_json TEXT NOT NULL)"
             )
             self._db.commit()
 
@@ -176,22 +194,24 @@ class StateStore:
         with self._lock:
             return len(self._evlog)
 
-    def get_minute_buckets(self, window_minutes: int = 30) -> List[Dict[str, Any]]:
-        """Aggregate event counts into 1-minute buckets."""
+    def get_minute_buckets(self, window_minutes: int = 15) -> List[Dict[str, Any]]:
+        """Aggregate event counts into continuous 1-minute buckets without missing intervals."""
         with self._lock:
             events_copy = list(self._evlog)
 
         cur_m = int(time.time() // 60)
-        out: Dict[int, Dict[str, int]] = {}
+        start_m = cur_m - window_minutes + 1
+        out: Dict[int, Dict[str, int]] = {
+            m: {"baseline": 0, "attack": 0} for m in range(start_m, cur_m + 1)
+        }
         for e in events_copy:
-            m = int(e["ts"] // 60)
-            if cur_m - m < window_minutes:
-                bucket = out.setdefault(m, {"baseline": 0, "attack": 0})
+            m = int(e.get("ts", 0) // 60)
+            if m in out:
                 k = e.get("kind", "baseline")
-                if k in bucket:
-                    bucket[k] += 1
+                if k in out[m]:
+                    out[m][k] += 1
                 else:
-                    bucket[k] = 1
+                    out[m]["baseline"] += 1
 
         return [dict(t=m * 60, **v) for m, v in sorted(out.items())]
 
@@ -298,6 +318,109 @@ class StateStore:
         with self._db_lock:
             rows = self._db.execute("SELECT text FROM audit ORDER BY i ASC").fetchall()
             return [r[0] for r in rows]
+
+    # ---- Cost Optimization Report Persistence ----
+
+    def save_cost_report(self, report: Dict[str, Any]) -> None:
+        """Persist an immutable Cost Optimization Report snapshot in SQLite."""
+        info = report.get("report_information") or {}
+        overview = report.get("cost_overview") or {}
+        comparison = report.get("cost_comparison") or {}
+        resources = report.get("resource_level_analysis") or []
+        findings = report.get("cost_optimization_findings") or []
+
+        report_id = str(info.get("report_id") or "")
+        if not report_id:
+            raise ValueError("report_id is required to persist cost report.")
+
+        snapshot_json = json.dumps(report, default=str)
+        with self._db_lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO cost_reports ("
+                "report_id, title, generated_at, reporting_period, service_filter, "
+                "environment, currency, pricing_version, total_monthly_cost, "
+                "potential_monthly_savings, optimized_monthly_cost, "
+                "resource_count, findings_count, snapshot_json"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    report_id,
+                    str(info.get("report_title") or "ThreatGuard Cost Optimization Report"),
+                    str(info.get("generated_at") or ""),
+                    str(info.get("reporting_period") or "monthly"),
+                    str(info.get("service_filter") or "all"),
+                    str(info.get("environment") or "Moto Simulated Cloud"),
+                    str(info.get("currency") or "USD"),
+                    str(info.get("pricing_dataset_version") or "unknown"),
+                    float(overview.get("estimated_monthly_cost") or 0.0),
+                    float(comparison.get("potential_monthly_savings") or 0.0),
+                    float(comparison.get("optimized_estimated_monthly_cost") or 0.0),
+                    len(resources),
+                    len(findings),
+                    snapshot_json,
+                ),
+            )
+            self._db.commit()
+
+    def list_cost_reports(
+        self,
+        service_filter: Optional[str] = None,
+        reporting_period: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List stored Cost Optimization Report metadata ordered newest first."""
+        clauses: List[str] = []
+        params: List[Any] = []
+        if service_filter:
+            clauses.append("LOWER(service_filter) = ?")
+            params.append(service_filter.strip().lower())
+        if reporting_period:
+            clauses.append("LOWER(reporting_period) = ?")
+            params.append(reporting_period.strip().lower())
+
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = (
+            "SELECT report_id, title, generated_at, reporting_period, service_filter, "
+            "environment, currency, pricing_version, total_monthly_cost, "
+            "potential_monthly_savings, optimized_monthly_cost, resource_count, findings_count "
+            f"FROM cost_reports {where_sql} ORDER BY generated_at DESC, rowid DESC LIMIT ?"
+        )
+        params.append(max(1, min(200, int(limit))))
+
+        with self._db_lock:
+            rows = self._db.execute(sql, tuple(params)).fetchall()
+
+        return [
+            {
+                "report_id": r[0],
+                "title": r[1],
+                "generated_at": r[2],
+                "reporting_period": r[3],
+                "service_filter": r[4],
+                "environment": r[5],
+                "currency": r[6],
+                "pricing_version": r[7],
+                "total_monthly_cost": r[8],
+                "potential_monthly_savings": r[9],
+                "optimized_monthly_cost": r[10],
+                "resource_count": r[11],
+                "findings_count": r[12],
+            }
+            for r in rows
+        ]
+
+    def get_cost_report(self, report_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve full immutable snapshot for a previously generated report."""
+        with self._db_lock:
+            row = self._db.execute(
+                "SELECT snapshot_json FROM cost_reports WHERE report_id = ?",
+                (report_id,),
+            ).fetchone()
+        if not row:
+            return None
+        try:
+            return json.loads(row[0])
+        except Exception:
+            return None
 
     def close(self) -> None:
         """Safely close database connections."""

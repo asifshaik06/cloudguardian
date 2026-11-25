@@ -683,6 +683,12 @@ def home() -> Any:
     return make_response(send_from_directory("static", "index.html"))
 
 
+@app.get("/favicon.ico")
+def favicon() -> Any:
+    """Serve brand favicon for direct browser root queries."""
+    return send_from_directory("static", "favicon.ico")
+
+
 @app.get("/api/auth/session")
 def auth_session() -> Any:
     """Check active session status and provide CSRF token if authenticated as operator.
@@ -891,6 +897,9 @@ register_replay_api(app, pipeline)
 register_graph_api(app, iam_graph, {"iam": iam, "s3": s3, "ec2": ec2, "ct": ct})
 register_scenarios_api(app, scenario_session_manager, store)
 register_soc_api(app, soc_store, R)
+
+from backend.cost.api import register_cost_api
+register_cost_api(app, context)
 
 
 def run_server() -> None:

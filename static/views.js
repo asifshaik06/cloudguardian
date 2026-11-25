@@ -41,10 +41,14 @@ const updateAuthUI = () => {
 };
 window.updateAuthUI = updateAuthUI;
 
+let IS_AUTHENTICATING = false;
+let IS_LOGGING_OUT = false;
+
 function openOperatorLoginModal() {
   const m = document.getElementById("cg-login-modal");
   const inp = document.getElementById("op-key-input");
   const err = document.getElementById("op-login-err");
+  const submitBtn = document.getElementById("cg-login-submit");
   if (!m) return;
   if (inp) {
     inp.value = "";
@@ -54,6 +58,10 @@ function openOperatorLoginModal() {
     err.textContent = "";
     err.style.display = "none";
   }
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Authenticate";
+  }
   m.style.display = "flex";
   if (inp) inp.focus();
 }
@@ -61,21 +69,45 @@ window.openOperatorLoginModal = openOperatorLoginModal;
 
 function closeOperatorLoginModal() {
   const m = document.getElementById("cg-login-modal");
+  const inp = document.getElementById("op-key-input");
+  const err = document.getElementById("op-login-err");
+  const submitBtn = document.getElementById("cg-login-submit");
+  if (inp) inp.value = "";
+  if (err) {
+    err.textContent = "";
+    err.style.display = "none";
+  }
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Authenticate";
+  }
   if (m) m.style.display = "none";
+  const loginBtn = document.getElementById("btn-login-modal");
+  if (loginBtn && loginBtn.style.display !== "none") loginBtn.focus();
 }
 window.closeOperatorLoginModal = closeOperatorLoginModal;
 
 async function submitOperatorLogin() {
+  if (IS_AUTHENTICATING) return;
   const inp = document.getElementById("op-key-input");
   const err = document.getElementById("op-login-err");
+  const submitBtn = document.getElementById("cg-login-submit");
   const val = inp ? inp.value.trim() : "";
   if (!val) {
     if (err) {
-      err.textContent = "Please enter an operator key.";
+      err.textContent = "Please enter the operator access credential.";
       err.style.display = "block";
     }
-    if (inp) inp.focus();
+    if (inp) {
+      inp.style.borderColor = "var(--bad)";
+      inp.focus();
+    }
     return;
+  }
+  IS_AUTHENTICATING = true;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Authenticating...";
   }
   try {
     const res = await fetch("/api/auth/login", {
@@ -94,21 +126,35 @@ async function submitOperatorLogin() {
       if (typeof window.poll === "function") window.poll();
     } else {
       if (err) {
-        err.textContent = data.error || "Authentication failed. Invalid operator key.";
+        err.textContent = data.error || "Authentication failed: invalid operator credential.";
         err.style.display = "block";
       }
-      if (inp) inp.select();
+      if (inp) {
+        inp.style.borderColor = "var(--bad)";
+        inp.select();
+        inp.focus();
+      }
     }
   } catch (e) {
     if (err) {
-      err.textContent = "Network error during authentication.";
+      err.textContent = "Network error: unable to reach the authentication service.";
       err.style.display = "block";
+    }
+  } finally {
+    IS_AUTHENTICATING = false;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Authenticate";
     }
   }
 }
 window.submitOperatorLogin = submitOperatorLogin;
 
 async function submitOperatorLogout() {
+  if (IS_LOGGING_OUT) return;
+  IS_LOGGING_OUT = true;
+  const logoutBtn = document.getElementById("btn-logout");
+  if (logoutBtn) logoutBtn.disabled = true;
   try {
     await fetch("/api/auth/logout", {
       method: "POST",
@@ -124,6 +170,9 @@ async function submitOperatorLogout() {
     window.CG_IS_OPERATOR = false;
     window.CG_CSRF_TOKEN = null;
     updateAuthUI();
+  } finally {
+    IS_LOGGING_OUT = false;
+    if (logoutBtn) logoutBtn.disabled = false;
   }
 }
 window.submitOperatorLogout = submitOperatorLogout;
@@ -190,19 +239,22 @@ function highlightJSON(data) {
 }
 window.highlightJSON = highlightJSON;
 let M={posture:[],anomaly:[],threshold:null,buckets:[],events_total:0,rem:{items:[],fixed:0,verified:0,rolled_back:0}},EVR=[],ES=new Set(),EBOOT=false,Q="",FSEV="",FST="",EK="",ESVC="",EV_PAGE=1,EV_PAGE_SIZE=25,DR=null;
-const ctx=()=>({S,ML,M}),mid=x=>(x.ref.match(/T\d{4}(\.\d{3})?/)||["n/a"])[0],$$=id=>document.getElementById(id);
+const ctx=()=>({S,ML,M,COST_DATA:window.COST_DATA}),mid=x=>(x.ref.match(/T\d{4}(\.\d{3})?/)||["n/a"])[0],$$=id=>document.getElementById(id);
 const stat=s=>({pending:tg("Awaiting approval","wr"),fixed:tg("Remediated","ok"),rejected:tg("Rejected","gr")}[s]||tg(s,"gr"));
 const noData=k=>k=="detectors"?!Object.values(ML.results||{}).some(r=>r.controlled):k=="calib"?!Object.values(ML.results||{}).some(r=>r.old_real_unlabelled):false,
  slot=(key,h)=>noData(key)?none(key=="calib"?"No flaws.cloud results yet. Run scripts\\train_eval.py with the flaws.cloud logs.":"No results yet. Run scripts\\train_eval.py."):`<div class="cslot" data-key="${key}" style="height:${h}px"></div>`,
- card=(t,sub,key,h)=>`<section class="panel"><div class="ph"><span class="pt">${t}</span><span class="mu">${sub}</span></div>${noData(key)?slot(key,h):`<div class="pb">${slot(key,h)}</div>`}</section>`;
+ card=(t,sub,key,h,extra="")=>`<section class="panel" style="min-width:0;overflow:hidden"><div class="ph" style="display:flex;justify-content:space-between;align-items:center;gap:8px;min-width:0"><div style="min-width:0;flex:1;overflow:hidden"><span class="pt" style="margin-right:6px;white-space:nowrap">${t}</span><span class="mu" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:180px;vertical-align:bottom" title="${esc(sub)}">${sub}</span></div>${extra}</div>${noData(key)?slot(key,h):`<div class="pb" style="min-width:0">${slot(key,h)}</div>`}</section>`;
 function pipe(){
-  const f=S.findings,fx=f.filter(x=>x.status=="fixed"),p=f.filter(x=>x.status=="pending").length;
+  const f=S.findings,fx=f.filter(x=>x.status=="fixed");
+  const pendingRem=(REM_DATA&&REM_DATA.stats&&REM_DATA.stats.pending_approval!=null)?REM_DATA.stats.pending_approval:f.filter(x=>x.status=="pending").length;
+  const verifiedRem=(REM_DATA&&REM_DATA.stats&&REM_DATA.stats.independently_verified!=null)?REM_DATA.stats.independently_verified:fx.filter(x=>x.verified).length;
+  const remediatedRem=(REM_DATA&&REM_DATA.stats&&REM_DATA.stats.applied!=null)?REM_DATA.stats.applied:fx.length;
   const stages=[
     ["Events",M.events_total||S.events.length,false,"#events","View all ingested telemetry events"],
     ["Detections",f.length,false,"#findings","View all security findings"],
-    ["Awaiting approval",p,p>0,"#remediation","pending","Review remediation tasks awaiting approval"],
-    ["Remediated",fx.length,false,"#remediation","","View remediated security findings"],
-    ["Verified",fx.filter(x=>x.verified).length,false,"#remediation","fixed","View independently verified fixes"]
+    ["Awaiting approval",pendingRem,pendingRem>0,"#remediation","pending","Review remediation tasks awaiting approval"],
+    ["Remediated",remediatedRem,false,"#remediation","","View remediated security findings"],
+    ["Verified",verifiedRem,false,"#remediation","fixed","View independently verified fixes"]
   ];
   return stages.map(s=>`
     <div class="stg interactive${s[2]?" on":""}" data-pipe-route="${s[3]}" ${s[4]&&s[4].length<10?`data-pipe-filter="${s[4]}"`:""} title="${s[s.length-1]}" tabindex="0" role="button">
@@ -278,7 +330,12 @@ function overview(){
     <!-- Dynamic Visualizations Grid -->
     <div class="g3">
       ${card("Security posture","score over time","posture",240)}
-      ${card("Anomaly score","scored events and threshold","anomaly",240)}
+      ${card("Anomaly score","scored events and threshold","anomaly",240,`
+        <button id="btn-reset-anomaly-zoom" class="btn sm" style="display:${(window._ANOMALY_ZOOM)?'inline-flex':'none'};height:22px;padding:0 7px;font-size:10.5px;font-weight:500;align-items:center;gap:3px;flex:none;box-sizing:border-box" title="Reset zoom to full time window" onclick="window.resetAnomalyZoom && window.resetAnomalyZoom()">
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          Reset zoom
+        </button>
+      `)}
       ${card("Event activity","events per minute","activity",240)}
       ${card("Detector comparison","controlled synthetic benchmark","detectors",240)}
       ${f.length?card("Threat severity","findings by status","severity",240)+card("Remediation","seconds per finding","remediation",240):`
@@ -328,6 +385,56 @@ function overview(){
         `).join("")}
       </section>
     </div>
+
+    <!-- Cloud FinOps & Cost Intelligence Summary -->
+    <section class="panel mt">
+      <div class="ph">
+        <span class="pt">Cost Intelligence &amp; AWS Optimization</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <a class="btn sm" href="#cost" onclick="window.COST_TAB='overview'">Open Cost Intelligence &rarr;</a>
+          <a class="btn sm primary" href="#cost" onclick="window.COST_TAB='reports'">Optimization Report &rarr;</a>
+        </div>
+      </div>
+      <div class="pb">
+        ${(() => {
+          const cd = window.COST_DATA;
+          const cov = cd && cd.cost_overview ? cd.cost_overview : null;
+          if (!cov) {
+            return '<div class="mu" style="font-size:12px">Loading Cost Intelligence metrics from simulator inventory...</div>';
+          }
+          const cur = esc(cov.currency || "USD");
+          return `
+            <div class="kpis" style="margin-bottom:0">
+              <div class="panel kp">
+                <div class="lb">Est. Monthly Spend</div>
+                <div class="kv mono">${cur} ${(+cov.estimated_monthly_cost || 0).toFixed(2)}</div>
+                <div class="mu">${cov.analyzed_resources || 0} resource(s) analyzed</div>
+              </div>
+              <div class="panel kp">
+                <div class="lb">Potential Savings</div>
+                <div class="kv ok mono">${cur} ${(+cov.potential_monthly_savings || 0).toFixed(2)}</div>
+                <div class="mu">${(+cov.percentage_reduction || 0).toFixed(1)}% potential reduction</div>
+              </div>
+              <div class="panel kp">
+                <div class="lb">Optimized Monthly</div>
+                <div class="kv mono">${cur} ${(+cov.optimized_monthly_cost || 0).toFixed(2)}</div>
+                <div class="mu">Post-optimization target</div>
+              </div>
+              <div class="panel kp">
+                <div class="lb">Realized Savings</div>
+                <div class="kv ok mono">${cur} ${(+cov.realized_monthly_savings || 0).toFixed(2)}</div>
+                <div class="mu">Verified remediations only</div>
+              </div>
+              <div class="panel kp">
+                <div class="lb">Cost Findings</div>
+                <div class="kv ${cov.optimization_findings > 0 ? 'wr' : 'ok'}">${cov.optimization_findings || 0}</div>
+                <div class="mu">${cov.confirmed_findings || 0} confirmed, ${cov.inferred_findings || 0} inferred</div>
+              </div>
+            </div>
+          `;
+        })()}
+      </div>
+    </section>
   `;
 }
 function findings(){return`<div class="tools" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="fq" class="inp" type="search" placeholder="Search findings (title, rule, ID)..." value="${esc(Q)}" aria-label="Search findings by title, rule, or ID" style="min-width:180px" /><select id="fsev" aria-label="Severity"><option value="">All severities</option>${["Critical","High","Medium","Low"].map(x=>`<option value="${x}" ${FSEV===x?"selected":""}>${x}</option>`).join("")}</select><select id="fst" aria-label="Status"><option value="">All statuses</option><option value="pending" ${FST==="pending"?"selected":""}>Awaiting approval</option><option value="fixed" ${FST==="fixed"?"selected":""}>Remediated</option><option value="rejected" ${FST==="rejected"?"selected":""}>Rejected</option></select><span class="mu" id="fcount"></span></div><section class="panel"><div class="wrap"><table class="tbl" id="ftbl"></table></div></section>`}
@@ -506,6 +613,21 @@ function openEventDrawer(id){
   d.innerHTML=eventDrawerHTML(e);
 }
 let KS="";async function loadMetrics(){const m=await _get("/api/metrics");if(!m)return;M=m;CG.update(ctx());const p=$$("pipe");if(p)p.innerHTML=pipe();const k=JSON.stringify([m.rem.rolled_back,m.rem.items.map(i=>i.ttr)]);if(k!==KS){KS=k;if(route()=="overview"&&BOOT)render()}}
+async function loadOverviewStats(){
+  try{
+    const [st,inc,rem,costOv]=await Promise.all([
+      _get("/api/alerts/stats"),
+      _get("/api/incidents?view=active"),
+      _get("/api/remediations"),
+      _get("/api/cost/overview")
+    ]);
+    if(st)ALERTS_STATS=st;
+    if(inc)INCIDENTS_DATA=inc;
+    if(rem)REM_DATA=rem;
+    if(costOv&&!costOv.error)window.COST_DATA=costOv;
+    if(route()=="overview"&&BOOT)render();
+  }catch(err){}
+}
 function renderInspectorHTML(){
  const edge = window.SELECTED_EDGE;
  const node = window.SELECTED_NODE;
@@ -1411,27 +1533,143 @@ function renderBuilderView() {
   `;
 }
 
+let FINOPS_DEMO = null, FINOPS_DEMO_BOOT = false, FINOPS_DEMO_BUSY = false;
+
+async function loadFinopsDemoStatus() {
+  const data = await _get("/api/cost/demo-scenario");
+  if (data) FINOPS_DEMO = data;
+  FINOPS_DEMO_BOOT = true;
+  if (route() === "lab") render();
+}
+
+function renderFinopsDemoView() {
+  if (!FINOPS_DEMO_BOOT) {
+    loadFinopsDemoStatus();
+    return `<div class="panel sk" style="height:260px"></div>`;
+  }
+  const d = FINOPS_DEMO || {};
+  const loaded = Boolean(d.loaded);
+  const ec2 = d.ec2_instances || [];
+  const ebs = d.ebs_volumes || [];
+  const s3 = d.s3_buckets || [];
+  const iamList = d.reused_identities || [];
+  const ctList = d.reused_trails || [];
+
+  return `
+    <section class="panel">
+      <div class="ph">
+        <div>
+          <span class="pt">FinOps Cloud Cost Demonstration Scenario (Moto)</span>
+          <span class="mu" style="margin-left:8px;font-size:11.5px">Optional, operator-controlled billable infrastructure in local Moto</span>
+        </div>
+        <div>
+          ${d.simulator_available === false ? tg("Simulator Offline", "bad") : loaded ? tg("Loaded in Moto", "ok") : tg("Not Loaded", "gr")}
+        </div>
+      </div>
+      <div class="pb">
+        <p style="font-size:12.5px;margin:0 0 12px;line-height:1.55">
+          Provisions an idempotent set of billable AWS resources tagged <code class="chip">ThreatGuardScenario=finops-demo</code>
+          (2 EC2 instances, attached &amp; unattached EBS volumes, and 2 populated S3 buckets) while preserving default <code>safe_setup()</code> resources.
+        </p>
+        <div class="ac" style="margin-top:0;margin-bottom:16px">
+          <button class="btn primary sm" id="btn-finops-demo-load" ${FINOPS_DEMO_BUSY ? "disabled" : ""}>${FINOPS_DEMO_BUSY ? "Working..." : "Load FinOps Demo Scenario"}</button>
+          <button class="btn sm" id="btn-finops-demo-inspect" ${FINOPS_DEMO_BUSY ? "disabled" : ""}>Inspect Scenario Resources</button>
+          <button class="btn sm" id="btn-finops-demo-refresh-cost">Refresh Cost Intelligence &rarr;</button>
+          <button class="btn sm danger" id="btn-finops-demo-reset" ${FINOPS_DEMO_BUSY || !loaded ? "disabled" : ""}>Reset FinOps Demo Scenario</button>
+        </div>
+
+        <div class="kpis" style="margin-bottom:16px">
+          <div class="panel kp"><div class="lb">Demo EC2 Instances</div><div class="kv mono">${ec2.length}</div><div class="mu">Running &amp; Stopped</div></div>
+          <div class="panel kp"><div class="lb">Demo EBS Volumes</div><div class="kv mono">${ebs.length}</div><div class="mu">Attached &amp; Unattached</div></div>
+          <div class="panel kp"><div class="lb">Demo S3 Buckets</div><div class="kv mono">${s3.length}</div><div class="mu">Populated objects</div></div>
+          <div class="panel kp"><div class="lb">Reused IAM Users</div><div class="kv mono">${iamList.length}</div><div class="mu">${esc(iamList.join(", ") || "None")}</div></div>
+          <div class="panel kp"><div class="lb">Reused Trails</div><div class="kv mono">${ctList.length}</div><div class="mu">${esc(ctList.join(", ") || "None")}</div></div>
+        </div>
+
+        ${loaded ? `
+          <div class="cols2">
+            <section class="panel">
+              <div class="ph"><span class="pt">EC2 Instances (${ec2.length})</span></div>
+              <div class="wrap">
+                <table class="tbl cost-tbl">
+                  <tr><th>Instance ID</th><th>Type</th><th>State</th><th>Tags</th></tr>
+                  ${ec2.map(i => `
+                    <tr>
+                      <td class="mono">${esc(i.instance_id)}</td>
+                      <td class="mono">${esc(i.instance_type)}</td>
+                      <td>${tg(i.state, i.state === "running" ? "ok" : "wr")}</td>
+                      <td class="mono" style="font-size:11px">${esc(_fmtPropSummary(i.tags))}</td>
+                    </tr>
+                  `).join("")}
+                </table>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="ph"><span class="pt">EBS Volumes (${ebs.length})</span></div>
+              <div class="wrap">
+                <table class="tbl cost-tbl">
+                  <tr><th>Volume ID</th><th>Spec</th><th>State</th><th>Attachment</th></tr>
+                  ${ebs.map(v => `
+                    <tr>
+                      <td class="mono">${esc(v.volume_id)}</td>
+                      <td class="mono">${v.size_gb} GB ${esc(v.volume_type)}</td>
+                      <td>${tg(v.state, v.state === "in-use" ? "ok" : "wr")}</td>
+                      <td class="mono" style="font-size:11px">${v.attachments && v.attachments.length ? esc(v.attachments.map(a => a.instance_id + " (" + a.device + ")").join(", ")) : "Unattached"}</td>
+                    </tr>
+                  `).join("")}
+                </table>
+              </div>
+            </section>
+          </div>
+          <section class="panel mt">
+            <div class="ph"><span class="pt">S3 Buckets (${s3.length})</span></div>
+            <div class="wrap">
+              <table class="tbl cost-tbl">
+                <tr><th>Bucket Name</th><th>Objects / Bytes</th><th>Versioning</th><th>Lifecycle</th><th>Tags</th></tr>
+                ${s3.map(b => `
+                  <tr>
+                    <td class="mono"><b>${esc(b.bucket_name)}</b></td>
+                    <td class="mono">${b.object_count} obj / ${b.total_bytes} B</td>
+                    <td>${tg(b.versioning, b.versioning === "Enabled" ? "in" : "gr")}</td>
+                    <td>${tg(b.has_lifecycle ? "Configured" : "None", b.has_lifecycle ? "ok" : "wr")}</td>
+                    <td class="mono" style="font-size:11px">${esc(_fmtPropSummary(b.tags))}</td>
+                  </tr>
+                `).join("")}
+              </table>
+            </div>
+          </section>
+        ` : `<div class="panel">${none("FinOps Demo Scenario is not loaded. Click Load FinOps Demo Scenario (requires Operator Login) to provision simulated EC2, EBS, and S3 resources in Moto.")}</div>`}
+      </div>
+    </section>
+  `;
+}
+
 function lab() {
   if (!SCENARIOS_CATALOG.length) {
     loadScenarioCatalog().then(() => {
       if (route() === "lab") render();
     });
   }
+  if (!FINOPS_DEMO_BOOT) {
+    loadFinopsDemoStatus();
+  }
 
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:10px">
       <div>
-        <h2 style="margin:0;font-size:18px;font-weight:600">IAM Attack Simulation Lab</h2>
-        <div class="mu" style="font-size:12px;margin-top:2px">Isolated Moto AWS attack scenarios, deterministic IAM policy evaluation, and independent post-remediation verification.</div>
+        <h2 style="margin:0;font-size:18px;font-weight:600">Simulation Lab</h2>
+        <div class="mu" style="font-size:12px;margin-top:2px">Isolated IAM attack scenarios, deterministic policy evaluation, and optional Moto FinOps Cost Demo.</div>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn ${LAB_MODE === "catalog" ? "primary" : ""}" id="tab-lab-catalog">Scenario Library (12)</button>
+        <button class="btn ${LAB_MODE === "finops" ? "primary" : ""}" id="tab-lab-finops">FinOps Demo Scenario ${FINOPS_DEMO && FINOPS_DEMO.loaded ? "[LOADED]" : ""}</button>
         <button class="btn ${LAB_MODE === "workbench" ? "primary" : ""}" id="tab-lab-workbench">Workbench ${ACTIVE_RUN ? `(${esc(ACTIVE_RUN.scenario_name)})` : ""}</button>
         <button class="btn ${LAB_MODE === "builder" ? "primary" : ""}" id="tab-lab-builder">Custom Builder</button>
       </div>
     </div>
 
     ${LAB_MODE === "catalog" ? renderCatalogView() :
+      LAB_MODE === "finops" ? renderFinopsDemoView() :
       LAB_MODE === "workbench" ? renderWorkbenchView() :
       renderBuilderView()}
   `;
@@ -1531,37 +1769,49 @@ function alerts() {
       <span class="mu" style="margin-left:auto;font-size:12px">${items.length} of ${st.total || 0} alerts</span>
     </div>
 
-    <div class="cols2">
+    <div class="alerts-layout">
       <!-- Alerts Table -->
       <section class="panel">
         <div class="ph">
           <span class="pt">Alerts Queue</span>
           <span class="mu">Click row to investigate</span>
         </div>
-        <div class="wrap">
-          <table class="tbl alerts-tbl" style="table-layout:fixed;width:100%">
+        <div class="wrap" style="width:100%;min-width:0;overflow-x:hidden">
+          <table class="tbl alerts-tbl">
             <thead>
               <tr>
-                <th style="width:96px;min-width:96px;white-space:nowrap">Alert ID</th>
-                <th style="width:85px;min-width:85px;text-align:center">Severity</th>
-                <th style="min-width:180px">Title &amp; Context</th>
-                <th style="width:130px;min-width:130px">Resource</th>
-                <th style="width:125px;min-width:125px">Status</th>
+                <th class="col-id">Alert ID</th>
+                <th class="col-sev">Severity</th>
+                <th class="col-title">Title &amp; Context</th>
+                <th class="col-res">Resource</th>
+                <th class="col-status">Status</th>
               </tr>
             </thead>
             <tbody>
               ${items.length ? items.map(a => `
                 <tr class="clk ${selected && selected.id === a.id ? 'selected fresh' : ''}" data-select-alert="${esc(a.id)}">
-                  <td class="mono" style="width:96px;min-width:96px;white-space:nowrap;font-weight:700"><b>${esc(a.id)}</b></td>
-                  <td style="text-align:center">${tg(a.severity, a.severity === 'Critical' ? 'crit' : a.severity === 'High' ? 'high' : a.severity === 'Medium' ? 'med' : '')}</td>
-                  <td style="overflow:hidden;text-overflow:ellipsis">
-                    <button type="button" class="tbl-btn" data-select-alert="${esc(a.id)}" aria-label="Inspect alert ${esc(a.id)}: ${esc(a.title)}"><span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(a.title)}">${esc(a.title)}</span></button>
-                    <div class="mu mono" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.detection_source)} · ${esc(a.timestamp)}</div>
+                  <td class="col-id mono" style="font-weight:700"><b>${esc(a.id)}</b></td>
+                  <td class="col-sev">${tg(a.severity, a.severity === 'Critical' ? 'crit' : a.severity === 'High' ? 'high' : a.severity === 'Medium' ? 'med' : '')}</td>
+                  <td class="col-title">
+                    <button type="button" class="tbl-btn" data-select-alert="${esc(a.id)}" aria-label="Inspect alert ${esc(a.id)}: ${esc(a.title)}" style="text-align:left;display:block;width:100%">
+                      <span style="font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35;word-break:break-word" title="${esc(a.title)}">${esc(a.title)}</span>
+                    </button>
+                    <div class="mu mono" style="font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(a.detection_source)} · ${esc(a.timestamp)}">${esc(a.detection_source)} · ${esc(a.timestamp)}</div>
                   </td>
-                  <td class="mono" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(a.affected_resource)}">${esc(a.affected_resource)}</td>
-                  <td>
-                    ${tg(a.status, a.status === 'Resolved' ? 'ok' : a.status === 'Investigating' ? 'in' : a.status === 'New' ? 'bad' : 'wr')}
-                    ${a.incident_id ? `<div style="margin-top:3px"><a class="lk mono" href="#incidents" data-link-incident="${esc(a.incident_id)}" style="font-size:10px;text-decoration:none;display:inline-flex;align-items:center;gap:3px"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>${esc(a.incident_id)} <span class="chip" style="font-size:9px;padding:1px 4px">${esc(a.incident_status || 'Active')}</span></a></div>` : ''}
+                  <td class="col-res mono" style="font-size:11px;line-height:1.35;word-break:break-word;overflow-wrap:anywhere" title="${esc(a.affected_resource)}">
+                    <span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;overflow-wrap:anywhere">${esc(a.affected_resource)}</span>
+                  </td>
+                  <td class="col-status">
+                    <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;width:100%">
+                      ${tg(a.status, a.status === 'Resolved' ? 'ok' : a.status === 'Investigating' ? 'in' : a.status === 'New' ? 'bad' : 'wr')}
+                      ${a.incident_id ? `
+                        <a class="lk mono" href="#incidents" data-link-incident="${esc(a.incident_id)}" title="Linked Incident: ${esc(a.incident_id)} (${esc(a.incident_status || 'Active')})" style="font-size:10px;text-decoration:none;display:inline-flex;align-items:center;gap:3px;background:var(--sf2);padding:2px 6px;border-radius:4px;border:1px solid var(--ln);white-space:nowrap">
+                          <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                          <span style="font-weight:600">${esc(a.incident_id)}</span>
+                          <span style="opacity:0.75;font-size:9px">· ${esc(a.incident_status || 'Active')}</span>
+                        </a>
+                      ` : ''}
+                    </div>
                   </td>
                 </tr>
               `).join("") : `<tr><td colspan="5">${none("No alerts match active filters.")}</td></tr>`}
@@ -1571,37 +1821,38 @@ function alerts() {
       </section>
 
       <!-- Alert Investigation Inspector -->
-      <section class="panel">
-        <div class="ph">
-          <span class="pt">Alert Investigation &amp; Triage</span>
-          ${selected ? tg(selected.status, selected.status === 'Resolved' ? 'ok' : selected.status === 'Investigating' ? 'in' : 'wr') : ''}
+      <section class="panel" style="min-width:0;overflow:hidden">
+        <div class="ph" style="display:flex;justify-content:space-between;align-items:center;gap:8px;min-width:0">
+          <span class="pt" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Alert Investigation &amp; Triage</span>
+          <div style="flex:none">${selected ? tg(selected.status, selected.status === 'Resolved' ? 'ok' : selected.status === 'Investigating' ? 'in' : 'wr') : ''}</div>
         </div>
         ${selected ? (() => {
           const isMotoSim = (selected.environment || '').toLowerCase().includes('moto') || (selected.environment || '').toLowerCase().includes('simulat');
           return `
-          <div class="pb">
+          <div class="pb" style="min-width:0;overflow-x:hidden">
             <!-- Environment Badge & Alert Title Header -->
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px">
-              <div>
-                <div style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-bottom:6px;${isMotoSim ? 'background:var(--fl);color:var(--ac);border:1px solid rgba(105,167,255,0.3)' : 'background:rgba(229,166,66,0.12);color:var(--wr);border:1px solid rgba(229,166,66,0.3)'}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px;flex-wrap:wrap;min-width:0">
+              <div style="flex:1;min-width:0">
+                <div style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-bottom:6px;max-width:100%;flex-wrap:wrap;word-break:break-word;${isMotoSim ? 'background:var(--fl);color:var(--ac);border:1px solid rgba(249,115,22,0.3)' : 'background:rgba(229,166,66,0.12);color:var(--wr);border:1px solid rgba(229,166,66,0.3)'}">
                   <span>${isMotoSim ? '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><path d="M10 2v7.31L4.14 19.3A2 2 0 0 0 6 22h12a2 2 0 0 0 1.86-2.7L14 9.31V2"/><path d="M8.5 2h7"/></svg>SIMULATED ENVIRONMENT (Moto Local Cloud)' : '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>PRODUCTION ENVIRONMENT (Real AWS Cloud)'}</span>
                   <span style="opacity:0.7">· Account: ${esc(selected.account_id)}</span>
                 </div>
-                <h3 style="margin:0 0 4px;font-size:15px;font-weight:600">${esc(selected.title)}</h3>
-                <div class="mu mono" style="font-size:11px">Alert ID: ${esc(selected.id)} · Target Resource: ${esc(selected.affected_resource)}</div>
+                <h3 style="margin:0 0 4px;font-size:15px;font-weight:600;line-height:1.35;word-break:break-word">${esc(selected.title)}</h3>
+                <div class="mu mono" style="font-size:11px;word-break:break-all;line-height:1.4">Alert ID: ${esc(selected.id)} · Target Resource: ${esc(selected.affected_resource)}</div>
               </div>
-              ${tg(selected.severity, selected.severity === 'Critical' ? 'crit' : selected.severity === 'High' ? 'high' : 'med')}
+              <div style="flex:none">
+                ${tg(selected.severity, selected.severity === 'Critical' ? 'crit' : selected.severity === 'High' ? 'high' : 'med')}
+              </div>
             </div>
 
             <!-- Lifecycle & Linked Incident Status -->
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;flex-wrap:wrap">
-              <div>
-                <span style="font-size:11px;font-weight:600;color:var(--mu);margin-right:6px">Alert Status:</span>
+            <div style="display:flex;align-items:center;gap:8px 12px;margin-bottom:12px;background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;flex-wrap:wrap;min-width:0">
+              <div style="display:inline-flex;align-items:center;gap:6px">
+                <span style="font-size:11px;font-weight:600;color:var(--mu)">Alert Status:</span>
                 ${tg(selected.status, selected.status === 'Resolved' ? 'ok' : selected.status === 'Investigating' ? 'in' : selected.status === 'New' ? 'bad' : 'wr')}
               </div>
-              <div style="width:1px;height:18px;background:var(--ln)"></div>
               ${selected.incident_id ? `
-                <div style="display:flex;align-items:center;gap:8px">
+                <div style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap">
                   <span style="font-size:11px;font-weight:600;color:var(--mu)">Linked Incident:</span>
                   <a class="chip lk" href="#incidents" data-link-incident="${esc(selected.incident_id)}" style="text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px">
                     <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>${esc(selected.incident_id)}
@@ -1616,38 +1867,38 @@ function alerts() {
             </div>
 
             <!-- Trigger Explanation & Telemetry Classification -->
-            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px;margin-bottom:12px">
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px;margin-bottom:12px;min-width:0">
               <div class="lb" style="margin-top:0">Trigger Explanation &amp; Classification</div>
-              <p style="font-size:12px;margin:0 0 6px">${esc(selected.trigger_reason || 'Condition violated baseline security threshold.')}</p>
-              <div class="mu" style="font-size:11px;display:flex;gap:12px;flex-wrap:wrap">
-                <span>Detection Source: <b>${esc(selected.detection_source)}</b></span>
-                <span>Category: <b>${esc(selected.category || 'Threat Detection')}</b></span>
-                <span>Rule Ref: <code class="mono">${esc(selected.rule_ref || 'N/A')}</code></span>
-                <span>Risk Score: <b>${selected.risk_score}/100</b></span>
+              <p style="font-size:12px;margin:0 0 8px;line-height:1.45;word-break:break-word">${esc(selected.trigger_reason || 'Condition violated baseline security threshold.')}</p>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 130px), 1fr));gap:6px">
+                <div style="background:var(--sf);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px;min-width:0;word-break:break-word"><span class="mu">Detection Source:</span> <b>${esc(selected.detection_source)}</b></div>
+                <div style="background:var(--sf);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px;min-width:0;word-break:break-word"><span class="mu">Category:</span> <b>${esc(selected.category || 'Threat Detection')}</b></div>
+                <div style="background:var(--sf);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px;min-width:0;word-break:break-word"><span class="mu">Rule Ref:</span> <code class="mono">${esc(selected.rule_ref || 'N/A')}</code></div>
+                <div style="background:var(--sf);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px;min-width:0"><span class="mu">Risk Score:</span> <b>${selected.risk_score}/100</b></div>
               </div>
             </div>
 
             <!-- Isolation Forest Anomaly Scoring (XAI Engine) -->
             ${selected.ml_anomaly_score !== null && selected.ml_anomaly_score !== undefined ? `
-              <div style="background:var(--fl);border:1px solid var(--ac);border-radius:6px;padding:10px;margin-bottom:12px">
-                <div class="lb" style="margin-top:0;display:flex;justify-content:space-between;align-items:center">
+              <div style="background:var(--fl);border:1px solid var(--ac);border-radius:6px;padding:10px;margin-bottom:12px;min-width:0">
+                <div class="lb" style="margin-top:0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
                   <span>Isolation Forest Anomaly Scoring (XAI Engine)</span>
                   ${selected.ml_anomaly_score >= (selected.ml_explanation?.threshold ?? 0.65) ?
                     '<span class="chip" style="background:rgba(240,82,82,0.18);color:var(--bad);border:1px solid var(--bad);font-weight:600">ANOMALOUS (Outlier)</span>' :
                     '<span class="chip" style="background:rgba(67,185,139,0.18);color:var(--ok);border:1px solid var(--ok);font-weight:600">NORMAL</span>'
                   }
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 140px), 1fr));gap:8px;font-size:12px;margin-bottom:8px">
                   <div><b>Calculated Anomaly Score:</b> <span class="mono bad" style="font-size:13px;font-weight:700">${selected.ml_anomaly_score.toFixed(3)}</span></div>
                   <div><b>Detection Threshold:</b> <span class="mono">${((selected.ml_explanation && selected.ml_explanation.threshold !== undefined) ? Number(selected.ml_explanation.threshold).toFixed(3) : "0.610")}</span></div>
                   ${selected.ml_explanation && selected.ml_explanation.anomaly_delta ? `<div><b>Anomaly Delta:</b> <span class="mono">${esc(selected.ml_explanation.anomaly_delta)}</span></div>` : ''}
-                  <div><b>Algorithm:</b> <span class="mono">Isolation Forest (200 Trees, Contamination=0.03)</span></div>
+                  <div style="word-break:break-word"><b>Algorithm:</b> <span class="mono">Isolation Forest (200 Trees)</span></div>
                 </div>
                 ${selected.ml_explanation && selected.ml_explanation.features ? `
                   <div class="mu" style="font-size:11px;margin-top:6px;font-weight:600">Raw Telemetry Observations (Observed Window):</div>
-                  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:6px;margin:6px 0">
+                  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 130px), 1fr));gap:6px;margin:6px 0">
                     ${Object.entries(selected.ml_explanation.features).map(([fKey, fVal]) => `
-                      <div style="background:var(--sf2);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px">
+                      <div style="background:var(--sf2);padding:6px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px;min-width:0;word-break:break-word">
                         <span class="mu">${esc(fKey)}:</span> <b>${esc(String(fVal))}</b>
                       </div>
                     `).join("")}
@@ -1657,9 +1908,9 @@ function alerts() {
                   <div class="mu" style="font-size:11px;margin-top:8px;font-weight:600">Tree-Path Information Gain Feature Attributions (200 Trees):</div>
                   <div style="display:flex;flex-direction:column;gap:4px;margin:6px 0">
                     ${selected.ml_explanation.top_features.map(tf => `
-                      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--sf2);padding:4px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px">
-                        <span>${esc(tf.description || tf.name)}</span>
-                        <span class="mono" style="font-weight:700;color:var(--ac)">${(Number(tf.weight) * 100).toFixed(1)}%</span>
+                      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--sf2);padding:4px 8px;border-radius:4px;border:1px solid var(--ln);font-size:11px;gap:8px">
+                        <span style="word-break:break-word">${esc(tf.description || tf.name)}</span>
+                        <span class="mono" style="font-weight:700;color:var(--ac);flex:none">${(Number(tf.weight) * 100).toFixed(1)}%</span>
                       </div>
                     `).join("")}
                   </div>
@@ -1674,7 +1925,7 @@ function alerts() {
 
             <!-- Readable Evidence Breakdown -->
             <div class="lb">Readable Evidence Breakdown</div>
-            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;margin-bottom:8px">
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:8px 12px;margin-bottom:8px;min-width:0">
               ${Object.entries(selected.evidence || {}).length ? Object.entries(selected.evidence).map(([k, v]) => {
                 const label = k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
                 let displayVal = v;
@@ -1686,9 +1937,9 @@ function alerts() {
                   displayVal = JSON.stringify(v);
                 }
                 return `
-                  <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--ln);font-size:12px">
-                    <span class="mu"><b>${esc(label)}:</b></span>
-                    <span class="mono ${valClass}">${esc(String(displayVal))}</span>
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--ln);font-size:12px;gap:8px;flex-wrap:wrap">
+                    <span class="mu" style="flex:none;max-width:140px"><b>${esc(label)}:</b></span>
+                    <span class="mono ${valClass}" style="word-break:break-all;text-align:right;flex:1;min-width:min(100%,130px)">${esc(String(displayVal))}</span>
                   </div>
                 `;
               }).join("") : `<div class="mu" style="font-size:12px">No structured telemetry evidence captured.</div>`}
@@ -1704,7 +1955,7 @@ function alerts() {
             </div>
 
             <div class="lb">SOC Analyst Actions</div>
-            <div class="ac" style="margin-top:8px">
+            <div class="ac" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
               <button class="btn sm" id="btn-al-ack" data-id="${esc(selected.id)}">Acknowledge</button>
               <button class="btn sm" id="btn-al-inv" data-id="${esc(selected.id)}">Investigate</button>
               <button class="btn sm primary" id="btn-al-res" data-id="${esc(selected.id)}">Resolve Alert</button>
@@ -1767,7 +2018,7 @@ function incidents() {
       </div>
     </div>
 
-    <div class="cols2">
+    <div class="alerts-layout">
       <!-- Incidents List -->
       <section class="panel">
         <div class="ph">
@@ -1823,7 +2074,7 @@ function incidents() {
             <!-- B: Security Issue Description -->
             ${selected.description ? `
               <div class="lb">Security Issue Description</div>
-              <div style="font-size:12px;margin-bottom:12px;white-space:pre-line;background:var(--bg2);padding:10px;border-radius:6px;border:1px solid var(--ln)">${esc(selected.description)}</div>
+              <div style="font-size:12px;margin-bottom:12px;white-space:pre-line;background:var(--sf2);padding:10px;border-radius:6px;border:1px solid var(--ln)">${esc(selected.description)}</div>
             ` : ''}
 
             <div class="lb">Incident Summary</div>
@@ -1832,7 +2083,7 @@ function incidents() {
             <!-- C: Detection Evidence -->
             ${selected.escalation_evidence ? `
               <div class="lb">Detection Evidence</div>
-              <div style="background:var(--bg2);padding:12px;border-radius:6px;border:1px solid var(--ln);margin-bottom:12px">
+              <div style="background:var(--sf2);padding:12px;border-radius:6px;border:1px solid var(--ln);margin-bottom:12px">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
                   <div><b>Detection Source:</b> ${esc(selected.escalation_evidence.detection_source || selected.detection_source || 'N/A')}</div>
                   <div><b>Rule Ref:</b> ${esc(selected.escalation_evidence.rule_ref || 'N/A')}</div>
@@ -1983,7 +2234,7 @@ function remediation() {
       </div>
     </div>
 
-    <div class="cols2">
+    <div class="alerts-layout">
       <!-- Tasks List -->
       <section class="panel">
         <div class="ph">
@@ -2119,7 +2370,169 @@ async function loadArchitecture() {
   const data = await _get("/api/architecture");
   if (data) ARCH_DATA = data;
   ARCH_BOOT = true;
-  if (route() === "architecture") render();
+  if (route() === "architecture" || route() === "portfolio") render();
+}
+
+function portfolio() {
+  if (!ARCH_BOOT) {
+    loadArchitecture();
+    return `<div class="panel sk" style="height:400px"></div>`;
+  }
+  const d = ARCH_DATA || {};
+  const highlights = d.engineering_highlights || [];
+  const stack = d.tech_stack || {};
+  const diffs = d.core_differentiators || [];
+
+  return `
+    <!-- Portfolio Hero Section -->
+    <section class="panel" style="margin-bottom:16px;background:var(--sf2);border:1px solid var(--ln);padding:24px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+        <div style="max-width:760px">
+          <div style="margin-bottom:12px">
+            <img src="/static/img/threatguard-brand-dark.png" alt="ThreatGuard Brand Wordmark" style="height:46px;max-width:100%;object-fit:contain">
+          </div>
+          <p style="font-size:13.5px;line-height:1.65;margin:0 0 14px;color:var(--tx)">
+            A defense-in-depth cloud security platform engineered for multi-hop IAM privilege escalation discovery, streaming behavioral anomaly detection with explainable attribution, human-in-the-loop remediation governance, and tamper-evident cryptographic auditing.
+          </p>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px" class="mu">
+            <span>Author: <b>Asif Shaik</b></span>
+            <span>&middot;</span>
+            <span>Degree: <b>B.Tech CSE (AI &amp; ML)</b></span>
+            <span>&middot;</span>
+            <span>Academic Year: <b>2026-2027</b></span>
+            <span>&middot;</span>
+            <a class="lk" href="https://github.com/asifshaik06/threatguard" target="_blank">GitHub Repository &rarr;</a>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:200px">
+          <a class="btn primary" href="#overview" style="text-decoration:none;text-align:center">Launch SOC Dashboard &rarr;</a>
+          <a class="btn" href="#demo" style="text-decoration:none;text-align:center">21-Step Guided Viva Walkthrough &rarr;</a>
+          <a class="btn" href="#architecture" style="text-decoration:none;text-align:center">10-Stage Pipeline Architecture &rarr;</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem Statement, Research Motivation & Core Differentiators -->
+    <div class="cols2" style="margin-bottom:16px">
+      <section class="panel">
+        <div class="ph"><span class="pt">Problem Statement &amp; Research Motivation</span></div>
+        <div class="pb">
+          <p style="font-size:12.5px;line-height:1.65;margin:0 0 12px">
+            Modern enterprise cloud infrastructures suffer from structural security visibility gaps. Multi-cloud IAM environments contain thousands of interdependent roles and policies where attackers exploit chained privileges rather than direct root access. Existing Cloud Security Posture Management (CSPM) tools alert on isolated symptoms, fail to uncover multi-hop escalation paths, treat machine learning as an unexplainable black box, and perform unverified remediations without cryptographic non-repudiation.
+          </p>
+          <div class="lb">ThreatGuard Architectural Solution</div>
+          <p style="font-size:12.5px;line-height:1.65;margin:0">
+            ThreatGuard bridges this divide through an integrated, verifiable pipeline: NetworkX directed graph analysis for multi-hop privilege escalation discovery, streaming identity-window Isolation Forest detection calibrated at threshold tau = 0.610 with Tree-Path attribution, authenticated human-in-the-loop remediation with independent post-fix verification (PASS/PARTIAL/FAIL), and a SHA-256 hash-chained SQLite audit trail.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="ph"><span class="pt">Core Engineering Differentiators</span></div>
+        <div class="pb">
+          <ul style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.75">
+            ${diffs.map(df => `<li>${esc(df)}</li>`).join("")}
+          </ul>
+          <div style="margin-top:14px;background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+            <div class="lb" style="margin-top:0">Safe Offline &amp; Live Deployment Models</div>
+            <div class="mu" style="font-size:12px;line-height:1.5">
+              Operates out-of-the-box against a local Moto AWS simulator on <code>http://127.0.0.1:5000</code> for zero-cost, risk-free academic examination, with strict opt-in environment flags (<code>CG_ALLOW_LIVE_SETUP=1</code>) for live AWS production monitoring.
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Demonstration Guide for Examiners & Interviewers -->
+    <section class="panel" style="margin-bottom:16px">
+      <div class="ph">
+        <span class="pt">5-Step Live Demonstration Guide</span>
+        <span class="mu">Hands-on evaluation workflow for university examiners, recruiters, and technical interviewers</span>
+      </div>
+      <div class="pb">
+        <div class="cols2" style="gap:12px">
+          <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px">
+            <div style="font-weight:600;font-size:13px;color:var(--ac);margin-bottom:4px">Step 1: Baseline Posture &amp; Telemetry</div>
+            <p style="font-size:12px;line-height:1.5;margin:0 0 6px">Observe the real-time security posture score (0-100%), event throughput, and active KPI counters across Alerts, Incidents, and Remediations.</p>
+            <a class="lk" href="#overview" style="font-size:11.5px">Open Overview Dashboard &rarr;</a>
+          </div>
+          <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px">
+            <div style="font-weight:600;font-size:13px;color:var(--magenta);margin-bottom:4px">Step 2: Attack Simulation Lab</div>
+            <p style="font-size:12px;line-height:1.5;margin:0 0 6px">Trigger isolated attack scenarios (e.g. privilege escalation, S3 public exposure, credential abuse) against the local Moto simulator.</p>
+            <a class="lk" href="#lab" style="font-size:11.5px">Open Simulation Lab &rarr;</a>
+          </div>
+          <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px">
+            <div style="font-weight:600;font-size:13px;color:var(--violet);margin-bottom:4px">Step 3: Graph Attack Paths &amp; Blast Radius</div>
+            <p style="font-size:12px;line-height:1.5;margin:0 0 6px">Trace multi-hop escalation trajectories (intern-dev &rarr; dev-role &rarr; cicd-deployer &rarr; admin-role) and compute transitive blast radius.</p>
+            <a class="lk" href="#graph" style="font-size:11.5px">Open IAM Attack Graph &rarr;</a>
+          </div>
+          <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px">
+            <div style="font-weight:600;font-size:13px;color:var(--amber);margin-bottom:4px">Step 4: Machine Learning &amp; Explainable AI</div>
+            <p style="font-size:12px;line-height:1.5;margin:0 0 6px">Inspect continuous 12-feature sliding windows, Isolation Forest anomaly scores against tau = 0.610, and Tree-Path attribution narratives.</p>
+            <a class="lk" href="#threats" style="font-size:11.5px">Open Detection &amp; XAI &rarr;</a>
+          </div>
+          <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px" class="span2">
+            <div style="font-weight:600;font-size:13px;color:var(--ok);margin-bottom:4px">Step 5: Verified Remediation &amp; Cryptographic Ledger</div>
+            <p style="font-size:12px;line-height:1.5;margin:0 0 6px">Review before/after policy diffs, approve remediation with human-in-the-loop control, observe independent closed-loop verification [PASS], and verify the SHA-256 hash-chain integrity.</p>
+            <div style="display:flex;gap:12px">
+              <a class="lk" href="#remediation" style="font-size:11.5px">Open Remediation Workspace &rarr;</a>
+              <a class="lk" href="#audit" style="font-size:11.5px">Open Audit &amp; Ledger &rarr;</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 14 Engineering & Technical Highlights (Recruiter Presentation) -->
+    <section class="panel" style="margin-bottom:16px">
+      <div class="ph">
+        <span class="pt">Engineering &amp; Technical Highlights (14 Core Modules)</span>
+        <span class="mu">Technical problem solved, engineering approach, implementation details, and live demonstration</span>
+      </div>
+      <div class="pb">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px">
+          ${highlights.map((h, i) => `
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:14px;display:flex;flex-direction:column;justify-content:space-between">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+                  <span style="font-weight:600;font-size:13px;color:var(--tx)">${i+1}. ${esc(h.title)}</span>
+                  <span class="chip mono" style="font-size:10px">#${esc(h.target_page)}</span>
+                </div>
+                <div style="font-size:12px;line-height:1.5;margin-bottom:6px">
+                  <b style="color:var(--sub)">Problem:</b> ${esc(h.problem_solved)}
+                </div>
+                <div style="font-size:12px;line-height:1.5;margin-bottom:6px">
+                  <b style="color:var(--ac)">Approach:</b> ${esc(h.technical_approach)}
+                </div>
+                <div style="font-size:11px;line-height:1.4;margin-bottom:10px;background:var(--sf);border:1px solid var(--ln);padding:6px 8px;border-radius:4px" class="mono">
+                  ${esc(h.implementation_details)}
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--ln);padding-top:8px">
+                <span class="mu" style="font-size:11px">${esc(h.dashboard_demonstration)}</span>
+                <a class="btn sm" href="#${esc(h.target_page)}" style="text-decoration:none;white-space:nowrap;margin-left:8px">Live Demo &rarr;</a>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </section>
+
+    <!-- Technology Stack -->
+    <section class="panel">
+      <div class="ph"><span class="pt">Technology Stack &amp; Architecture Invariants</span></div>
+      <div class="pb">
+        <div class="g3">
+          ${Object.entries(stack).map(([k, v]) => `
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+              <div class="lb" style="margin-top:0">${esc(k)}</div>
+              <div class="mono" style="font-size:12px;font-weight:600">${esc(v)}</div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </section>
+  `;
 }
 
 function architecture() {
@@ -2133,12 +2546,19 @@ function architecture() {
   const curStage = stages.find(s => s.step === SELECTED_ARCH_STAGE) || stages[0] || {};
   const diffs = d.core_differentiators || [];
   const stack = d.tech_stack || {};
+  const highlights = d.engineering_highlights || [];
 
   return `
-    <div style="margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px">
-      <h2 style="margin:0 0 4px;font-size:18px;font-weight:600">Project Architecture &amp; Technical Reference</h2>
-      <div class="mu" style="font-size:12px">
-        <b>${esc(d.academic_context || "Final Year B.Tech CSE (AI & ML) Project")}</b> · Author: <b>${esc(d.author || "Asif Shaik")}</b> · <a class="lk" href="${esc(d.repository || 'https://github.com/asifshaik06/threatguard')}" target="_blank">GitHub Repository</a>
+    <div style="margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0 0 4px;font-size:18px;font-weight:600">Project Architecture &amp; Technical Reference</h2>
+        <div class="mu" style="font-size:12px">
+          <b>${esc(d.academic_context || "Final Year B.Tech CSE (AI & ML) Project")}</b> · Author: <b>${esc(d.author || "Asif Shaik")}</b> · <a class="lk" href="${esc(d.repository || 'https://github.com/asifshaik06/threatguard')}" target="_blank">GitHub Repository</a>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a class="btn sm primary" href="#demo" style="text-decoration:none">21-Step Guided Viva &rarr;</a>
+        <a class="btn sm" href="#portfolio" style="text-decoration:none">Portfolio Overview</a>
       </div>
     </div>
 
@@ -2201,6 +2621,41 @@ function architecture() {
       </div>
     </section>
 
+    <!-- Engineering & Technical Highlights (14 Core Capabilities) -->
+    <section class="panel mt">
+      <div class="ph">
+        <span class="pt">Engineering &amp; Technical Highlights (14 Core Capabilities)</span>
+        <span class="mu">Technical problem, engineering approach, implementation details, and live demonstration</span>
+      </div>
+      <div class="pb">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px">
+          ${highlights.map((h, i) => `
+            <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:14px;display:flex;flex-direction:column;justify-content:space-between">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+                  <span style="font-weight:600;font-size:13px;color:var(--tx)">${i+1}. ${esc(h.title)}</span>
+                  <span class="chip mono" style="font-size:10px">#${esc(h.target_page)}</span>
+                </div>
+                <div style="font-size:12px;line-height:1.5;margin-bottom:6px">
+                  <b style="color:var(--sub)">Problem:</b> ${esc(h.problem_solved)}
+                </div>
+                <div style="font-size:12px;line-height:1.5;margin-bottom:6px">
+                  <b style="color:var(--ac)">Approach:</b> ${esc(h.technical_approach)}
+                </div>
+                <div style="font-size:11px;line-height:1.4;margin-bottom:10px;background:var(--sf);border:1px solid var(--ln);padding:6px 8px;border-radius:4px" class="mono">
+                  ${esc(h.implementation_details)}
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--ln);padding-top:8px">
+                <span class="mu" style="font-size:11px">${esc(h.dashboard_demonstration)}</span>
+                <a class="btn sm" href="#${esc(h.target_page)}" style="text-decoration:none;white-space:nowrap;margin-left:8px">Demo &rarr;</a>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </section>
+
     <!-- Technology Stack Breakdown -->
     <section class="panel mt">
       <div class="ph"><span class="pt">Complete Technology Stack</span></div>
@@ -2218,7 +2673,7 @@ function architecture() {
   `;
 }
 
-let DEMO_DATA = null, CURRENT_DEMO_STEP = 1, DEMO_BOOT = false;
+let DEMO_DATA = null, CURRENT_DEMO_STEP = 1, DEMO_BOOT = false, DEMO_VIEW_MODE = "viva21";
 
 async function loadDemo() {
   const data = await _get("/api/demo");
@@ -2234,17 +2689,24 @@ function demo() {
   }
 
   const d = DEMO_DATA || {};
-  const steps = d.steps || [];
+  const isViva = DEMO_VIEW_MODE === "viva21";
+  const steps = (isViva && d.viva_steps && d.viva_steps.length) ? d.viva_steps : (d.steps || []);
   const curStep = steps.find(s => s.step === CURRENT_DEMO_STEP) || steps[0] || {};
-  const total = steps.length || 17;
+  const total = steps.length || (isViva ? 21 : 17);
 
   return `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:12px">
       <div>
-        <h2 style="margin:0;font-size:18px;font-weight:600">Guided Viva Demonstration Mode</h2>
-        <div class="mu" style="font-size:12px;margin-top:2px">17-Step interactive walkthrough designed for external university examiners, technical evaluators, and project presentation.</div>
+        <h2 style="margin:0;font-size:18px;font-weight:600">Guided Viva &amp; Demonstration Mode</h2>
+        <div class="mu" style="font-size:12px;margin-top:2px">
+          ${isViva ? '21-Step comprehensive examination sequence for external university evaluators, academic viva, and technical interviews.' : '17-Step core presentation script for faculty evaluation and executive walkthrough.'}
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:4px;background:var(--sf2);padding:2px;border-radius:6px;border:1px solid var(--ln)">
+          <button class="btn sm ${isViva ? 'primary' : ''}" id="btn-toggle-viva21" style="font-size:11px">21-Step Viva</button>
+          <button class="btn sm ${!isViva ? 'primary' : ''}" id="btn-toggle-core17" style="font-size:11px">17-Step Summary</button>
+        </div>
         <span class="chip">Step ${curStep.step || 1} of ${total}</span>
         <button class="btn sm primary" id="btn-demo-jump-dash" data-target="${esc(curStep.target_page || 'overview')}">Launch in Dashboard</button>
       </div>
@@ -2258,7 +2720,7 @@ function demo() {
         <select id="sel-demo-step" style="height:28px;font-size:12px">
           ${steps.map(s => `
             <option value="${s.step}" ${s.step === CURRENT_DEMO_STEP ? 'selected' : ''}>
-              ${s.step}. ${esc(s.title)} (${esc(s.target_page)})
+              ${s.step}. ${esc(s.title)} (#${esc(s.target_page)})
             </option>
           `).join("")}
         </select>
@@ -2273,6 +2735,10 @@ function demo() {
         <span class="chip mono" style="color:var(--ac)">Target: #${esc(curStep.target_page)}</span>
       </div>
       <div class="pb">
+        <div style="font-size:13px;line-height:1.6;margin-bottom:14px;color:var(--tx)">
+          ${esc(curStep.description || '')}
+        </div>
+
         <div class="lb" style="margin-top:0">Evaluator Question / Viva Context</div>
         <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">
           <b>Faculty / Examiner Question:</b> "${esc(curStep.evaluator_question || 'Explain the technical architecture and verifiable guarantees of this stage.')}"
@@ -2292,7 +2758,7 @@ function demo() {
 
         <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--ln);padding-top:12px;flex-wrap:wrap;gap:8px">
           <div class="mu" style="font-size:12px">
-            Pressing <b>"Launch in Dashboard"</b> will automatically switch the page view to <code>#${esc(curStep.target_page)}</code>.
+            Pressing <b>"Launch in Dashboard"</b> switches directly to <code>#${esc(curStep.target_page)}</code>.
           </div>
           <button class="btn primary" id="btn-demo-action-launch" data-target="${esc(curStep.target_page || 'overview')}">
             Switch to #${esc(curStep.target_page)} &rarr;
@@ -2303,7 +2769,677 @@ function demo() {
   `;
 }
 
-function refresh(){const r=route();if(r=="findings")paintFindings();if(r=="events")loadEvents();if(r=="audit")loadAudit();if(r=="graph"&&window.loadGraph)loadGraph();if(r=="alerts")loadAlerts();if(r=="incidents")loadIncidents();if(r=="remediation"||r=="response")loadRemediations();if(r=="architecture")loadArchitecture();if(r=="demo")loadDemo()}
+let COST_BOOT = false, COST_PERIOD = "monthly", COST_SVC = "", COST_HOURS = "730", COST_CLASS_FILTER = "", COST_REPORTS = [], COST_ACTIVE_REPORT = null, COST_SHOW_RAW_TEXT = false, COST_GENERATING = false, COST_HISTORY_OPEN = false;
+window.COST_TAB = window.COST_TAB || "overview";
+
+async function loadCostOverview() {
+  const params = new URLSearchParams();
+  if (COST_PERIOD) params.set("period", COST_PERIOD);
+  if (COST_SVC) params.set("service", COST_SVC);
+  if (COST_HOURS) params.set("hours", COST_HOURS);
+  const [ov, rpts, rem] = await Promise.all([
+    _get(`/api/cost/overview?${params.toString()}`),
+    _get(`/api/cost/reports?limit=30`),
+    _get(`/api/remediations`),
+  ]);
+  if (ov && !ov.error) window.COST_DATA = ov;
+  if (rpts && Array.isArray(rpts.reports)) COST_REPORTS = rpts.reports;
+  if (rem) REM_DATA = rem;
+  if (!COST_ACTIVE_REPORT && COST_REPORTS.length > 0) {
+    const det = await _get(`/api/cost/reports/${encodeURIComponent(COST_REPORTS[0].report_id)}`);
+    if (det && !det.error) {
+      COST_ACTIVE_REPORT = det;
+      COST_HISTORY_OPEN = false;
+    }
+  }
+  COST_BOOT = true;
+  if (route() === "cost") render();
+}
+
+async function loadCostReportsOnly() {
+  const params = new URLSearchParams();
+  if (COST_SVC) params.set("service", COST_SVC);
+  if (COST_PERIOD) params.set("period", COST_PERIOD);
+  const rpts = await _get(`/api/cost/reports?${params.toString()}`);
+  if (rpts && Array.isArray(rpts.reports)) COST_REPORTS = rpts.reports;
+  if (route() === "cost") render();
+}
+
+async function loadCostReportDetail(reportId) {
+  const det = await _get(`/api/cost/reports/${encodeURIComponent(reportId)}`);
+  if (det && !det.error) {
+    COST_ACTIVE_REPORT = det;
+    COST_HISTORY_OPEN = false;
+    if (route() === "cost") render();
+  } else {
+    showToast((det && det.error) || "Failed to load report details.", "bad");
+  }
+}
+
+async function generateCostReportUI() {
+  if (COST_GENERATING) return;
+  COST_GENERATING = true;
+  render();
+  try {
+    const res = await authFetch("/api/cost/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reporting_period: COST_PERIOD || "monthly",
+        service: COST_SVC || "",
+        operating_hours: Number(COST_HOURS || 730),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok && data.report) {
+      COST_ACTIVE_REPORT = data.report;
+      COST_HISTORY_OPEN = false;
+      window.COST_TAB = "reports";
+      showToast(`Report ${data.report_id} generated and stored.`, "ok");
+      await loadCostOverview();
+    } else if (res.status !== 401) {
+      showToast(data.error || "Failed to generate cost optimization report.", "bad");
+    }
+  } finally {
+    COST_GENERATING = false;
+    if (route() === "cost") render();
+  }
+}
+
+async function proposeCostRemediationUI(findingId) {
+  const res = await authFetch(`/api/cost/findings/${encodeURIComponent(findingId)}/remediate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.ok) {
+    showToast(`Remediation task ${data.remediation.id} staged for human approval.`, "ok");
+    await loadCostOverview();
+  } else if (res.status !== 401) {
+    showToast(data.error || "Failed to stage remediation task.", "bad");
+  }
+}
+
+function _fmtMoney(v, cur = "USD") {
+  if (v === null || v === undefined || isNaN(+v)) return "Unavailable";
+  const num = +v;
+  if (num !== 0 && Math.abs(num) < 0.01) return `${cur} ${num.toFixed(4)}`;
+  return `${cur} ${num.toFixed(2)}`;
+}
+
+function _costStatusBadge(st) {
+  const s = String(st || "Resource unavailable");
+  if (s === "Calculated") return tg(s, "ok");
+  if (s === "Zero usage observed" || s === "Zero eligible spend" || s === "Governance only") return tg(s, "gr");
+  if (s === "Estimate based on assumptions") return tg(s, "in");
+  if (s === "Pricing unavailable" || s === "Resource unavailable") return tg(s, "bad");
+  return tg(s, "wr");
+}
+
+function _fmtPropSummary(obj) {
+  if (!obj || typeof obj !== "object") return "Unavailable";
+  const entries = Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (!entries.length) return "None";
+  return entries.map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ");
+}
+
+function _renderReportSectionHTML(rpt) {
+  if (!rpt) {
+    return `
+      <div class="es">
+        <div><b>No Cost Optimization Report generated yet.</b>
+          <div class="mu">Click <b>Generate Report</b> to build a full 11-section FinOps report from current simulator inventory, pricing rates, optimization findings, and remediation records.</div>
+        </div>
+      </div>
+    `;
+  }
+  const info = rpt.report_information || {};
+  const ex = rpt.executive_summary || {};
+  const ov = rpt.cost_overview || {};
+  const svcs = rpt.service_wise_cost_analysis || [];
+  const resList = rpt.resource_level_analysis || [];
+  const findings = rpt.cost_optimization_findings || [];
+  const recs = rpt.optimization_recommendations || [];
+  const comp = rpt.before_after_cost_comparison || {};
+  const rem = rpt.remediation_summary || {};
+  const allRem = rem.all_tasks_summary || {};
+  const costRem = rem.cost_tasks_summary || {};
+  const assess = rpt.final_assessment || {};
+  const meth = rpt.methodology_and_limitations || {};
+  const cur = info.currency || "USD";
+
+  if (COST_SHOW_RAW_TEXT) {
+    return `
+      <div class="pb">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+          <span class="mu" style="font-size:12px">Plain-text narrative view for ${esc(info.report_id)}</span>
+          <button class="btn sm" id="btn-toggle-raw-report">Switch to Structured Tables View</button>
+        </div>
+        <pre style="max-height:760px;overflow:auto;line-height:1.65;font-size:12px">${esc(rpt.narrative_text || "")}</pre>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="pb cost-report-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="chip">${esc(info.report_id)}</span>
+          <span class="chip">${esc(info.reporting_period_label)}</span>
+          <span class="chip">Pricing ${esc(info.pricing_dataset_version)}</span>
+          <span class="chip">Hours ${esc(info.operating_hours_per_month || 730)}h/mo</span>
+        </div>
+        <button class="btn sm" id="btn-toggle-raw-report">View Plain-Text Report</button>
+      </div>
+
+      <!-- 1. Report Information -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">1. Report Information</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:12px 14px;font-size:12.5px">
+          <div><span class="mu">Title:</span> <b>${esc(info.report_title)}</b></div>
+          <div><span class="mu">Report ID:</span> <span class="mono">${esc(info.report_id)}</span></div>
+          <div><span class="mu">Generated:</span> <span class="mono">${esc(info.generated_at)}</span></div>
+          <div><span class="mu">Period:</span> ${esc(info.reporting_period_label)}</div>
+          <div><span class="mu">Environment:</span> ${esc(info.environment)} (${esc(info.account_id)})</div>
+          <div><span class="mu">Currency &amp; Dataset:</span> ${esc(cur)} · ${esc(info.pricing_dataset_version)}</div>
+        </div>
+      </div>
+
+      <!-- 2. Executive Summary -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">2. Executive Summary</div>
+        <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:14px;font-size:12.5px;line-height:1.65">
+          <p style="margin:0 0 8px">${esc(ex.overview_narrative)}</p>
+          <div style="margin-bottom:4px"><span class="mu">Main Cost Drivers:</span> ${(ex.main_cost_drivers || []).length ? esc(ex.main_cost_drivers.join(" | ")) : "None observed (USD 0.00 baseline)"}</div>
+          <div><span class="mu">Major Opportunities:</span> ${(ex.major_opportunities || []).length ? esc(ex.major_opportunities.join(" | ")) : "None identified"}</div>
+        </div>
+      </div>
+
+      <!-- 3. Cost Overview -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">3. Cost Overview</div>
+        <div class="cost-kpis-5">
+          <div class="panel kp"><div class="lb">Monthly Estimate</div><div class="kv mono" style="font-size:18px">${esc(_fmtMoney(ov.estimated_monthly_cost, cur))}</div></div>
+          <div class="panel kp"><div class="lb">Annual Estimate</div><div class="kv mono" style="font-size:18px">${esc(_fmtMoney(ov.estimated_annual_cost, cur))}</div></div>
+          <div class="panel kp"><div class="lb">Optimized Monthly</div><div class="kv mono" style="font-size:18px">${esc(_fmtMoney(ov.optimized_monthly_cost, cur))}</div></div>
+          <div class="panel kp"><div class="lb">Potential Savings</div><div class="kv ok mono" style="font-size:18px">${esc(_fmtMoney(ov.potential_monthly_savings, cur))}</div></div>
+          <div class="panel kp"><div class="lb">Reduction</div><div class="kv ok mono" style="font-size:18px">${(+ov.percentage_reduction || 0).toFixed(2)}%</div></div>
+        </div>
+      </div>
+
+      <!-- 4. Service-Wise Cost Analysis -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">4. Service-Wise Cost Analysis</div>
+        <div class="wrap" style="border:1px solid var(--ln);border-radius:6px">
+          <table class="tbl cost-tbl">
+            <tr><th>Service</th><th>Status</th><th>Est. Monthly</th><th>% Spend</th><th>Opps</th></tr>
+            ${svcs.length ? svcs.map(s => `
+              <tr>
+                <td class="mono"><b>${esc(String(s.service).toUpperCase())}</b><div class="mu" style="font-size:11px">${s.resource_count} resource(s)</div></td>
+                <td>${_costStatusBadge(s.service_status || "Calculated")}</td>
+                <td class="mono">${esc(_fmtMoney(s.estimated_monthly_cost, cur))}</td>
+                <td class="mono">${(+s.percentage_of_total || 0).toFixed(1)}%</td>
+                <td class="mono">${s.optimization_opportunities}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="5">${none("No services in scope.")}</td></tr>`}
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. Resource-Level Analysis -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">5. Resource-Level Analysis</div>
+        <div class="wrap" style="border:1px solid var(--ln);border-radius:6px">
+          <table class="tbl cost-tbl">
+            <tr><th>Resource</th><th>Status</th><th>Monthly / Savings</th><th>Observed vs Estimated</th></tr>
+            ${resList.length ? resList.map(r => `
+              <tr>
+                <td style="width:26%">
+                  <div class="mono mono-wrap"><b>${esc(r.resource_id)}</b></div>
+                  <div class="mono mu" style="font-size:11px;margin-top:2px">${esc(String(r.service).toUpperCase())} &middot; ${esc(r.resource_type)} &middot; ${esc(r.region)}</div>
+                  <div style="margin-top:4px">${tg(r.state, r.state === "running" || r.state === "active" || r.state === "logging" ? "ok" : "wr")}</div>
+                </td>
+                <td style="width:16%">${_costStatusBadge(r.cost_status || r.estimation_basis)}</td>
+                <td class="mono" style="width:18%;white-space:nowrap">
+                  <div><b>${esc(_fmtMoney(r.estimated_monthly_cost, cur))}</b></div>
+                  <div class="${r.potential_monthly_savings > 0 ? 'ok' : 'mu'}" style="font-size:11px;margin-top:2px">Save ${esc(_fmtMoney(r.potential_monthly_savings, cur))}</div>
+                </td>
+                <td style="font-size:11.5px">
+                  <div><b>Observed:</b> <span class="mu mono-wrap">${esc(_fmtPropSummary(r.observed_properties))}</span></div>
+                  <div style="margin-top:3px"><b>Basis:</b> <span class="mu">${esc(r.assumption_note || r.estimation_basis)}</span></div>
+                </td>
+              </tr>
+            `).join("") : `<tr><td colspan="4">${none("No resources observed.")}</td></tr>`}
+          </table>
+        </div>
+      </div>
+
+      <!-- 6. Cost Optimization Findings -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">6. Cost Optimization Findings</div>
+        <div class="wrap" style="border:1px solid var(--ln);border-radius:6px">
+          <table class="tbl cost-tbl">
+            <tr><th>Finding &amp; ID</th><th>Class &amp; Priority</th><th>Affected Resource</th><th>Supporting Evidence</th></tr>
+            ${findings.length ? findings.map(f => `
+              <tr>
+                <td><b>${esc(f.title)}</b><div class="mono mu mono-wrap" style="font-size:11px;margin-top:2px">${esc(f.id)}</div></td>
+                <td style="white-space:nowrap">
+                  ${tg(String(f.classification).toUpperCase(), f.classification === "confirmed" ? "in" : "wr")}
+                  <div style="margin-top:4px">${tg(f.priority + " " + f.severity, f.severity === "High" ? "bad" : f.severity === "Medium" ? "wr" : "low")}</div>
+                </td>
+                <td class="mono mono-wrap">${esc(f.affected_resource)}</td>
+                <td class="mono mu mono-wrap" style="font-size:11px">${esc(_fmtPropSummary(f.supporting_evidence))}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="4">${none("No optimization findings in scope.")}</td></tr>`}
+          </table>
+        </div>
+      </div>
+
+      <!-- 7. Optimization Recommendations -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">7. Optimization Recommendations</div>
+        <div class="wrap" style="border:1px solid var(--ln);border-radius:6px">
+          <table class="tbl cost-tbl">
+            <tr><th>Resource</th><th>Recommended Action</th><th>Est. Monthly Savings</th><th>Implementation Risk</th></tr>
+            ${recs.length ? recs.map(rc => `
+              <tr>
+                <td class="mono mono-wrap">${esc(rc.affected_resource)}</td>
+                <td style="font-size:12px">
+                  <div>${esc(rc.recommended_action)}</div>
+                  <div class="mu" style="font-size:11px;margin-top:2px">${esc(rc.savings_basis || "")}</div>
+                </td>
+                <td class="mono">
+                  <div class="${rc.estimated_monthly_savings > 0 ? 'ok' : 'mu'}"><b>${esc(_fmtMoney(rc.estimated_monthly_savings, cur))}</b></div>
+                  <div style="margin-top:3px">${_costStatusBadge(rc.savings_status || "Calculated")}</div>
+                </td>
+                <td class="mu" style="font-size:11.5px">${esc(rc.risk_of_implementation)}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="4">${none("No recommendations generated.")}</td></tr>`}
+          </table>
+        </div>
+      </div>
+
+      <!-- 8. Before-and-After Cost Comparison -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">8. Before-and-After Cost Comparison</div>
+        <div class="wrap" style="border:1px solid var(--ln);border-radius:6px">
+          <table class="tbl cost-tbl">
+            <tr><th>Comparison Metric</th><th>Amount / Value</th><th>Notes</th></tr>
+            <tr>
+              <td><b>Current Estimated Monthly Cost</b></td>
+              <td class="mono"><b>${esc(_fmtMoney(comp.current_estimated_monthly_cost, cur))}</b></td>
+              <td class="mu" style="font-size:11.5px">Baseline estimated infrastructure spend</td>
+            </tr>
+            <tr>
+              <td><b>Potential Monthly Savings</b></td>
+              <td class="mono ok"><b>${esc(_fmtMoney(comp.potential_monthly_savings, cur))}</b></td>
+              <td class="mu" style="font-size:11.5px">Deduplicated savings from defensible findings</td>
+            </tr>
+            <tr>
+              <td><b>Optimized Estimated Monthly Cost</b></td>
+              <td class="mono"><b>${esc(_fmtMoney(comp.optimized_estimated_monthly_cost, cur))}</b></td>
+              <td class="mu" style="font-size:11.5px">Current minus potential monthly savings</td>
+            </tr>
+            <tr>
+              <td><b>Percentage Reduction</b></td>
+              <td class="mono"><b>${(+comp.percentage_reduction || 0).toFixed(2)}%</b></td>
+              <td class="mu" style="font-size:11.5px">(Potential savings / Current cost) x 100</td>
+            </tr>
+            <tr>
+              <td><b>Realized Monthly Savings (Verified)</b></td>
+              <td class="mono ok"><b>${esc(_fmtMoney(comp.realized_monthly_savings, cur))}</b></td>
+              <td class="mu" style="font-size:11.5px">Independently verified PASS cost remediations only</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- 9. Remediation Summary -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">9. Remediation Summary (Actual Workflow Records)</div>
+        <div class="wrap" style="border:1px solid var(--ln);border-radius:6px">
+          <table class="tbl cost-tbl">
+            <tr><th>Workflow State</th><th>Cost Optimization Tasks</th><th>All SOC &amp; FinOps Tasks</th></tr>
+            <tr><td><b>Total Tasks</b></td><td class="mono">${costRem.total || 0}</td><td class="mono">${allRem.total || 0}</td></tr>
+            <tr><td>Pending Approval</td><td class="mono">${costRem.pending || 0}</td><td class="mono">${allRem.pending || 0}</td></tr>
+            <tr><td>Approved</td><td class="mono">${costRem.approved || 0}</td><td class="mono">${allRem.approved || 0}</td></tr>
+            <tr><td>Executed / Applied</td><td class="mono">${costRem.executed || 0}</td><td class="mono">${allRem.executed || 0}</td></tr>
+            <tr><td>Independently Verified (PASS)</td><td class="mono ok">${costRem.independently_verified || 0}</td><td class="mono ok">${allRem.independently_verified || 0}</td></tr>
+            <tr><td>Failed</td><td class="mono bad">${costRem.failed || 0}</td><td class="mono bad">${allRem.failed || 0}</td></tr>
+            <tr><td>Rolled Back</td><td class="mono">${costRem.rolled_back || 0}</td><td class="mono">${allRem.rolled_back || 0}</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- 10. Final Assessment -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">10. Final Assessment</div>
+        <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:14px;font-size:12.5px;line-height:1.65">
+          <p style="margin:0 0 8px">${esc(assess.summary)}</p>
+          ${(assess.unresolved_risks || []).length ? `<div style="margin-bottom:6px"><span class="mu">Unresolved Risks:</span> ${esc(assess.unresolved_risks.join(" | "))}</div>` : ""}
+          <div><span class="mu">Next Steps:</span> ${esc((assess.next_steps || []).join(" | "))}</div>
+        </div>
+      </div>
+
+      <!-- 11. Methodology and Limitations -->
+      <div class="cost-rpt-sec">
+        <div class="lb" style="margin-top:0">11. Methodology and Limitations</div>
+        <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:14px;font-size:12px;line-height:1.65">
+          <p style="margin:0 0 6px"><b>Pricing Assumptions:</b> ${esc(meth.pricing_assumptions)}</p>
+          <p style="margin:0 0 6px"><b>Usage Assumptions:</b> ${esc(meth.usage_assumptions)}</p>
+          <p style="margin:0 0 6px"><b>Missing Fields:</b> ${esc((meth.missing_resource_fields || []).join(" | "))}</p>
+          <p style="margin:0 0 6px"><b>Simulator Limitations:</b> ${esc((meth.simulator_limitations || []).join(" | "))}</p>
+          <p class="mu" style="margin:0"><b>Disclaimer:</b> ${esc(meth.billing_disclaimer)}</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function cost() {
+  if (!COST_BOOT) {
+    loadCostOverview();
+    return `<div class="panel sk" style="height:420px"></div>`;
+  }
+
+  const d = window.COST_DATA || {};
+  const ov = d.cost_overview || {};
+  const cur = ov.currency || "USD";
+  const svcs = d.service_breakdown || [];
+  const resources = d.resources || [];
+  const findings = d.findings || [];
+  const comp = d.cost_comparison || {};
+  const pmeta = d.pricing_metadata || {};
+  const avail = d.service_availability || {};
+  const ctSum = d.cloudtrail_summary || {};
+  const remTasks = (REM_DATA && REM_DATA.remediations) ? REM_DATA.remediations : [];
+
+  const filteredFindings = findings.filter(f => !COST_CLASS_FILTER || f.classification === COST_CLASS_FILTER);
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:1px solid var(--ln);padding-bottom:12px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0;font-size:18px;font-weight:600">Cost Intelligence &amp; AWS Optimization</h2>
+        <div class="mu" style="font-size:12px;margin-top:2px">
+          ${esc(d.environment || "Moto Simulated Cloud")} &middot; Account <span class="mono">${esc(d.account_id || "unavailable")}</span> &middot;
+          Pricing <span class="mono">${esc(pmeta.dataset_version || "n/a")}</span> (effective ${esc(pmeta.effective_date || "n/a")})
+          ${d.simulator_available === false ? ` &middot; ${tg("Simulator Offline", "wr")}` : ` &middot; ${tg("Simulator Connected", "ok")}`}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="cost-period" aria-label="Reporting period" style="height:28px;font-size:12px">
+          <option value="monthly" ${COST_PERIOD === "monthly" ? "selected" : ""}>Monthly (30-Day)</option>
+          <option value="quarterly" ${COST_PERIOD === "quarterly" ? "selected" : ""}>Quarterly (90-Day)</option>
+          <option value="annual" ${COST_PERIOD === "annual" ? "selected" : ""}>Annual (365-Day)</option>
+        </select>
+        <select id="cost-svc" aria-label="Service filter" style="height:28px;font-size:12px">
+          <option value="" ${!COST_SVC ? "selected" : ""}>All Services</option>
+          <option value="ec2" ${COST_SVC === "ec2" ? "selected" : ""}>EC2</option>
+          <option value="ebs" ${COST_SVC === "ebs" ? "selected" : ""}>EBS</option>
+          <option value="s3" ${COST_SVC === "s3" ? "selected" : ""}>S3</option>
+          <option value="iam" ${COST_SVC === "iam" ? "selected" : ""}>IAM</option>
+          <option value="cloudtrail" ${COST_SVC === "cloudtrail" ? "selected" : ""}>CloudTrail</option>
+        </select>
+        <select id="cost-hours" aria-label="Operating hours assumption" style="height:28px;font-size:12px">
+          <option value="730" ${COST_HOURS === "730" ? "selected" : ""}>730h/mo (Continuous)</option>
+          <option value="160" ${COST_HOURS === "160" ? "selected" : ""}>160h/mo (Business Hrs)</option>
+        </select>
+        <button class="btn sm" id="btn-cost-refresh">Refresh Analysis</button>
+        <button class="btn sm primary" id="btn-cost-gen-report" ${COST_GENERATING ? "disabled" : ""}>${COST_GENERATING ? "Generating..." : "Generate Report"}</button>
+      </div>
+    </div>
+
+    <!-- Workspace Sub-Tabs -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn sm ${window.COST_TAB === 'overview' ? 'primary' : ''}" data-cost-tab="overview">Overview &amp; Breakdown</button>
+      <button class="btn sm ${window.COST_TAB === 'findings' ? 'primary' : ''}" data-cost-tab="findings">Optimization Findings (${findings.length})</button>
+      <button class="btn sm ${window.COST_TAB === 'reports' ? 'primary' : ''}" data-cost-tab="reports">Reports &amp; History (${COST_REPORTS.length})</button>
+    </div>
+
+    ${window.COST_TAB === "overview" ? `
+      <!-- A. Cost Overview KPIs -->
+      <div class="kpis-6">
+        <div class="panel kp">
+          <div class="lb">Est. Monthly Cost</div>
+          <div class="kv mono">${esc(_fmtMoney(ov.estimated_monthly_cost, cur))}</div>
+          <div class="mu">${esc(d.reporting_period_label || "Monthly baseline")}</div>
+        </div>
+        <div class="panel kp">
+          <div class="lb">Est. Annual Cost</div>
+          <div class="kv mono">${esc(_fmtMoney(ov.estimated_annual_cost, cur))}</div>
+          <div class="mu">12-month projection</div>
+        </div>
+        <div class="panel kp">
+          <div class="lb">Potential Monthly Savings</div>
+          <div class="kv ok mono">${esc(_fmtMoney(ov.potential_monthly_savings, cur))}</div>
+          <div class="mu">${(+ov.percentage_reduction || 0).toFixed(1)}% reduction</div>
+        </div>
+        <div class="panel kp">
+          <div class="lb">Potential Annual Savings</div>
+          <div class="kv ok mono">${esc(_fmtMoney(ov.potential_annual_savings, cur))}</div>
+          <div class="mu">If verified &amp; applied</div>
+        </div>
+        <div class="panel kp">
+          <div class="lb">Optimized Monthly Cost</div>
+          <div class="kv mono">${esc(_fmtMoney(ov.optimized_monthly_cost, cur))}</div>
+          <div class="mu">Realized: ${esc(_fmtMoney(ov.realized_monthly_savings, cur))}</div>
+        </div>
+        <div class="panel kp">
+          <div class="lb">Resources / Findings</div>
+          <div class="kv">${ov.analyzed_resources || 0} / <span class="${(ov.optimization_findings||0)>0?'wr':'ok'}">${ov.optimization_findings || 0}</span></div>
+          <div class="mu">${ov.confirmed_findings || 0} confirmed, ${ov.inferred_findings || 0} inferred</div>
+        </div>
+      </div>
+
+      <!-- B. Service Breakdown + 6. Cost Comparison -->
+      <div class="cols2">
+        <section class="panel">
+          <div class="ph"><span class="pt">Service Cost Breakdown</span><span class="mu">${svcs.length} supported service(s)</span></div>
+          <div class="wrap">
+            <table class="tbl cost-tbl">
+              <tr><th>Service</th><th>Count</th><th>Status</th><th>Est. Monthly</th><th>% Spend</th><th>Opportunities</th></tr>
+              ${svcs.length ? svcs.map(s => `
+                <tr>
+                  <td class="mono"><b>${esc(String(s.service).toUpperCase())}</b></td>
+                  <td class="mono">${s.resource_count}</td>
+                  <td>${_costStatusBadge(s.service_status || "Calculated")}</td>
+                  <td class="mono">${esc(_fmtMoney(s.estimated_monthly_cost, cur))}</td>
+                  <td class="mono">${(+s.percentage_of_total || 0).toFixed(1)}%</td>
+                  <td class="mono">${s.optimization_opportunities}</td>
+                </tr>
+              `).join("") : `<tr><td colspan="6">${none("No supported services in scope.")}</td></tr>`}
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="ph"><span class="pt">Before-and-After Cost Comparison</span><span class="mu">Potential vs Realized</span></div>
+          <div class="pb">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+              <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+                <div class="lb" style="margin-top:0">Current Estimated Monthly</div>
+                <div class="kv mono" style="font-size:20px">${esc(_fmtMoney(comp.current_estimated_monthly_cost, cur))}</div>
+              </div>
+              <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+                <div class="lb" style="margin-top:0">Optimized Estimated Monthly</div>
+                <div class="kv ok mono" style="font-size:20px">${esc(_fmtMoney(comp.optimized_estimated_monthly_cost, cur))}</div>
+              </div>
+              <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+                <div class="lb" style="margin-top:0">Potential Monthly Savings</div>
+                <div class="kv ok mono" style="font-size:18px">${esc(_fmtMoney(comp.potential_monthly_savings, cur))} (${(+comp.percentage_reduction || 0).toFixed(2)}%)</div>
+              </div>
+              <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:6px;padding:10px">
+                <div class="lb" style="margin-top:0">Realized Verified Savings</div>
+                <div class="kv ok mono" style="font-size:18px">${esc(_fmtMoney(comp.realized_monthly_savings, cur))}</div>
+              </div>
+            </div>
+            ${slot("cost_services", 170)}
+          </div>
+        </section>
+      </div>
+
+      <!-- C. Resource-Level Cost Analysis -->
+      <section class="panel mt">
+        <div class="ph"><span class="pt">Resource-Level Cost Analysis</span><span class="mu">Observed simulator properties separated from estimated usage</span></div>
+        <div class="wrap">
+          <table class="tbl cost-tbl">
+            <tr><th>Resource ID</th><th>Service / Type</th><th>Region &amp; State</th><th>Status</th><th>Est. Monthly</th><th>Pot. Savings</th><th>Observed Properties &amp; Usage Basis</th></tr>
+            ${resources.length ? resources.map(r => `
+              <tr>
+                <td class="mono" style="min-width:130px"><b>${esc(r.resource_id)}</b></td>
+                <td class="mono">${esc(String(r.service).toUpperCase())}<div class="mu">${esc(r.resource_type)}</div></td>
+                <td class="mono">${esc(r.region)}<div style="margin-top:2px">${tg(r.state, r.state === "running" || r.state === "active" || r.state === "logging" ? "ok" : "wr")}</div></td>
+                <td>${_costStatusBadge(r.cost_status || r.estimation_basis)}</td>
+                <td class="mono">${esc(_fmtMoney(r.estimated_monthly_cost, cur))}</td>
+                <td class="mono ${r.potential_monthly_savings > 0 ? 'ok' : 'mu'}">${esc(_fmtMoney(r.potential_monthly_savings, cur))}</td>
+                <td style="font-size:12px;min-width:240px">
+                  <div><b>Observed:</b> <span class="mono mu" style="font-size:11px">${esc(_fmtPropSummary(r.observed_properties))}</span></div>
+                  <div style="margin-top:2px"><b>Recommendation:</b> ${esc(r.recommendation_summary)}</div>
+                  <div class="mu" style="font-size:11px;margin-top:2px">${esc(r.assumption_note)}</div>
+                </td>
+              </tr>
+            `).join("") : `<tr><td colspan="7">${none("No resources observed. Start Moto simulator on port 5000 or adjust filters.")}</td></tr>`}
+          </table>
+        </div>
+      </section>
+
+      <!-- Simulator Data Availability & CloudTrail Context -->
+      <section class="panel mt">
+        <div class="ph"><span class="pt">Data Source &amp; Simulator Availability</span><span class="mu">${ctSum.telemetry_event_count || 0} CloudTrail telemetry event(s)</span></div>
+        <div class="pb" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          ${Object.keys(avail).map(k => {
+            const st = avail[k] || {};
+            const cnt = st.resource_count != null ? ` (${st.resource_count})` : "";
+            return `<span class="chip">${esc(k.toUpperCase())}: ${esc(st.status || "unavailable")}${cnt}</span>`;
+          }).join("")}
+          <span class="mu" style="font-size:11.5px;margin-left:auto">${esc(ctSum.note || "")}</span>
+        </div>
+      </section>
+    ` : window.COST_TAB === "findings" ? `
+      <!-- D & E. Findings and Recommendations + Remediation Integration -->
+      <div class="tools">
+        <select id="cost-class-filter" aria-label="Classification filter">
+          <option value="" ${!COST_CLASS_FILTER ? "selected" : ""}>All Classifications (${findings.length})</option>
+          <option value="confirmed" ${COST_CLASS_FILTER === "confirmed" ? "selected" : ""}>Confirmed Configurations (${ov.confirmed_findings || 0})</option>
+          <option value="inferred" ${COST_CLASS_FILTER === "inferred" ? "selected" : ""}>Inferred Opportunities (${ov.inferred_findings || 0})</option>
+        </select>
+        <span class="mu" style="font-size:12px">Showing ${filteredFindings.length} finding(s) &middot; All actions require human approval before simulator execution.</span>
+      </div>
+
+      ${filteredFindings.length ? filteredFindings.map(f => {
+        const linkedRem = remTasks.find(t => t.related_finding_id === f.id);
+        return `
+          <article class="panel fc">
+            <div class="ph">
+              <span class="pt">${esc(f.title)}</span>
+              <span>
+                ${tg(f.priority + " " + f.severity, f.severity === "High" ? "bad" : f.severity === "Medium" ? "wr" : "low")}
+                ${tg(String(f.classification).toUpperCase(), f.classification === "confirmed" ? "in" : "wr")}
+                ${tg("Save " + _fmtMoney(f.estimated_monthly_savings, cur) + "/mo", f.estimated_monthly_savings > 0 ? "ok" : "gr")}
+              </span>
+            </div>
+            <div class="pb">
+              <div class="cols2">
+                <div>
+                  <div class="lb" style="margin-top:0">Affected Resource &amp; Scope</div>
+                  <p class="mono" style="font-size:12px">${esc(f.service.toUpperCase())} / ${esc(f.affected_resource)} (${esc(f.region)})</p>
+                  <div class="lb">Why It Matters</div>
+                  <p style="font-size:12.5px">${esc(f.why_it_matters)}</p>
+                  <div class="lb">Recommended Action</div>
+                  <p style="font-size:12.5px"><b>${esc(f.recommended_action)}</b></p>
+                  <div class="lb">Implementation Risk</div>
+                  <p class="mu" style="font-size:12px">${esc(f.risk_of_implementation)}</p>
+                </div>
+                <div>
+                  <div class="lb" style="margin-top:0">Supporting Evidence</div>
+                  <pre style="font-size:11px;max-height:140px">${esc(JSON.stringify(f.supporting_evidence, null, 2))}</pre>
+                  <div class="lb">Savings Basis</div>
+                  <div style="margin-bottom:4px">${_costStatusBadge(f.savings_status || "Calculated")}</div>
+                  <p class="mu" style="font-size:12px">${esc(f.savings_basis)}</p>
+                </div>
+              </div>
+              <div class="ac" style="align-items:center">
+                ${!linkedRem ? `
+                  <button class="btn sm primary" data-cost-remediate="${esc(f.id)}">Stage Remediation for Approval</button>
+                ` : `
+                  ${tg("Task " + linkedRem.id + ": " + linkedRem.status, linkedRem.status === "Verified" ? "ok" : linkedRem.status === "Failed" ? "bad" : "wr")}
+                  ${tg("Verify: " + linkedRem.verification_state, linkedRem.verification_state === "PASS" ? "pass" : linkedRem.verification_state === "FAIL" ? "fail" : "gr")}
+                  ${linkedRem.status === "Pending" ? `<button class="btn sm primary" data-cost-rem-approve="${esc(linkedRem.id)}">Approve Fix</button>` : ""}
+                  ${linkedRem.status === "Approved" ? `<button class="btn sm primary" data-cost-rem-apply="${esc(linkedRem.id)}">Execute &amp; Independently Verify</button>` : ""}
+                  <a class="btn sm" href="#remediation">Inspect in Remediation Queue &rarr;</a>
+                `}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("") : `<section class="panel">${none("No cost optimization findings detected for current filters.")}</section>`}
+    ` : (() => {
+      const activeId = (COST_ACTIVE_REPORT && COST_ACTIVE_REPORT.report_information && COST_ACTIVE_REPORT.report_information.report_id) || "";
+      const activeInfo = (COST_ACTIVE_REPORT && COST_ACTIVE_REPORT.report_information) || {};
+      const activeOv = (COST_ACTIVE_REPORT && COST_ACTIVE_REPORT.cost_overview) || {};
+      const historyExpanded = Boolean(COST_HISTORY_OPEN || (!COST_ACTIVE_REPORT && COST_REPORTS.length > 0));
+      return `
+      <!-- 7 & 8. Collapsible Report History + Full-Width Cost Optimization Report Detail -->
+      <div class="cost-reports-layout">
+        <section class="panel cost-history-panel ${historyExpanded ? 'open' : ''}">
+          <div class="cost-history-bar" id="cost-history-toggle-bar" role="button" tabindex="0" aria-expanded="${historyExpanded ? 'true' : 'false'}" aria-controls="cost-history-body">
+            <div class="cost-history-title">
+              <span class="pt">Report History (${COST_REPORTS.length})</span>
+              ${activeId ? `<span class="cost-history-meta">Selected: <span class="mono">${esc(activeId)}</span> &middot; ${esc(activeInfo.generated_at || "")} &middot; <span class="mono">${esc(_fmtMoney(activeOv.estimated_monthly_cost, activeInfo.currency || "USD"))}</span></span>` : `<span class="cost-history-meta">Select any historical snapshot to inspect</span>`}
+            </div>
+            <div class="cost-history-actions">
+              <button class="btn sm" id="btn-cost-refresh-reports" type="button">Refresh</button>
+              <button class="btn sm cost-history-chev" id="btn-toggle-cost-history" type="button" aria-expanded="${historyExpanded ? 'true' : 'false'}" aria-controls="cost-history-body">
+                <span>${historyExpanded ? 'Hide History' : 'Show History'}</span>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+          </div>
+          <div class="cost-history-body wrap" id="cost-history-body" ${historyExpanded ? '' : 'hidden'}>
+            <table class="tbl cost-tbl cost-history-tbl">
+              <thead>
+                <tr>
+                  <th>Report ID</th>
+                  <th>Generated</th>
+                  <th>Scope</th>
+                  <th style="text-align:right">Est. Monthly Cost</th>
+                  <th style="text-align:right">Potential Savings</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${COST_REPORTS.length ? COST_REPORTS.map(rp => {
+                  const isSel = activeId === rp.report_id;
+                  return `
+                  <tr class="clk ${isSel ? 'selected' : ''}" data-select-cost-report="${esc(rp.report_id)}" tabindex="0">
+                    <td class="ch-id">
+                      <span class="mono mono-wrap"><b>${esc(rp.report_id)}</b></span>
+                      ${isSel ? tg("ACTIVE", "in") : ""}
+                    </td>
+                    <td class="mu mono" style="font-size:12px">${esc(rp.generated_at)}</td>
+                    <td class="mu" style="font-size:12px">${esc(rp.reporting_period)} &middot; <span class="mono">${esc(rp.service_filter || "all")}</span></td>
+                    <td class="ch-cost mono" style="text-align:right;white-space:nowrap">${esc(_fmtMoney(rp.total_monthly_cost, rp.currency))}</td>
+                    <td class="ch-cost mono ${rp.potential_monthly_savings > 0 ? 'ok' : 'mu'}" style="text-align:right;white-space:nowrap">${esc(_fmtMoney(rp.potential_monthly_savings, rp.currency))}</td>
+                  </tr>
+                `;}).join("") : `<tr><td colspan="5">${none("No reports generated yet.")}</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel cost-report-detail">
+          <div class="ph">
+            <span class="pt">Cost Optimization Report Detail</span>
+            <span class="mu">Readable in-dashboard report (non-exportable)</span>
+          </div>
+          ${_renderReportSectionHTML(COST_ACTIVE_REPORT)}
+        </section>
+      </div>
+    `;})()}
+  `;
+}
+
+function refresh(){const r=route();if(r=="overview"||!r)loadOverviewStats();if(r=="findings")paintFindings();if(r=="events")loadEvents();if(r=="audit")loadAudit();if(r=="graph"&&window.loadGraph)loadGraph();if(r=="alerts")loadAlerts();if(r=="incidents")loadIncidents();if(r=="remediation"||r=="response")loadRemediations();if(r=="cost")loadCostOverview();if(r=="architecture"||r=="portfolio")loadArchitecture();if(r=="demo")loadDemo()}
 function bind(){const r=route();
  if(r=="findings"){
    const fq=$$("fq");
@@ -2437,10 +3573,56 @@ function bind(){const r=route();
     if(r=="lab"){
       const bCat=$$("tab-lab-catalog");
       if(bCat)bCat.onclick=()=>{LAB_MODE="catalog";render()};
+      const bFin=$$("tab-lab-finops");
+      if(bFin)bFin.onclick=()=>{LAB_MODE="finops";loadFinopsDemoStatus();render()};
       const bWb=$$("tab-lab-workbench");
       if(bWb)bWb.onclick=()=>{LAB_MODE="workbench";render()};
       const bBld=$$("tab-lab-builder");
       if(bBld)bBld.onclick=()=>{LAB_MODE="builder";render()};
+
+      const bFinLoad=$$("btn-finops-demo-load");
+      if(bFinLoad)bFinLoad.onclick=async()=>{
+        if(FINOPS_DEMO_BUSY)return;
+        FINOPS_DEMO_BUSY=true;render();
+        try{
+          const res=await authFetch("/api/cost/demo-scenario/load",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+          const data=await res.json().catch(()=>({}));
+          if(res.ok&&data.ok){
+            FINOPS_DEMO=data;
+            COST_BOOT=false;
+            showToast("FinOps Demo Scenario resources loaded in Moto.", "ok");
+          }else if(res.status!==401){
+            showToast(data.error||"Failed to load FinOps Demo Scenario.", "bad");
+          }
+        }finally{FINOPS_DEMO_BUSY=false;if(route()==="lab")render();}
+      };
+      const bFinInsp=$$("btn-finops-demo-inspect");
+      if(bFinInsp)bFinInsp.onclick=async()=>{await loadFinopsDemoStatus();showToast("Inspected live Moto demo resources.", "info");};
+      const bFinCost=$$("btn-finops-demo-refresh-cost");
+      if(bFinCost)bFinCost.onclick=()=>{COST_BOOT=false;window.COST_TAB="overview";location.hash="#cost";};
+      const bFinReset=$$("btn-finops-demo-reset");
+      if(bFinReset)bFinReset.onclick=()=>{
+        confirmModal({
+          title:"Reset FinOps Demo Scenario",
+          message:"Remove only the simulated resources tagged ThreatGuardScenario=finops-demo from Moto? Default ThreatGuard resources will be preserved.",
+          confirmText:"Reset Demo Scenario",
+          danger:true,
+          onConfirm:async()=>{
+            FINOPS_DEMO_BUSY=true;render();
+            try{
+              const res=await authFetch("/api/cost/demo-scenario/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+              const data=await res.json().catch(()=>({}));
+              if(res.ok&&data.ok){
+                FINOPS_DEMO=data;
+                COST_BOOT=false;
+                showToast("FinOps Demo Scenario reset cleanly.", "ok");
+              }else if(res.status!==401){
+                showToast(data.error||"Failed to reset FinOps Demo Scenario.", "bad");
+              }
+            }finally{FINOPS_DEMO_BUSY=false;if(route()==="lab")render();}
+          }
+        });
+      };
 
       const bGotoCat=$$("btn-goto-catalog");
       if(bGotoCat)bGotoCat.onclick=()=>{LAB_MODE="catalog";render()};
@@ -2891,6 +4073,14 @@ function bind(){const r=route();
     }
 
     if (r === "demo") {
+      const bV21 = $$("btn-toggle-viva21");
+      if (bV21) bV21.onclick = () => { DEMO_VIEW_MODE = "viva21"; CURRENT_DEMO_STEP = 1; render(); };
+      const bC17 = $$("btn-toggle-core17");
+      if (bC17) bC17.onclick = () => { DEMO_VIEW_MODE = "core17"; CURRENT_DEMO_STEP = 1; render(); };
+
+      const steps = (DEMO_VIEW_MODE === "viva21" && DEMO_DATA && DEMO_DATA.viva_steps) ? DEMO_DATA.viva_steps : ((DEMO_DATA && DEMO_DATA.steps) || []);
+      const total = steps.length || (DEMO_VIEW_MODE === "viva21" ? 21 : 17);
+
       const bPrev = $$("btn-demo-prev");
       if (bPrev) bPrev.onclick = () => {
         CURRENT_DEMO_STEP = Math.max(1, CURRENT_DEMO_STEP - 1);
@@ -2899,7 +4089,6 @@ function bind(){const r=route();
 
       const bNext = $$("btn-demo-next");
       if (bNext) bNext.onclick = () => {
-        const total = (DEMO_DATA && DEMO_DATA.steps) ? DEMO_DATA.steps.length : 17;
         CURRENT_DEMO_STEP = Math.min(total, CURRENT_DEMO_STEP + 1);
         render();
       };
@@ -2919,6 +4108,92 @@ function bind(){const r=route();
       if (bActLaunch) bActLaunch.onclick = () => {
         location.hash = "#" + bActLaunch.dataset.target;
       };
+    }
+
+    if (r === "cost") {
+      document.querySelectorAll("[data-cost-tab]").forEach(btn => {
+        btn.onclick = () => {
+          window.COST_TAB = btn.dataset.costTab;
+          render();
+        };
+      });
+      const selPer = $$("cost-period");
+      if (selPer) selPer.onchange = () => { COST_PERIOD = selPer.value; loadCostOverview(); };
+      const selSvc = $$("cost-svc");
+      if (selSvc) selSvc.onchange = () => { COST_SVC = selSvc.value; loadCostOverview(); };
+      const selHrs = $$("cost-hours");
+      if (selHrs) selHrs.onchange = () => { COST_HOURS = selHrs.value; loadCostOverview(); };
+      const selCls = $$("cost-class-filter");
+      if (selCls) selCls.onchange = () => { COST_CLASS_FILTER = selCls.value; render(); };
+
+      const bRefCost = $$("btn-cost-refresh");
+      if (bRefCost) bRefCost.onclick = () => loadCostOverview();
+      const bGenRpt = $$("btn-cost-gen-report");
+      if (bGenRpt) bGenRpt.onclick = () => generateCostReportUI();
+      const bRefRpts = $$("btn-cost-refresh-reports");
+      if (bRefRpts) bRefRpts.onclick = e => {
+        e.stopPropagation();
+        loadCostReportsOnly();
+      };
+      const toggleHistory = () => {
+        COST_HISTORY_OPEN = !COST_HISTORY_OPEN;
+        render();
+      };
+      const histBar = $$("cost-history-toggle-bar");
+      if (histBar) {
+        histBar.onclick = e => {
+          if (e.target && e.target.closest("#btn-cost-refresh-reports")) return;
+          toggleHistory();
+        };
+        histBar.onkeydown = e => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleHistory();
+          }
+        };
+      }
+      const bTogHist = $$("btn-toggle-cost-history");
+      if (bTogHist) bTogHist.onclick = e => {
+        e.stopPropagation();
+        toggleHistory();
+      };
+      const bTogRaw = $$("btn-toggle-raw-report");
+      if (bTogRaw) bTogRaw.onclick = () => { COST_SHOW_RAW_TEXT = !COST_SHOW_RAW_TEXT; render(); };
+
+      document.querySelectorAll("[data-select-cost-report]").forEach(row => {
+        row.onclick = () => loadCostReportDetail(row.dataset.selectCostReport);
+        row.onkeydown = e => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            loadCostReportDetail(row.dataset.selectCostReport);
+          }
+        };
+      });
+      document.querySelectorAll("[data-cost-remediate]").forEach(btn => {
+        btn.onclick = () => proposeCostRemediationUI(btn.dataset.costRemediate);
+      });
+      document.querySelectorAll("[data-cost-rem-approve]").forEach(btn => {
+        btn.onclick = async () => {
+          const res = await authFetch(`/api/remediations/${btn.dataset.costRemApprove}/approve`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: "Security Operator" })
+          });
+          if (res.ok) showToast("Cost remediation approved. Ready for execution.", "ok");
+          await loadCostOverview();
+        };
+      });
+      document.querySelectorAll("[data-cost-rem-apply]").forEach(btn => {
+        btn.onclick = async () => {
+          const res = await authFetch(`/api/remediations/${btn.dataset.costRemApply}/apply`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: "Security Operator" })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) showToast(data.message || "Cost remediation applied and verified.", "ok");
+          else if (res.status !== 401) showToast(data.error || "Execution failed.", "bad");
+          await loadCostOverview();
+        };
+      });
     }
 
   CG.mount(ctx())}
@@ -2999,5 +4274,5 @@ document.addEventListener("keydown",e=>{
 });
 new MutationObserver(()=>CG.update(ctx())).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 $$("menu").onclick=()=>document.body.classList.toggle("navopen");$$("scrim").onclick=()=>document.body.classList.remove("navopen");window.addEventListener("hashchange",()=>document.body.classList.remove("navopen"));
-setTimeout(loadMetrics,0);setInterval(loadMetrics,3000);setInterval(()=>{if(route()=="events")loadEvents()},2000);
-return{overview,findings,events,audit,graph,lab,alerts,incidents,remediation,architecture,demo,bind,slot,q:()=>Q,open:openDrawer}})();
+setTimeout(loadMetrics,0);setTimeout(loadOverviewStats,50);setInterval(loadMetrics,3000);setInterval(()=>{if(route()=="events")loadEvents()},2000);setInterval(()=>{if(route()=="overview")loadOverviewStats()},5000);
+return{overview,findings,events,audit,graph,lab,alerts,incidents,remediation,cost,architecture,demo,portfolio,bind,slot,q:()=>Q,open:openDrawer}})();
