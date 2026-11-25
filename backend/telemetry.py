@@ -68,20 +68,21 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
 
     def calc_score(hour: int, country: str, calls: int) -> float:
         if detector:
-            # Score synthetic baseline through 12-feature detector
+            # Score synthetic traffic through 12-feature detector
+            is_attack = (country != "IN") or not (8 <= hour <= 18) or (calls > 20)
             feat = {
                 "call_count": float(calls),
-                "call_velocity": 1.0,
-                "error_ratio": 0.0,
-                "unique_services": 1.0,
-                "unique_events": 1.0,
-                "enumeration_ratio": 0.2,
-                "sensitive_count": 0.0,
-                "iam_change_count": 0.0,
-                "first_service_ratio": 0.0,
-                "first_ip": 0.0,
+                "call_velocity": 0.5 if not is_attack else 6.0,
+                "error_ratio": 0.0 if not is_attack else 0.4,
+                "unique_services": 1.0 if not is_attack else 4.0,
+                "unique_events": 1.0 if not is_attack else 5.0,
+                "enumeration_ratio": 0.76 if not is_attack else 1.0,
+                "sensitive_count": 0.0 if not is_attack else 3.0,
+                "iam_change_count": 0.0 if not is_attack else 2.0,
+                "first_service_ratio": 0.0 if not is_attack else 0.8,
+                "first_ip": 0.0 if not is_attack else 1.0,
                 "off_hours": 0.0 if (8 <= hour <= 18) else 1.0,
-                "event_entropy": 0.5,
+                "event_entropy": 1.18 if not is_attack else 0.1,
             }
             res = detector.score_window(feat)
             return float(res["score"])
@@ -112,7 +113,18 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
 
     # Background Posture Loop
     def posture_loop() -> None:
+        s_store = g.get("soc_store") or soc_store
+        # Record initial authoritative posture measurement
+        if not store.get_posture_samples():
+            current_init_score = compute_posture_score(R, store, s_store)
+            pending_count = sum(
+                1 for f in store.get_all_findings() if f.get("status") == "pending"
+            )
+            store.add_posture_sample(current_init_score, pending_count)
         time.sleep(2)
+        last_score = None
+        last_pending = None
+        last_time = 0.0
         while True:
             try:
                 s_store = g.get("soc_store") or soc_store
@@ -120,10 +132,20 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
                 pending_count = sum(
                     1 for f in store.get_all_findings() if f.get("status") == "pending"
                 )
-                store.add_posture_sample(posture_score, pending_count)
+                now_t = time.time()
+                # Record sample immediately when score or pending findings change, or every 20 seconds
+                if (
+                    posture_score != last_score
+                    or pending_count != last_pending
+                    or (now_t - last_time >= 20.0)
+                ):
+                    store.add_posture_sample(posture_score, pending_count)
+                    last_score = posture_score
+                    last_pending = pending_count
+                    last_time = now_t
             except Exception as exc:
                 logger.warning("Telemetry posture loop error: %s", exc)
-            time.sleep(5)
+            time.sleep(3)
 
     threading.Thread(target=posture_loop, daemon=True).start()
 
@@ -144,7 +166,7 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
                     time.sleep(rng.uniform(2.5, 5.0))
                     svc, op = rng.choice(ops)
                     hr = rng.randint(8, 18)
-                    calls = rng.randint(1, 11)
+                    calls = rng.randint(1, 5)
                     s = calc_score(hr, "IN", calls)
                     user_name = f"user-{rng.randint(1, 8):03d}"
                     store.log_telemetry_event(op, svc, user_name, "IN", "baseline", MODE)
@@ -159,7 +181,11 @@ def register_telemetry(app: Flask, g: Dict[str, Any]) -> None:
     @app.get("/api/metrics")
     def metrics() -> Any:
         """Return system posture, anomaly timeline, and remediation KPI metrics."""
-        rb_count = store.count_rollback_events()
+        s_store = g.get("soc_store")
+        soc_tasks = s_store.get_remediations() if s_store and hasattr(s_store, "get_remediations") else []
+        from backend.soc.models import RemediationStatus
+        soc_rb = sum(1 for t in soc_tasks if getattr(t, "status", None) == RemediationStatus.ROLLED_BACK)
+        rb_count = soc_rb if s_store else store.count_rollback_events()
         findings = store.get_all_findings()
 
         items = []

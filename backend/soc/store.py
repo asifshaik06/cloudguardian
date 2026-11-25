@@ -704,7 +704,7 @@ class SOCStore:
             },
         )
 
-        self.create_remediation_task(
+        rem2 = self.create_remediation_task(
             title="Restart CloudTrail Central Audit Logging",
             affected_resource="cloudtrail/main-trail",
             recommended_action="Invoke cloudtrail:StartLogging on trail 'main-trail'.",
@@ -716,6 +716,8 @@ class SOCStore:
             related_alert_id="ALT-0002",
             before_config={"IsLogging": False},
         )
+        rem2.status = RemediationStatus.VERIFIED
+        rem2.verification_state = VerificationState.PASS
 
         # 3. Security Group Exposure Alert
         self.create_alert(
@@ -731,7 +733,7 @@ class SOCStore:
             evidence={"port": 22, "protocol": "tcp", "cidr": "0.0.0.0/0"},
         )
 
-        self.create_remediation_task(
+        rem3 = self.create_remediation_task(
             title="Restrict Inbound SSH to Trusted Corporate CIDR",
             affected_resource="ec2/security-group/sg-01a2b3c4d5",
             recommended_action="Revoke 0.0.0.0/0 ingress rule on port 22; restrict to corporate VPN.",
@@ -742,6 +744,8 @@ class SOCStore:
             related_finding_id="sg",
             related_alert_id="ALT-0003",
         )
+        rem3.status = RemediationStatus.VERIFIED
+        rem3.verification_state = VerificationState.PASS
 
         # 4. ML Anomaly Alert - Evaluated dynamically via RuntimeDetector on models/baseline_v1.joblib
         alt4_12d = {
@@ -809,7 +813,7 @@ class SOCStore:
             evidence={"user": "intern-dev", "key_id": "AKIAIOSFODNN7EXAMPLE", "source_ip": "198.51.100.4"},
         )
 
-        self.create_remediation_task(
+        rem4 = self.create_remediation_task(
             title="Deactivate Compromised IAM Access Key",
             affected_resource="iam/user/intern-dev/access-key",
             recommended_action="Invoke iam:UpdateAccessKey to set Status=Inactive.",
@@ -820,6 +824,8 @@ class SOCStore:
             related_finding_id="key",
             related_alert_id="ALT-0004",
         )
+        rem4.status = RemediationStatus.VERIFIED
+        rem4.verification_state = VerificationState.PASS
 
         # 5. Seed Correlated Incident
         self.create_incident(

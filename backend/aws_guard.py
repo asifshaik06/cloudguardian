@@ -160,30 +160,66 @@ def safe_setup(
     resource_ids: Dict[str, str] = {}
     try:
         # S3 Buckets
-        s3_client.create_bucket(Bucket=bucket_name)
-        s3_client.create_bucket(Bucket=bucket_name + "-trail")
+        try:
+            s3_client.create_bucket(Bucket=bucket_name)
+        except Exception as e:
+            if "BucketAlready" not in str(e):
+                raise
+        try:
+            s3_client.create_bucket(Bucket=bucket_name + "-trail")
+        except Exception as e:
+            if "BucketAlready" not in str(e):
+                raise
         s3_client.put_public_access_block(
             Bucket=bucket_name,
             PublicAccessBlockConfiguration=block_config
         )
 
         # CloudTrail
-        ct_client.create_trail(Name=trail_name, S3BucketName=bucket_name + "-trail")
-        ct_client.start_logging(Name=trail_name)
+        try:
+            ct_client.create_trail(Name=trail_name, S3BucketName=bucket_name + "-trail")
+        except Exception as e:
+            if "TrailAlreadyExists" not in str(e):
+                raise
+        try:
+            ct_client.start_logging(Name=trail_name)
+        except Exception:
+            pass
 
         # EC2 Security Group
-        sg_resp = ec2_client.create_security_group(GroupName="web-sg", Description="web")
-        sg_id = sg_resp["GroupId"]
+        try:
+            sg_resp = ec2_client.create_security_group(GroupName="web-sg", Description="web")
+            sg_id = sg_resp["GroupId"]
+            ec2_client.authorize_security_group_ingress(
+                GroupId=sg_id,
+                IpPermissions=cidr_perm_fn("10.0.0.0/8")
+            )
+        except Exception as e:
+            if "InvalidGroup.Duplicate" in str(e):
+                sg_info = ec2_client.describe_security_groups(GroupNames=["web-sg"])
+                sg_id = sg_info["SecurityGroups"][0]["GroupId"]
+            else:
+                raise
         resource_ids["sg"] = sg_id
-        ec2_client.authorize_security_group_ingress(
-            GroupId=sg_id,
-            IpPermissions=cidr_perm_fn("10.0.0.0/8")
-        )
 
         # IAM User & Access Key
-        iam_client.create_user(UserName=user_name)
-        key_resp = iam_client.create_access_key(UserName=user_name)
-        resource_ids["key"] = key_resp["AccessKey"]["AccessKeyId"]
+        user_created = False
+        try:
+            iam_client.create_user(UserName=user_name)
+            user_created = True
+        except Exception as e:
+            if "EntityAlreadyExists" not in str(e):
+                raise
+        if user_created:
+            key_resp = iam_client.create_access_key(UserName=user_name)
+            resource_ids["key"] = key_resp["AccessKey"]["AccessKeyId"]
+        else:
+            keys = iam_client.list_access_keys(UserName=user_name).get("AccessKeyMetadata", [])
+            if keys and isinstance(keys, list):
+                resource_ids["key"] = keys[0]["AccessKeyId"]
+            else:
+                key_resp = iam_client.create_access_key(UserName=user_name)
+                resource_ids["key"] = key_resp["AccessKey"]["AccessKeyId"]
 
         return True, resource_ids, "Setup completed successfully."
 
